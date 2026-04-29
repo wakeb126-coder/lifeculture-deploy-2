@@ -1,0 +1,292 @@
+// =====================================================
+// 거래처 정보 관리 JS — Genspark Table API 사용
+// =====================================================
+let allVendors = [];
+let filteredVendors = [];
+let currentPage = 1;
+const pageSize = 15;
+let editingId = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  generateVendorCode();
+  loadVendors();
+
+  const form = document.getElementById('vendorForm');
+  if (form) form.addEventListener('submit', handleSubmit);
+
+  // 검색 및 필터 이벤트
+  const search = document.getElementById('searchInput');
+  if (search) search.addEventListener('input', filterTable);
+  const typeF = document.getElementById('typeFilter');
+  if (typeF) typeF.addEventListener('change', filterTable);
+});
+
+// ===========================
+// 거래처 코드 자동 생성
+// ===========================
+async function generateVendorCode() {
+  const display = document.getElementById('codeDisplay');
+  if (!display) return;
+  try {
+    const res = await apiGetAll('vendors');
+    const dateStr = today().replace(/-/g, '').slice(0, 8);
+    const todayCodes = res.filter(v =>
+      v.vendor_code && v.vendor_code.startsWith(`VND-${dateStr}`)
+    );
+    const seq = String(todayCodes.length + 1).padStart(3, '0');
+    display.textContent = `VND-${dateStr}-${seq}`;
+  } catch (e) {
+    const rand = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
+    const dateStr = today().replace(/-/g, '').slice(0, 8);
+    display.textContent = `VND-${dateStr}-${rand}`;
+  }
+}
+
+// ===========================
+// 데이터 로드
+// ===========================
+async function loadVendors() {
+  try {
+    const res = await apiGetAll('vendors');
+    allVendors = res.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    filteredVendors = [...allVendors];
+    renderTable();
+    renderKpi();
+  } catch (e) {
+    console.error('[vendors] 로드 실패:', e);
+    const tb = document.getElementById('vendorTableBody');
+    if (tb) tb.innerHTML = `<tr><td colspan="13" class="empty-msg"><i class="fas fa-exclamation-circle"></i> 데이터 로드 실패: ${e.message}</td></tr>`;
+  }
+}
+
+// ===========================
+// KPI 렌더링
+// ===========================
+function renderKpi() {
+  const total = allVendors.length;
+  const suppliers = allVendors.filter(v => v.vendor_type === '공급업체').length;
+  const retailers = allVendors.filter(v => v.vendor_type === '판매거래처').length;
+  const oem = allVendors.filter(v => v.vendor_type === 'OEM업체').length;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('kpiTotal', total);
+  set('kpiSupplier', suppliers);
+  set('kpiRetailer', retailers);
+  set('kpiOem', oem);
+}
+
+// ===========================
+// 필터링
+// ===========================
+function filterTable() {
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+  const type = document.getElementById('typeFilter')?.value || '';
+  filteredVendors = allVendors.filter(v => {
+    const matchQ = !q ||
+      (v.vendor_name || '').toLowerCase().includes(q) ||
+      (v.vendor_code || '').toLowerCase().includes(q) ||
+      (v.contact_person || '').toLowerCase().includes(q) ||
+      (v.registration_no || '').toLowerCase().includes(q);
+    const matchType = !type || v.vendor_type === type;
+    return matchQ && matchType;
+  });
+  currentPage = 1;
+  renderTable();
+}
+
+// ===========================
+// 테이블 렌더링
+// ===========================
+function renderTable() {
+  const tbody = document.getElementById('vendorTableBody');
+  if (!tbody) return;
+  const start = (currentPage - 1) * pageSize;
+  const pageData = filteredVendors.slice(start, start + pageSize);
+
+  if (!pageData.length) {
+    tbody.innerHTML = `<tr><td colspan="13"><div class="empty-msg"><i class="fas fa-inbox"></i> 등록된 거래처가 없습니다.</div></td></tr>`;
+  } else {
+    tbody.innerHTML = pageData.map(v => {
+      const statusMap = { '거래중': 'badge-success', '신규': 'badge-info', '거래중지': 'badge-danger' };
+      const typeMap = { '공급업체': 'badge-info', '판매거래처': 'badge-warning', 'OEM업체': 'badge-success', '기타': 'badge-secondary' };
+      const statusCls = statusMap[v.trade_status] || 'badge-secondary';
+      const typeCls = typeMap[v.vendor_type] || 'badge-secondary';
+      return `<tr>
+        <td><strong>${v.vendor_code || '-'}</strong></td>
+        <td><strong>${v.vendor_name || '-'}</strong></td>
+        <td><span class="badge ${typeCls}">${v.vendor_type || '-'}</span></td>
+        <td>${v.registration_no || '-'}</td>
+        <td>${v.representative || '-'}</td>
+        <td>${v.contact_person || '-'}</td>
+        <td>${v.contact_phone || '-'}</td>
+        <td>${v.contact_email || '-'}</td>
+        <td>${v.bank_name || '-'}</td>
+        <td>${v.bank_account || '-'}</td>
+        <td><span class="badge ${statusCls}">${v.trade_status || '-'}</span></td>
+        <td>${v.trade_start_date || '-'}</td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="openEditModal('${v.id}')"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-danger btn-sm" onclick="deleteVendor('${v.id}')"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  const countEl = document.getElementById('tableCount');
+  if (countEl) countEl.textContent = `전체 ${filteredVendors.length}건`;
+  renderPagination();
+}
+
+// ===========================
+// 페이지네이션
+// ===========================
+function renderPagination() {
+  const totalPages = Math.ceil(filteredVendors.length / pageSize);
+  const pg = document.getElementById('pagination');
+  if (!pg) return;
+  if (totalPages <= 1) { pg.innerHTML = ''; return; }
+  let html = '';
+  if (currentPage > 1) html += `<button class="page-btn" onclick="changePage(${currentPage - 1})"><i class="fas fa-chevron-left"></i></button>`;
+  for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+    html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+  }
+  if (currentPage < totalPages) html += `<button class="page-btn" onclick="changePage(${currentPage + 1})"><i class="fas fa-chevron-right"></i></button>`;
+  pg.innerHTML = html;
+}
+function changePage(p) { currentPage = p; renderTable(); }
+
+// ===========================
+// 폼 데이터 수집
+// ===========================
+function getFormData() {
+  const code = document.getElementById('codeDisplay')?.textContent || '';
+  return {
+    vendor_code: code,
+    vendor_name: document.getElementById('f_vendor_name')?.value || '',
+    vendor_type: document.getElementById('f_vendor_type')?.value || '',
+    trade_status: document.getElementById('f_trade_status')?.value || '거래중',
+    registration_no: document.getElementById('f_registration_no')?.value || '',
+    representative: document.getElementById('f_representative')?.value || '',
+    business_type: document.getElementById('f_business_type')?.value || '',
+    business_category: document.getElementById('f_business_category')?.value || '',
+    address: document.getElementById('f_address')?.value || '',
+    contact_person: document.getElementById('f_contact_person')?.value || '',
+    contact_phone: document.getElementById('f_contact_phone')?.value || '',
+    contact_email: document.getElementById('f_contact_email')?.value || '',
+    trade_start_date: document.getElementById('f_trade_start_date')?.value || '',
+    bank_name: document.getElementById('f_bank_name')?.value || '',
+    bank_account: document.getElementById('f_bank_account')?.value || '',
+    account_holder: document.getElementById('f_account_holder')?.value || '',
+    doc_registration_file: document.getElementById('f_doc_registration_file')?.value || '',
+    doc_registration_date: document.getElementById('f_doc_registration_date')?.value || '',
+    doc_registration_status: document.getElementById('f_doc_registration_status')?.value || '',
+    doc_bank_file: document.getElementById('f_doc_bank_file')?.value || '',
+    doc_bank_date: document.getElementById('f_doc_bank_date')?.value || '',
+    doc_bank_status: document.getElementById('f_doc_bank_status')?.value || '',
+    doc_other_file: document.getElementById('f_doc_other_file')?.value || '',
+    doc_other_date: document.getElementById('f_doc_other_date')?.value || '',
+    doc_other_status: document.getElementById('f_doc_other_status')?.value || '',
+    notes: document.getElementById('f_notes')?.value || '',
+  };
+}
+
+// ===========================
+// 폼 초기화
+// ===========================
+function resetForm() {
+  const form = document.getElementById('vendorForm');
+  if (form) form.reset();
+  editingId = null;
+  const btn = document.getElementById('vendorSubmitBtn');
+  if (btn) btn.innerHTML = '<i class="fas fa-save"></i> 저장';
+  generateVendorCode();
+  showToast('폼이 초기화되었습니다.', 'info');
+}
+
+// ===========================
+// 폼 제출 처리
+// ===========================
+async function handleSubmit(e) {
+  e.preventDefault();
+  const data = getFormData();
+  const btn = document.getElementById('vendorSubmitBtn') || document.querySelector('#vendorForm button[type="submit"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...'; }
+  try {
+    if (editingId) {
+      await apiPut('vendors', editingId, data);
+      showToast('거래처 정보가 수정되었습니다.', 'success');
+      editingId = null;
+    } else {
+      await apiPost('vendors', data);
+      showToast('거래처가 등록되었습니다.', 'success');
+    }
+    resetForm();
+    await loadVendors();
+  } catch (err) {
+    showToast('저장 실패: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = editingId ? '<i class="fas fa-save"></i> 수정 저장' : '<i class="fas fa-save"></i> 저장';
+    }
+  }
+}
+
+// ===========================
+// 수정 모달 열기
+// ===========================
+function openEditModal(id) {
+  const v = allVendors.find(r => r.id === id);
+  if (!v) return;
+  editingId = id;
+
+  // 폼에 값 채우기
+  const fields = ['vendor_name', 'vendor_type', 'trade_status', 'registration_no', 'representative',
+    'business_type', 'business_category', 'address', 'contact_person', 'contact_phone',
+    'contact_email', 'trade_start_date', 'bank_name', 'bank_account', 'account_holder',
+    'doc_registration_file', 'doc_registration_date', 'doc_registration_status',
+    'doc_bank_file', 'doc_bank_date', 'doc_bank_status',
+    'doc_other_file', 'doc_other_date', 'doc_other_status', 'notes'];
+
+  fields.forEach(key => {
+    const el = document.getElementById('f_' + key);
+    if (el) el.value = v[key] || '';
+  });
+
+  // 코드 표시
+  const codeDisplay = document.getElementById('codeDisplay');
+  if (codeDisplay) codeDisplay.textContent = v.vendor_code || '';
+
+  // 폼으로 스크롤
+  const formSection = document.querySelector('.form-container');
+  if (formSection) formSection.scrollIntoView({ behavior: 'smooth' });
+
+  const btn = document.getElementById('vendorSubmitBtn') || document.querySelector('#vendorForm button[type="submit"]');
+  if (btn) btn.innerHTML = '<i class="fas fa-save"></i> 수정 저장';
+  showToast('수정 모드: 내용 변경 후 저장하세요.', 'info');
+}
+
+// ===========================
+// 삭제
+// ===========================
+async function deleteVendor(id) {
+  showConfirm('이 거래처를 삭제하시겠습니까?<br><small style="color:#e74c3c">삭제 후 복구할 수 없습니다.</small>', async () => {
+    try {
+      await apiDelete('vendors', id);
+      showToast('삭제되었습니다.', 'success');
+      if (editingId === id) resetForm();
+      await loadVendors();
+    } catch (e) {
+      showToast('삭제 실패: ' + e.message, 'error');
+    }
+  });
+}
+
+// 하위 호환 (수정 모달 닫기)
+function closeEditModal() {
+  resetForm();
+}
+function saveEdit() { /* not used */ }
+function deleteRecord() {
+  if (editingId) deleteVendor(editingId);
+}

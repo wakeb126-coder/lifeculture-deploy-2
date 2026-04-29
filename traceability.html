@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="images/icon-512-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192-v2.png" />
+  <title>Lot 역추적 - 라이프컬처</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/production.css" />
+  <link rel="stylesheet" href="css/traceability.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    .trace-search-box { background: linear-gradient(135deg, #1a3c1a, #2C5F2E); border-radius: 16px; padding: 28px; margin-bottom: 24px; color: #fff; }
+    .trace-search-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; opacity: 0.9; }
+    .trace-search-row { display: flex; gap: 10px; }
+    .trace-input { flex: 1; padding: 12px 16px; border: none; border-radius: 10px; font-size: 14px; font-family: monospace; font-weight: 700; }
+    .trace-hint { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .hint-chip { background: rgba(255,255,255,0.15); color: #fff; border-radius: 20px; padding: 4px 12px; font-size: 11px; cursor: pointer; transition: background 0.2s; }
+    .hint-chip:hover { background: rgba(255,255,255,0.3); }
+    .trace-result-header { display: flex; align-items: center; gap: 16px; background: #fff; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; border: 1px solid #e0e0e0; }
+    .trace-lot-badge { font-size: 18px; font-weight: 800; color: #2C5F2E; font-family: monospace; background: #eafaf1; padding: 8px 16px; border-radius: 8px; border: 2px solid #a9dfbf; }
+    .trace-result-meta { font-size: 13px; color: #555; }
+    .trace-timeline { display: flex; flex-direction: column; gap: 0; }
+    .timeline-item { display: flex; gap: 16px; position: relative; }
+    .timeline-item:not(:last-child)::before { content: ''; position: absolute; left: 19px; top: 40px; bottom: -8px; width: 2px; background: linear-gradient(#2C5F2E, #ddd); z-index: 0; }
+    .timeline-dot { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #fff; flex-shrink: 0; z-index: 1; margin-top: 4px; }
+    .dot-raw { background: #D4A017; }
+    .dot-roast { background: #e17055; }
+    .dot-grind { background: #6c5ce7; }
+    .dot-extract { background: #3498db; }
+    .dot-bottle { background: #1abc9c; }
+    .dot-box { background: #27ae60; }
+    .dot-empty { background: #ccc; }
+    .timeline-content { flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+    .timeline-content.active { border-color: #a9dfbf; }
+    .timeline-content.empty { opacity: 0.6; }
+    .timeline-step-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .timeline-lot-no { font-family: monospace; font-size: 12px; color: #2C5F2E; font-weight: 700; background: #eafaf1; display: inline-block; padding: 2px 8px; border-radius: 4px; margin-bottom: 4px; }
+    .timeline-main-info { font-size: 13px; color: #333; margin-bottom: 6px; }
+    .timeline-meta-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .timeline-meta-item { font-size: 11px; color: #666; background: #f5f5f5; padding: 3px 8px; border-radius: 4px; display: flex; align-items: center; gap: 4px; }
+    .trace-details-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .trace-detail-card { border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
+    .trace-detail-header { padding: 12px 16px; color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .trace-detail-body { padding: 12px; }
+    .detail-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: #888; flex-shrink: 0; margin-right: 8px; }
+    .detail-value { font-weight: 600; text-align: right; word-break: break-all; }
+    .trace-empty { text-align: center; padding: 60px 20px; color: #aaa; }
+    .trace-empty-icon { font-size: 48px; margin-bottom: 16px; }
+    .trace-empty-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: #666; }
+    .trace-empty-sub { font-size: 13px; }
+    .section-title { font-size: 15px; font-weight: 700; color: #2C5F2E; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .box-lot-primary { background: linear-gradient(135deg, #eafaf1, #d5f5e3); border: 2px solid #27ae60; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+    .box-lot-primary-title { font-size: 13px; color: #1e8449; font-weight: 700; margin-bottom: 8px; }
+    .box-lot-primary-value { font-size: 22px; font-weight: 800; color: #1e8449; font-family: monospace; }
+    @media (max-width: 640px) { .trace-search-row { flex-direction: column; } .trace-details-grid { grid-template-columns: 1fr; } }
+    @media print { .sidebar, .topbar, .bottom-nav, .pwa-install-banner, .trace-search-box, .btn { display: none !important; } @page { size: A4; margin: 15mm; } }
+  </style>
+</head>
+<body>
+  <div class="offline-bar" id="offlineBar"><i class="fas fa-wifi-slash"></i> 오프라인 상태</div>
+  <div class="online-bar" id="onlineBar"><i class="fas fa-wifi"></i> 온라인 복구</div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-wrap">
+        <div class="logo-icon"><i class="fas fa-coffee"></i></div>
+        <div class="logo-text"><span class="brand">라이프컬처</span><span class="sub">생산관리 시스템</span></div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="menuToggle"><i class="fas fa-bars"></i></button>
+        <h1 class="page-title"><i class="fas fa-search" style="color:#2C5F2E;margin-right:8px"></i>Lot 역추적 시스템</h1>
+      </div>
+      <div class="topbar-right">
+        <span id="topUserName" style="font-size:12px;color:#666;margin-right:6px"></span>
+        <span class="topbar-date" id="topbarDate"></span>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <!-- 검색 박스 -->
+      <div class="trace-search-box">
+        <div class="trace-search-title">
+          <i class="fas fa-boxes"></i> 박스포장 Lot No 기준 역추적 — 완제품 박스에서 생두 입고까지 전 공정 추적
+        </div>
+        <div class="trace-search-row">
+          <input type="text" id="traceInput" class="trace-input"
+            placeholder="박스포장 Lot 우선 입력 (예: BOX-260427-001) 또는 임의 Lot No" />
+          <button class="btn btn-primary btn-lg" onclick="startTrace()">
+            <i class="fas fa-search"></i> 역추적 조회
+          </button>
+        </div>
+        <div class="trace-hint">
+          <span class="hint-chip" style="background:rgba(39,174,96,0.4)" onclick="setHint('BOX-')"><i class="fas fa-boxes"></i> BOX-날짜-번호 (박스포장 ★ 권장)</span>
+          <span class="hint-chip" style="background:rgba(26,188,156,0.3)" onclick="setHint('BTL-')"><i class="fas fa-wine-bottle"></i> BTL- (병포장)</span>
+          <span class="hint-chip" style="background:rgba(52,152,219,0.3)" onclick="setHint('EXT-')"><i class="fas fa-tint"></i> EXT- (추출)</span>
+          <span class="hint-chip" style="background:rgba(108,92,231,0.3)" onclick="setHint('GRIND-')"><i class="fas fa-cog"></i> GRIND- (분쇄)</span>
+          <span class="hint-chip" style="background:rgba(225,112,85,0.3)" onclick="setHint('ROAST-')"><i class="fas fa-fire"></i> ROAST- (로스팅)</span>
+          <span class="hint-chip" style="background:rgba(212,160,23,0.3)" onclick="setHint('RM-')"><i class="fas fa-box-open"></i> RM- (생두입고)</span>
+        </div>
+      </div>
+
+      <!-- 결과 영역 -->
+      <div id="traceResult" style="display:none">
+        <!-- 박스포장 Lot 강조 표시 -->
+        <div id="boxLotPrimary" class="box-lot-primary" style="display:none">
+          <div class="box-lot-primary-title"><i class="fas fa-boxes"></i> 추적 기준: 박스포장 Lot No</div>
+          <div class="box-lot-primary-value" id="boxLotPrimaryValue"></div>
+          <div style="font-size:12px;color:#1e8449;margin-top:6px" id="boxLotPrimaryMeta"></div>
+        </div>
+
+        <div class="trace-result-header">
+          <div class="trace-lot-badge" id="traceLotBadge"></div>
+          <div class="trace-result-meta" id="traceResultMeta"></div>
+          <button class="btn btn-secondary" style="margin-left:auto;font-size:12px" onclick="window.print()"><i class="fas fa-print"></i> 인쇄</button>
+        </div>
+
+        <div class="trace-timeline-section">
+          <h3 class="section-title"><i class="fas fa-stream"></i> 생산 공정 타임라인 (역추적)</h3>
+          <div class="trace-timeline" id="traceTimeline"></div>
+        </div>
+        <div id="traceDetails"></div>
+      </div>
+
+      <!-- 빈 상태 -->
+      <div id="traceEmpty" class="trace-empty">
+        <div class="trace-empty-icon"><i class="fas fa-boxes"></i></div>
+        <div class="trace-empty-title">박스포장 Lot 번호를 입력하세요</div>
+        <div class="trace-empty-sub">
+          박스포장 Lot No를 입력하면 해당 박스에 들어간 원료(생두)부터<br>
+          로스팅 → 분쇄 → 추출 → 병포장 → 박스포장까지 전체 이력을 역추적합니다.<br>
+          <span style="color:#2C5F2E;font-weight:700">다른 공정 Lot No도 입력 가능합니다.</span>
+        </div>
+      </div>
+
+      <!-- 로딩 -->
+      <div id="traceLoading" style="display:none;text-align:center;padding:60px">
+        <i class="fas fa-spinner fa-spin" style="font-size:36px;color:#2C5F2E;margin-bottom:16px;display:block"></i>
+        역추적 중...
+      </div>
+
+      <!-- Not Found -->
+      <div id="traceNotFound" style="display:none;text-align:center;padding:60px">
+        <i class="fas fa-exclamation-circle" style="font-size:36px;color:#e74c3c;margin-bottom:16px;display:block"></i>
+        해당 Lot 번호를 찾을 수 없습니다.<br>
+        <small style="font-size:12px;margin-top:8px;display:block">입력한 Lot 번호를 확인해주세요.</small>
+      </div>
+    </div>
+  </main>
+
+  <nav class="bottom-nav" id="bottomNav">
+    <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>홈</span></a>
+    <a href="raw-materials.html" class="bottom-nav-item"><i class="fas fa-box-open"></i><span>원료</span></a>
+    <a href="warehouse.html" class="bottom-nav-item"><i class="fas fa-warehouse"></i><span>물류</span></a>
+    <a href="traceability.html" class="bottom-nav-item active"><i class="fas fa-search"></i><span>역추적</span></a>
+    <a href="index.html" class="bottom-nav-item"><i class="fas fa-th-large"></i><span>더보기</span></a>
+  </nav>
+
+  <div class="pwa-install-banner" id="pwaInstallBanner">
+    <div class="pwa-banner-icon"><img src="images/icon-192-v2.png" alt="LifeCulture" /></div>
+    <div class="pwa-banner-text"><div class="pwa-banner-title">라이프컬처</div><div class="pwa-banner-sub">앱으로 설치하세요</div></div>
+    <div class="pwa-banner-actions">
+      <button class="pwa-install-btn" onclick="installPwa()">설치</button>
+      <button class="pwa-dismiss-btn" onclick="dismissPwaBanner()">닫기</button>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+      <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-init.js"></script>
+    <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/traceability.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const user = requireAuth('traceability');
+      if (!user) return;
+      document.getElementById('sidebarNav').innerHTML = getSidebarHTML('traceability.html');
+      renderUserHeader();
+      setupSidebar();
+      initDateDisplay();
+
+      const params = new URLSearchParams(window.location.search);
+      const lot = params.get('lot');
+      if (lot) {
+        document.getElementById('traceInput').value = lot;
+        startTrace();
+      }
+      document.getElementById('traceInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') startTrace();
+      });
+    });
+
+    function setHint(prefix) {
+      document.getElementById('traceInput').value = prefix;
+      document.getElementById('traceInput').focus();
+    }
+  </script>
+</body>
+</html>

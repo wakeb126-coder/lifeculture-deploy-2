@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192-v2.png" />
+  <title>데이터 백업/복원 - 라이프컬처</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    .backup-wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 0 0 60px;
+    }
+    .section-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .section-card h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin: 0 0 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-card .desc {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 18px;
+      line-height: 1.6;
+    }
+    .table-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .table-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f7f9f7;
+      border: 1.5px solid #e0e8e0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .table-item:hover { background: #eafaf1; border-color: #a9dfbf; }
+    .table-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: #2C5F2E; }
+    .table-item .count-badge {
+      margin-left: auto;
+      background: #2C5F2E;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+      min-width: 24px;
+      text-align: center;
+    }
+    .table-item .count-badge.loading { background: #ccc; }
+    .btn-backup {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #2C5F2E, #1e8449);
+      color: #fff; border: none; border-radius: 12px;
+      padding: 13px 24px; font-size: 14px; font-weight: 700;
+      cursor: pointer; width: 100%; justify-content: center;
+      transition: opacity 0.15s; box-shadow: 0 3px 10px rgba(44,95,46,0.3);
+    }
+    .btn-backup:hover { opacity: 0.9; }
+    .btn-backup:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-restore {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #e17055, #c0392b);
+      color: #fff; border: none; border-radius: 12px;
+      padding: 13px 24px; font-size: 14px; font-weight: 700;
+      cursor: pointer; width: 100%; justify-content: center;
+      transition: opacity 0.15s; box-shadow: 0 3px 10px rgba(225,112,85,0.3);
+    }
+    .btn-restore:hover { opacity: 0.9; }
+    .btn-restore:disabled { opacity: 0.5; cursor: not-allowed; }
+    .drop-zone {
+      border: 2.5px dashed #a9dfbf;
+      border-radius: 14px;
+      padding: 32px 20px;
+      text-align: center;
+      background: #f7fdf8;
+      color: #888;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 16px;
+    }
+    .drop-zone.drag-over { background: #eafaf1; border-color: #27ae60; }
+    .drop-zone i { font-size: 32px; color: #a9dfbf; margin-bottom: 10px; display: block; }
+    .drop-zone p { margin: 4px 0; font-size: 13px; }
+    .drop-zone strong { color: #2C5F2E; }
+    #fileInput { display: none; }
+    .restore-preview {
+      display: none;
+      background: #f0f9f0;
+      border: 1.5px solid #a9dfbf;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .restore-preview h4 { margin: 0 0 10px; color: #1e8449; font-size: 14px; }
+    .preview-table-list { display: flex; flex-direction: column; gap: 6px; }
+    .preview-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #fff; border-radius: 8px; padding: 8px 12px;
+      border: 1px solid #d5f5e3;
+    }
+    .preview-row .table-name { font-weight: 600; color: #1a3d1c; }
+    .preview-row .rec-count {
+      background: #eafaf1; color: #27ae60;
+      padding: 2px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 700;
+    }
+    .log-box {
+      background: #1a1a1a;
+      color: #7eff8a;
+      border-radius: 10px;
+      padding: 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      min-height: 120px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 16px;
+      display: none;
+      line-height: 1.7;
+    }
+    .log-box.visible { display: block; }
+    .log-error { color: #ff7675; }
+    .log-warn  { color: #fdcb6e; }
+    .log-ok    { color: #55efc4; }
+    .progress-bar-wrap {
+      background: #eee;
+      border-radius: 8px;
+      height: 8px;
+      overflow: hidden;
+      margin: 12px 0;
+      display: none;
+    }
+    .progress-bar-wrap.visible { display: block; }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2C5F2E, #27ae60);
+      border-radius: 8px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+    .warn-box {
+      background: #fff3cd;
+      border: 1.5px solid #ffc107;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #856404;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .warn-box i { color: #e67e22; margin-top: 2px; flex-shrink: 0; }
+    .step-guide {
+      background: linear-gradient(135deg, #1a3d1c, #2C5F2E);
+      border-radius: 14px;
+      padding: 20px 24px;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+    .step-guide h3 {
+      font-size: 15px; font-weight: 700;
+      margin: 0 0 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .step-guide ol {
+      margin: 0; padding-left: 20px;
+      font-size: 13px; line-height: 2;
+      color: rgba(255,255,255,0.9);
+    }
+    .step-guide ol li { margin-bottom: 4px; }
+    .step-guide strong { color: #7eff8a; }
+    .total-summary {
+      display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .summary-chip {
+      background: #eafaf1; color: #1e8449;
+      border: 1px solid #a9dfbf;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex; align-items: center; gap: 5px;
+    }
+  </style>
+</head>
+<body>
+  <!-- 오프라인/온라인 바 -->
+  <div class="offline-bar" id="offlineBar"><i class="fas fa-wifi-slash"></i> 오프라인 상태 · 일부 기능이 제한됩니다</div>
+  <div class="online-bar" id="onlineBar"><i class="fas fa-wifi"></i> 인터넷 연결됨</div>
+
+  <!-- 사이드바 -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-wrap">
+        <div class="logo-icon"><i class="fas fa-coffee"></i></div>
+        <div class="logo-text"><span class="brand">라이프컬처</span><span class="sub">생산관리 시스템</span></div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <span class="nav-section-title">대시보드</span>
+        <a href="index.html" class="nav-item"><i class="fas fa-tachometer-alt"></i><span>현황 대시보드</span></a>
+        <a href="traceability.html" class="nav-item"><i class="fas fa-search"></i><span>Lot 역추적</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">원부자재 관리</span>
+        <a href="materials-master.html" class="nav-item"><i class="fas fa-cubes"></i><span>원부재료 마스터</span></a>
+        <a href="raw-materials.html" class="nav-item"><i class="fas fa-box-open"></i><span>원료수불부</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">거래처 관리</span>
+        <a href="vendors.html" class="nav-item"><i class="fas fa-handshake"></i><span>거래처 정보</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">생산일지</span>
+        <a href="roasting.html" class="nav-item"><i class="fas fa-fire"></i><span>로스팅</span></a>
+        <a href="grinding.html" class="nav-item"><i class="fas fa-cog"></i><span>분쇄</span></a>
+        <a href="extraction.html" class="nav-item"><i class="fas fa-tint"></i><span>추출</span></a>
+        <a href="bottle-packing.html" class="nav-item"><i class="fas fa-wine-bottle"></i><span>제품(병)포장</span></a>
+        <a href="box-packing.html" class="nav-item"><i class="fas fa-boxes"></i><span>완제품(박스)포장</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">판매 관리</span>
+        <a href="sales.html" class="nav-item"><i class="fas fa-shopping-cart"></i><span>온라인몰 판매</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">제품 관리</span>
+        <a href="products.html" class="nav-item"><i class="fas fa-tag"></i><span>제품 정보</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">시스템</span>
+        <a href="backup.html" class="nav-item active"><i class="fas fa-database"></i><span>데이터 백업/복원</span></a>
+        <a href="install-guide.html" class="nav-item"><i class="fas fa-mobile-alt"></i><span>앱 설치 가이드</span></a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <span>LifeCulture Co.</span>
+      <span id="currentDate"></span>
+    </div>
+  </aside>
+
+  <!-- 메인 -->
+  <main class="main-content" id="mainContent">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+        <h1 class="page-title"><i class="fas fa-database" style="color:#2C5F2E;margin-right:8px"></i>데이터 백업 / 복원</h1>
+      </div>
+      <div class="topbar-right"><span class="topbar-date" id="topbarDate"></span></div>
+    </header>
+
+    <div class="content-area">
+      <div class="backup-wrap">
+
+        <!-- 배포 전 필수 안내 -->
+        <div class="step-guide">
+          <h3><i class="fas fa-rocket"></i> 배포(업데이트) 전 필수 절차</h3>
+          <ol>
+            <li>아래 <strong>① 백업 받기</strong>로 JSON 파일을 PC에 저장합니다</li>
+            <li>Publish 탭 → <strong>데이터베이스 재구축으로 배포</strong>를 실행합니다</li>
+            <li>배포 완료 후 앱을 새로 열고 <strong>② 복원하기</strong>에 파일을 업로드합니다</li>
+            <li>복원이 끝나면 데이터가 모두 돌아옵니다 ✅</li>
+          </ol>
+        </div>
+
+        <!-- ① 백업 -->
+        <div class="section-card">
+          <h2><i class="fas fa-download" style="color:#2C5F2E"></i> ① 데이터 백업</h2>
+          <p class="desc">
+            현재 DB에 저장된 모든 데이터를 <strong>JSON 파일 1개</strong>로 내보냅니다.<br>
+            배포 전 반드시 실행하세요. 파일은 PC 다운로드 폴더에 저장됩니다.
+          </p>
+
+          <!-- 테이블별 건수 -->
+          <div class="table-list" id="tableStatusList">
+            <!-- JS로 채움 -->
+          </div>
+          <div class="total-summary" id="totalSummary"></div>
+
+          <button class="btn-backup" id="btnBackup" onclick="startBackup()">
+            <i class="fas fa-download"></i> 전체 백업 JSON 다운로드
+          </button>
+
+          <div class="progress-bar-wrap" id="backupProgress">
+            <div class="progress-bar-fill" id="backupFill"></div>
+          </div>
+          <div class="log-box" id="backupLog"></div>
+        </div>
+
+        <!-- ② 복원 -->
+        <div class="section-card">
+          <h2><i class="fas fa-upload" style="color:#e17055"></i> ② 데이터 복원</h2>
+          <p class="desc">
+            백업한 JSON 파일을 업로드하면 DB에 자동으로 재삽입합니다.<br>
+            <strong>복원 전 DB가 비어있어야 합니다</strong> (재구축 배포 직후 사용).
+          </p>
+
+          <div class="warn-box">
+            <i class="fas fa-exclamation-triangle"></i>
+            <div>
+              <strong>주의!</strong> 복원은 기존 데이터에 <em>추가</em>됩니다.
+              이미 데이터가 있는 상태에서 복원하면 <strong>중복 데이터</strong>가 생깁니다.
+              반드시 <strong>재구축 배포 직후 빈 DB</strong> 상태에서만 복원하세요.
+            </div>
+          </div>
+
+          <!-- 파일 드롭존 -->
+          <div class="drop-zone" id="dropZone"
+               onclick="document.getElementById('fileInput').click()"
+               ondragover="event.preventDefault();this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="handleDrop(event)">
+            <i class="fas fa-file-import"></i>
+            <p><strong>클릭하거나 파일을 여기 끌어다 놓으세요</strong></p>
+            <p style="font-size:12px">lifeculture-backup-*.json 파일</p>
+          </div>
+          <input type="file" id="fileInput" accept=".json" onchange="handleFileSelect(event)" />
+
+          <!-- 미리보기 -->
+          <div class="restore-preview" id="restorePreview">
+            <h4><i class="fas fa-table"></i> 복원 예정 데이터 미리보기</h4>
+            <div class="preview-table-list" id="previewTableList"></div>
+          </div>
+
+          <button class="btn-restore" id="btnRestore" onclick="startRestore()" disabled>
+            <i class="fas fa-upload"></i> 복원 시작
+          </button>
+
+          <div class="progress-bar-wrap" id="restoreProgress">
+            <div class="progress-bar-fill" id="restoreFill"></div>
+          </div>
+          <div class="log-box" id="restoreLog"></div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script src="js/auth.js"></script>
+      <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-init.js"></script>
+    <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/pwa.js"></script>
+  <script>
+  // =============================================
+  // 백업/복원 대상 테이블 목록
+  // =============================================
+  const TABLES = [
+    { key: 'raw_materials',      label: '원료수불부',       icon: 'fa-box-open',     color: '#1abc9c' },
+    { key: 'roasting_log',       label: '로스팅 생산일지',  icon: 'fa-fire',         color: '#e17055' },
+    { key: 'grinding_log',       label: '분쇄 생산일지',    icon: 'fa-cog',          color: '#6c5ce7' },
+    { key: 'extraction_log',     label: '추출 생산일지',    icon: 'fa-tint',         color: '#3498db' },
+    { key: 'bottle_packing_log', label: '병 포장일지',      icon: 'fa-wine-bottle',  color: '#27ae60' },
+    { key: 'box_packing_log',    label: '박스 포장일지',    icon: 'fa-boxes',        color: '#2C5F2E' },
+    { key: 'materials_master',   label: '원부재료 마스터',  icon: 'fa-cubes',        color: '#3498db' },
+    { key: 'vendors',            label: '거래처',           icon: 'fa-handshake',    color: '#27ae60' },
+    { key: 'products',           label: '제품 정보',        icon: 'fa-tag',          color: '#f39c12' },
+    { key: 'sales',              label: '판매 내역',        icon: 'fa-shopping-cart',color: '#e67e22' },
+  ];
+
+  let backupData = null;   // 백업 메모리
+  let restoreData = null;  // 복원할 데이터
+
+  // =============================================
+  // 페이지 초기화: 각 테이블 건수 표시
+  // =============================================
+  async function initPage() {
+    const list = document.getElementById('tableStatusList');
+    list.innerHTML = TABLES.map(t => `
+      <div class="table-item" id="item_${t.key}">
+        <i class="fas ${t.icon}" style="color:${t.color};font-size:15px;flex-shrink:0"></i>
+        <span>${t.label}</span>
+        <span class="count-badge loading" id="cnt_${t.key}">...</span>
+      </div>`).join('');
+
+    let total = 0;
+    const promises = TABLES.map(async t => {
+      try {
+        const res = await apiGet(t.key, { limit: 1 });
+        const cnt = res.total || 0;
+        const badge = document.getElementById(`cnt_${t.key}`);
+        if (badge) { badge.textContent = cnt + '건'; badge.classList.remove('loading'); }
+        return cnt;
+      } catch(e) {
+        const badge = document.getElementById(`cnt_${t.key}`);
+        if (badge) { badge.textContent = '오류'; badge.classList.remove('loading'); badge.style.background = '#e74c3c'; }
+        return 0;
+      }
+    });
+    const counts = await Promise.all(promises);
+    total = counts.reduce((a,b) => a+b, 0);
+    document.getElementById('totalSummary').innerHTML = `
+      <div class="summary-chip"><i class="fas fa-database"></i> 전체 ${total.toLocaleString()}건</div>
+      <div class="summary-chip"><i class="fas fa-table"></i> ${TABLES.length}개 테이블</div>
+    `;
+  }
+
+  // =============================================
+  // 로그 출력 헬퍼
+  // =============================================
+  function addLog(boxId, msg, type = 'ok') {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    box.classList.add('visible');
+    const cls = type === 'error' ? 'log-error' : type === 'warn' ? 'log-warn' : 'log-ok';
+    const ts = new Date().toLocaleTimeString('ko-KR');
+    box.innerHTML += `<div class="${cls}">[${ts}] ${msg}</div>`;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setProgress(fillId, wrapId, pct) {
+    document.getElementById(wrapId).classList.add('visible');
+    document.getElementById(fillId).style.width = pct + '%';
+  }
+
+  // =============================================
+  // 백업 실행
+  // =============================================
+  async function startBackup() {
+    const btn = document.getElementById('btnBackup');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 백업 중...';
+
+    const logBox = document.getElementById('backupLog');
+    logBox.innerHTML = '';
+    setProgress('backupFill', 'backupProgress', 0);
+    addLog('backupLog', '🔄 백업 시작...', 'ok');
+
+    const snapshot = { version: '2.3', created_at: new Date().toISOString(), tables: {} };
+    let done = 0;
+
+    for (const t of TABLES) {
+      try {
+        addLog('backupLog', `📥 ${t.label} (${t.key}) 불러오는 중...`);
+        const rows = await apiGetAll(t.key);
+        snapshot.tables[t.key] = rows;
+        done++;
+        setProgress('backupFill', 'backupProgress', Math.round((done / TABLES.length) * 100));
+        addLog('backupLog', `✅ ${t.label}: ${rows.length}건 완료`);
+      } catch(e) {
+        addLog('backupLog', `❌ ${t.label} 실패: ${e.message}`, 'error');
+        snapshot.tables[t.key] = [];
+        done++;
+        setProgress('backupFill', 'backupProgress', Math.round((done / TABLES.length) * 100));
+      }
+    }
+
+    // JSON 파일로 다운로드
+    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const timeStr = new Date().toTimeString().slice(0,5).replace(':','');
+    const filename = `lifeculture-backup-${dateStr}-${timeStr}.json`;
+
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    const totalRecs = Object.values(snapshot.tables).reduce((s,r) => s + r.length, 0);
+    addLog('backupLog', `🎉 백업 완료! 파일: ${filename} (총 ${totalRecs.toLocaleString()}건)`, 'ok');
+    setProgress('backupFill', 'backupProgress', 100);
+    showToast(`✅ 백업 완료 — ${filename}`, 'success');
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-download"></i> 전체 백업 JSON 다운로드';
+
+    // 건수 새로고침
+    initPage();
+  }
+
+  // =============================================
+  // 파일 선택 / 드롭
+  // =============================================
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) loadRestoreFile(file);
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) loadRestoreFile(file);
+  }
+
+  function loadRestoreFile(file) {
+    if (!file.name.endsWith('.json')) {
+      showToast('JSON 파일만 업로드 가능합니다.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        restoreData = JSON.parse(e.target.result);
+        if (!restoreData.tables) throw new Error('올바른 백업 파일이 아닙니다.');
+
+        // 미리보기
+        const preview = document.getElementById('restorePreview');
+        const list = document.getElementById('previewTableList');
+        preview.style.display = 'block';
+
+        let totalRecs = 0;
+        list.innerHTML = TABLES.map(t => {
+          const rows = restoreData.tables[t.key] || [];
+          totalRecs += rows.length;
+          return `
+            <div class="preview-row">
+              <span class="table-name"><i class="fas ${t.icon}" style="color:${t.color};margin-right:6px"></i>${t.label}</span>
+              <span class="rec-count">${rows.length.toLocaleString()}건</span>
+            </div>`;
+        }).join('');
+
+        list.innerHTML += `
+          <div class="preview-row" style="background:#1a3d1c;border-color:#2C5F2E">
+            <span class="table-name" style="color:#fff;font-size:13px"><i class="fas fa-sigma" style="color:#7eff8a;margin-right:6px"></i>합계</span>
+            <span class="rec-count" style="background:#2C5F2E">${totalRecs.toLocaleString()}건</span>
+          </div>`;
+
+        document.getElementById('btnRestore').disabled = false;
+        showToast(`📂 ${file.name} 로드 완료 (${totalRecs.toLocaleString()}건)`, 'success');
+      } catch(err) {
+        showToast('파일 읽기 실패: ' + err.message, 'error');
+        restoreData = null;
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // =============================================
+  // 복원 실행
+  // =============================================
+  async function startRestore() {
+    if (!restoreData) { showToast('복원할 파일을 먼저 선택하세요.', 'warning'); return; }
+
+    const totalRecs = Object.values(restoreData.tables).reduce((s,r) => s + r.length, 0);
+    const ok = await new Promise(resolve => {
+      showConfirm(
+        `총 ${totalRecs.toLocaleString()}건을 DB에 복원합니다.\n\n⚠️ 반드시 재구축 배포 직후 빈 DB 상태에서만 실행하세요!\n계속하시겠습니까?`,
+        () => resolve(true)
+      );
+      // showConfirm이 취소 콜백을 지원하지 않으면 setTimeout으로 처리
+      setTimeout(() => {}, 100);
+    });
+
+    const btn = document.getElementById('btnRestore');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 복원 중...';
+
+    const logBox = document.getElementById('restoreLog');
+    logBox.innerHTML = '';
+    setProgress('restoreFill', 'restoreProgress', 0);
+    addLog('restoreLog', '🔄 복원 시작...', 'ok');
+
+    // 시스템 필드 제거 헬퍼 (ID, 타임스탬프 등은 API가 새로 발급)
+    const cleanRecord = (row) => {
+      const r = { ...row };
+      delete r.id;
+      delete r.gs_project_id;
+      delete r.gs_table_name;
+      delete r.created_at;
+      delete r.updated_at;
+      delete r.deleted;
+      return r;
+    };
+
+    let doneCount = 0;
+    let errorCount = 0;
+    let totalDone = 0;
+
+    for (const t of TABLES) {
+      const rows = restoreData.tables[t.key] || [];
+      if (!rows.length) {
+        addLog('restoreLog', `⏭️ ${t.label}: 데이터 없음, 건너뜀`, 'warn');
+        totalDone++;
+        setProgress('restoreFill', 'restoreProgress', Math.round((totalDone / TABLES.length) * 100));
+        continue;
+      }
+
+      addLog('restoreLog', `📤 ${t.label} (${rows.length}건) 복원 중...`);
+      let tableOk = 0;
+      let tableErr = 0;
+
+      // 배치로 삽입 (5건씩 병렬)
+      const BATCH = 5;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
+        const results = await Promise.allSettled(
+          batch.map(row => apiPost(t.key, cleanRecord(row)))
+        );
+        results.forEach(r => {
+          if (r.status === 'fulfilled') tableOk++;
+          else { tableErr++; errorCount++; }
+        });
+        // 진행률 업데이트
+        const tableProgress = Math.round(((i + batch.length) / rows.length) * 100);
+        addLog('restoreLog', `  └ ${t.label}: ${Math.min(i + batch.length, rows.length)}/${rows.length}건 처리됨...`);
+      }
+
+      addLog('restoreLog', `✅ ${t.label}: ${tableOk}건 성공 ${tableErr > 0 ? `/ ❌ ${tableErr}건 실패` : ''}`, tableErr > 0 ? 'warn' : 'ok');
+      doneCount += tableOk;
+      totalDone++;
+      setProgress('restoreFill', 'restoreProgress', Math.round((totalDone / TABLES.length) * 100));
+    }
+
+    addLog('restoreLog', `🎉 복원 완료! 성공: ${doneCount.toLocaleString()}건 / 오류: ${errorCount}건`, errorCount > 0 ? 'warn' : 'ok');
+    setProgress('restoreFill', 'restoreProgress', 100);
+    showToast(`✅ 복원 완료 (${doneCount.toLocaleString()}건)`, 'success');
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-upload"></i> 복원 시작';
+
+    // 건수 새로고침
+    setTimeout(initPage, 1500);
+  }
+
+  // =============================================
+  // 초기화
+  // =============================================
+  document.addEventListener('DOMContentLoaded', () => {
+    // 날짜 표시
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일`;
+    const el = document.getElementById('currentDate');
+    if (el) el.textContent = dateStr;
+    const tb = document.getElementById('topbarDate');
+    if (tb) tb.textContent = dateStr;
+
+    // 사이드바 토글
+    const toggle = document.getElementById('sidebarToggle');
+    const mobileBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const main = document.getElementById('mainContent');
+    if (toggle) toggle.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+      main.classList.toggle('expanded');
+    });
+    if (mobileBtn) mobileBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('mobile-open');
+    });
+
+    // 건수 로드
+    initPage();
+  });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var user = (typeof requireAuth === 'function') ? requireAuth('backup') : null;
+      var nav = document.getElementById('sidebarNav');
+      if (nav && typeof getSidebarHTML === 'function') nav.innerHTML = getSidebarHTML('backup.html');
+      if (typeof renderUserHeader === 'function') renderUserHeader();
+      if (typeof setupSidebar === 'function') setupSidebar();
+      if (typeof initDateDisplay === 'function') initDateDisplay();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+/* 공정 단계 인디케이터 */
+.process-step-indicator {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+}
+.step-badge {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: var(--bg-main);
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+  font-weight: 600; white-space: nowrap;
+}
+.step-badge.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.step-arrow { color: var(--border); font-size: 14px; }

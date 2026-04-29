@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="images/icon-512-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192-v2.png" />
+  <title>온라인몰 판매 - 라이프컬처</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/production.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ===== 필터 영역 ===== */
+    .filter-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 140px;
+      flex: 1;
+    }
+    .filter-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .filter-group select,
+    .filter-group input[type="date"],
+    .filter-group input[type="text"] {
+      height: 36px;
+      padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      color: var(--text);
+      width: 100%;
+    }
+    .filter-actions {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+    /* ===== KPI 카드 ===== */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .kpi-card .kpi-label {
+      font-size: 11px;
+      color: #888;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .kpi-card .kpi-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #2C5F2E;
+    }
+    .kpi-card .kpi-sub {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 2px;
+    }
+    /* ===== 테이블 ===== */
+    .table-wrap {
+      overflow-x: auto;
+    }
+    .sales-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .sales-table th {
+      background: #2C5F2E;
+      color: #fff;
+      padding: 10px 12px;
+      text-align: center;
+      font-weight: 600;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .sales-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      white-space: nowrap;
+      color: var(--text);
+    }
+    .sales-table tr:hover td { background: #f7fdf8; }
+    .sales-table .num { text-align: right; }
+    .sales-table .center { text-align: center; }
+    .sales-table .margin-pos { color: #1e8449; font-weight: 600; }
+    .sales-table .margin-neg { color: #e74c3c; font-weight: 600; }
+    /* ===== 페이지네이션 ===== */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      padding: 16px 0;
+      flex-wrap: wrap;
+    }
+    .page-btn {
+      min-width: 32px;
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .page-btn:hover { background: #e8f5e9; border-color: #2C5F2E; color: #2C5F2E; }
+    .page-btn.active { background: #2C5F2E; color: #fff; border-color: #2C5F2E; font-weight: 700; }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    /* ===== 액션 버튼 ===== */
+    .action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .action-bar .result-count {
+      font-size: 13px;
+      color: #666;
+      font-weight: 500;
+    }
+    .action-bar .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+    /* ===== 모달 ===== */
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; }
+    .modal.show { display:flex; }
+    .modal-box { background:#fff; border-radius:12px; padding:24px; width:min(560px,95vw); max-height:90vh; overflow-y:auto; }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+    .modal-header h3 { font-size:16px; font-weight:700; }
+    .modal-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+    /* ===== 인쇄 ===== */
+    @media print {
+      .sidebar, .top-bar, .bottom-nav, .filter-panel, .action-bar,
+      .pagination, .btn, button, .modal { display: none !important; }
+      .main-content { margin: 0 !important; padding: 0 !important; }
+      .print-header { display: block !important; }
+      body { font-size: 11px; }
+      .sales-table th { background: #2C5F2E !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+    .print-header { display: none; text-align: center; margin-bottom: 16px; }
+    .print-header h2 { font-size: 18px; font-weight: 700; }
+    .print-header p { font-size: 12px; color: #666; }
+    /* ===== 매출 그래프 ===== */
+    .chart-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chart-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #2C5F2E;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chart-toggle {
+      display: flex;
+      gap: 4px;
+    }
+    .chart-toggle button {
+      padding: 4px 14px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #666;
+      transition: all 0.15s;
+    }
+    .chart-toggle button.active {
+      background: #2C5F2E;
+      color: #fff;
+      border-color: #2C5F2E;
+    }
+    .chart-toggle button:hover:not(.active) {
+      background: #e8f5e9;
+      border-color: #2C5F2E;
+      color: #2C5F2E;
+    }
+    .chart-canvas-wrap {
+      position: relative;
+      height: 220px;
+    }
+    .chart-collapse-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #888;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      margin-top: 8px;
+      float: right;
+    }
+    .chart-collapse-btn:hover { color: #2C5F2E; }
+    @media print { .chart-section { display: none !important; } }
+  </style>
+</head>
+<body>
+  <!-- 사이드바 -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="images/icon-192-v2.png" alt="라이프컬처" style="width:32px;height:32px;border-radius:8px;margin-right:8px" />
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#2C5F2E">라이프컬처</div>
+          <div style="font-size:11px;color:#888">생산관리 시스템</div>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    </div>
+    <nav id="sidebarNav"></nav>
+  </div>
+
+  <!-- 메인 콘텐츠 -->
+  <div class="main-content" id="mainContent">
+    <!-- 상단 바 -->
+    <div class="top-bar">
+      <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+      <h1 class="page-title"><i class="fas fa-shopping-cart" style="color:#2C5F2E;margin-right:8px"></i>온라인몰 판매 관리</h1>
+      <div class="top-bar-right">
+        <span id="currentUserName" style="font-size:13px;color:#666;margin-right:8px"></span>
+        <span id="currentUserRole" class="badge badge-primary"></span>
+        <span id="currentDate" style="font-size:12px;color:#999;margin-left:12px"></span>
+      </div>
+    </div>
+
+    <div class="content-area">
+      <!-- 인쇄 헤더 (인쇄 시에만 표시) -->
+      <div class="print-header" id="printHeader">
+        <h2>라이프컬처 온라인몰 판매 현황</h2>
+        <p id="printSubtitle"></p>
+      </div>
+
+      <!-- KPI 카드 -->
+      <div class="kpi-row" id="kpiRow">
+        <div class="kpi-card">
+          <div class="kpi-label">총 주문건수</div>
+          <div class="kpi-value" id="kpiCount">-</div>
+          <div class="kpi-sub">건</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">총 결제금액</div>
+          <div class="kpi-value" id="kpiPayment">-</div>
+          <div class="kpi-sub">원</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">총 정산금액</div>
+          <div class="kpi-value" id="kpiSettlement">-</div>
+          <div class="kpi-sub">원</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">총 마진</div>
+          <div class="kpi-value" id="kpiMargin">-</div>
+          <div class="kpi-sub">원</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">평균 마진율</div>
+          <div class="kpi-value" id="kpiMarginRate">-</div>
+          <div class="kpi-sub">%</div>
+        </div>
+      </div>
+
+      <!-- 매출 그래프 섹션 -->
+      <div class="chart-section" id="chartSection">
+        <div class="chart-header">
+          <div class="chart-title">
+            <i class="fas fa-chart-bar"></i> 전체 매출액 추이
+          </div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="chart-toggle">
+              <button id="chartModeDay" class="chart-toggle-btn" onclick="setChartMode('day')">일</button>
+              <button id="chartModeWeek" class="chart-toggle-btn" onclick="setChartMode('week')">주</button>
+              <button id="chartModeMonth" class="chart-toggle-btn active" onclick="setChartMode('month')">월</button>
+            </div>
+            <button class="chart-collapse-btn" id="chartCollapseBtn" onclick="toggleChartCollapse()">
+              <i class="fas fa-chevron-up" id="chartCollapseIcon"></i> <span id="chartCollapseText">접어두기</span>
+            </button>
+          </div>
+        </div>
+        <div id="chartBody">
+          <div class="chart-canvas-wrap">
+            <canvas id="salesChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- 필터 패널 -->
+      <div class="filter-panel">
+        <div class="filter-row">
+          <div class="filter-group" style="min-width:110px">
+            <label><i class="fas fa-calendar-alt"></i> 시작일</label>
+            <input type="date" id="filterDateFrom" />
+          </div>
+          <div class="filter-group" style="min-width:110px">
+            <label><i class="fas fa-calendar-alt"></i> 종료일</label>
+            <input type="date" id="filterDateTo" />
+          </div>
+          <div class="filter-group">
+            <label><i class="fas fa-store"></i> 쇼핑몰(채널)</label>
+            <select id="filterChannel">
+              <option value="">전체 채널</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label><i class="fas fa-building"></i> 업체명</label>
+            <select id="filterCompany">
+              <option value="">전체 업체</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label><i class="fas fa-box"></i> 제품명</label>
+            <select id="filterProduct">
+              <option value="">전체 제품</option>
+            </select>
+          </div>
+          <div class="filter-group" style="min-width:160px">
+            <label><i class="fas fa-search"></i> 검색</label>
+            <input type="text" id="searchInput" placeholder="주문번호, 제품명 검색..." />
+          </div>
+          <div class="filter-actions">
+            <button class="btn btn-primary" id="applyFilterBtn" style="height:36px;white-space:nowrap">
+              <i class="fas fa-filter"></i> 조회
+            </button>
+            <button class="btn btn-secondary" id="resetFilterBtn" style="height:36px;white-space:nowrap">
+              <i class="fas fa-undo"></i> 초기화
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 액션 바 -->
+      <div class="action-bar">
+        <div class="result-count" id="resultCount">전체 0건</div>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="addSalesBtn" style="white-space:nowrap">
+            <i class="fas fa-plus"></i> 신규 등록
+          </button>
+          <button class="btn btn-secondary" id="importExcelBtn" style="white-space:nowrap;background:#e8f5e9;border-color:#2C5F2E;color:#2C5F2E">
+            <i class="fas fa-file-upload" style="color:#2C5F2E"></i> 엑셀 가져오기
+          </button>
+          <button class="btn btn-secondary" id="exportExcelBtn" style="white-space:nowrap">
+            <i class="fas fa-file-excel" style="color:#1e8449"></i> 엑셀 다운로드
+          </button>
+          <button class="btn btn-secondary" id="printBtn" style="white-space:nowrap">
+            <i class="fas fa-print"></i> 인쇄
+          </button>
+          <button class="btn btn-secondary" id="sampleExcelBtn" style="white-space:nowrap" title="샘플 엑셀 다운로드">
+            <i class="fas fa-download"></i> 샘플
+          </button>
+          <button class="btn btn-danger" id="deleteSelectedBtn" style="white-space:nowrap;display:none" title="체크된 항목 삭제">
+            <i class="fas fa-trash-alt"></i> 선택 삭제
+          </button>
+          <button class="btn btn-danger" id="deleteAllRawBtn" style="white-space:nowrap" title="모든 데이터 전체 삭제">
+            <i class="fas fa-trash-alt"></i> 전체 삭제
+          </button>
+        </div>
+      </div>
+
+      <!-- 테이블 -->
+      <div class="table-wrap">
+        <table class="sales-table" id="salesTable">
+          <thead>
+            <tr>
+              <th style="width:40px"><input type="checkbox" id="selectAllChk" title="전체 선택" style="cursor:pointer;width:15px;height:15px"></th>
+              <th>업체명</th>
+              <th>제품명</th>
+              <th style="width:50px">수량</th>
+              <th>쇼핑몰</th>
+              <th>결제금액</th>
+              <th>정산금액</th>
+              <th>공급가</th>
+              <th>택배비</th>
+              <th>작업비</th>
+              <th>포장박스</th>
+              <th>마진</th>
+              <th>마진율</th>
+              <th style="width:60px">수정</th>
+            </tr>
+          </thead>
+          <tbody id="salesTableBody">
+            <tr><td colspan="14" style="text-align:center;padding:60px;color:#999"><i class="fas fa-spinner fa-spin"></i> 데이터 로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 페이지네이션 -->
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- 신규/수정 모달 -->
+  <div class="modal" id="salesModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalTitle">판매기록 등록</h3>
+        <button class="btn-close" id="modalCloseBtn"><i class="fas fa-times"></i></button>
+      </div>
+      <form id="salesForm">
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label>판매일자 <span class="required">*</span></label>
+            <input type="date" id="f_sale_date" required />
+          </div>
+          <div class="form-group">
+            <label>업체명 <span class="required">*</span></label>
+            <input type="text" id="f_company" placeholder="업체명 입력" required />
+          </div>
+          <div class="form-group">
+            <label>쇼핑몰(채널) <span class="required">*</span></label>
+            <input type="text" id="f_channel" placeholder="쇼핑몰명 입력" list="channelList" required />
+            <datalist id="channelList"></datalist>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>제품명 <span class="required">*</span></label>
+          <input type="text" id="f_product" placeholder="제품명 입력" list="productList" required />
+          <datalist id="productList"></datalist>
+        </div>
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label>주문번호</label>
+            <input type="text" id="f_order_no" placeholder="주문번호" />
+          </div>
+          <div class="form-group">
+            <label>송장번호</label>
+            <input type="text" id="f_invoice_no" placeholder="송장번호" />
+          </div>
+          <div class="form-group">
+            <label>수량 <span class="required">*</span></label>
+            <input type="number" id="f_qty" placeholder="0" min="1" required />
+          </div>
+        </div>
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label>결제금액 (원)</label>
+            <input type="number" id="f_payment" placeholder="0" />
+          </div>
+          <div class="form-group">
+            <label>정산금액 (원)</label>
+            <input type="number" id="f_settlement" placeholder="0" />
+          </div>
+          <div class="form-group">
+            <label>공급가 (원)</label>
+            <input type="number" id="f_supply" placeholder="0" />
+          </div>
+        </div>
+        <div class="form-grid form-grid-3">
+          <div class="form-group">
+            <label>택배비 (원)</label>
+            <input type="number" id="f_delivery" placeholder="0" />
+          </div>
+          <div class="form-group">
+            <label>작업비 (원)</label>
+            <input type="number" id="f_work" placeholder="0" />
+          </div>
+          <div class="form-group">
+            <label>포장박스 (원)</label>
+            <input type="number" id="f_box" placeholder="0" />
+          </div>
+        </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label>마진 (자동계산)</label>
+            <input type="number" id="f_margin" readonly style="background:#f9f9f9" />
+          </div>
+          <div class="form-group">
+            <label>마진율 (자동계산)</label>
+            <input type="text" id="f_margin_rate" readonly style="background:#f9f9f9" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>비고</label>
+          <input type="text" id="f_remarks" placeholder="비고" />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="modalCancelBtn">취소</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 엑셀 가져오기 모달 -->
+  <div class="modal" id="importModal">
+    <div class="modal-box" style="width:min(600px,95vw)">
+      <div class="modal-header">
+        <h3><i class="fas fa-file-upload" style="color:#2C5F2E;margin-right:8px"></i>엑셀 파일 가져오기</h3>
+        <button class="btn-close" id="importModalClose"><i class="fas fa-times"></i></button>
+      </div>
+
+      <!-- 판매일자 입력 -->
+      <div style="background:#f0f7ff;border:1px solid #b3d4f5;border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+        <label style="font-size:13px;font-weight:600;color:#1a5276;white-space:nowrap"><i class="fas fa-calendar-alt"></i> 판매일자</label>
+        <input type="date" id="importSaleDate" style="height:34px;padding:0 10px;border:1px solid #b3d4f5;border-radius:6px;font-size:13px;flex:1" />
+        <span style="font-size:11px;color:#666">파일에 날짜가 없으면 이 날짜로 일괄 적용</span>
+      </div>
+
+      <!-- 파일 선택 영역 -->
+      <div id="importDropZone" style="border:2px dashed #ccc;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-bottom:16px">
+        <i class="fas fa-cloud-upload-alt" style="font-size:36px;color:#aaa;margin-bottom:10px"></i>
+        <p style="font-size:14px;color:#666;margin:0">엑셀 파일(.xlsx, .xls)을 드래그하거나 클릭하여 선택하세요</p>
+        <p style="font-size:12px;color:#aaa;margin-top:6px">첨부하신 <strong>260428-제품판매.xlsx</strong> 형식과 동일한 파일을 업로드하세요</p>
+        <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display:none" />
+      </div>
+
+      <!-- 컬럼 매핑 안내 -->
+      <div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px">
+        <strong style="color:#2C5F2E"><i class="fas fa-info-circle"></i> 인식되는 컬럼명</strong>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">DB번호</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">주문번호</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">송장번호</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">업체명</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">제품명</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">수량</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">쇼핑몰</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">결제금액</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">정산금액</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">공급가</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">택배비</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">작업비</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">포장박스</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">마진</span>
+          <span style="background:#e8f5e9;padding:2px 8px;border-radius:4px">마진율</span>
+        </div>
+      </div>
+
+      <!-- 진행률 바 -->
+      <div id="importProgressWrap" style="display:none;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-bottom:4px">
+          <span id="importProgressLabel">저장 중...</span>
+          <span id="importProgressPct">0%</span>
+        </div>
+        <div style="background:#eee;border-radius:6px;height:10px;overflow:hidden">
+          <div id="importProgressBar" style="height:100%;background:#2C5F2E;border-radius:6px;width:0%;transition:width 0.3s"></div>
+        </div>
+      </div>
+
+      <!-- 미리보기 영역 -->
+      <div id="importPreview" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong id="importPreviewTitle" style="font-size:13px;color:#333"></strong>
+          <span id="importPreviewCount" style="font-size:12px;color:#2C5F2E;font-weight:600"></span>
+        </div>
+        <div style="overflow-x:auto;max-height:200px;border:1px solid #eee;border-radius:6px">
+          <table id="importPreviewTable" style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead id="importPreviewHead" style="background:#2C5F2E;color:#fff;position:sticky;top:0"></thead>
+            <tbody id="importPreviewBody"></tbody>
+          </table>
+        </div>
+        <div id="importWarning" style="display:none;margin-top:8px;padding:8px 12px;background:#fff3cd;border-radius:6px;font-size:12px;color:#856404"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="importCancelBtn">취소</button>
+        <button type="button" class="btn btn-primary" id="importConfirmBtn" disabled>
+          <i class="fas fa-upload"></i> <span id="importConfirmText">파일을 선택하세요</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 더보기 메뉴 -->
+  <div class="bottom-sheet-overlay" id="moreMenuOverlay" style="display:none"></div>
+  <div class="bottom-sheet" id="moreMenuSheet" style="display:none">
+    <div class="bottom-sheet-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px">
+      <h3 style="font-size:15px;font-weight:700">메뉴</h3>
+      <button class="btn-close" id="moreMenuClose"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="bottom-sheet-content" style="padding:0 16px 20px">
+      <button class="btn btn-danger" id="deleteAllBtn" style="width:100%;text-align:left;margin-bottom:8px">
+        <i class="fas fa-trash"></i> 전체 삭제 (현재 조회 결과)
+      </button>
+      <button class="btn btn-danger" id="deleteAllRawBtn" style="width:100%;text-align:left;background:#c0392b">
+        <i class="fas fa-database"></i> 전체 삭제 (모든 데이터)
+      </button>
+      <!-- 삭제 진행률 -->
+      <div id="deleteProgressWrap" style="display:none;margin-top:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-bottom:4px">
+          <span id="deleteProgressLabel">삭제 중...</span>
+          <span id="deleteProgressPct">0%</span>
+        </div>
+        <div style="background:#eee;border-radius:6px;height:10px;overflow:hidden">
+          <div id="deleteProgressBar" style="height:100%;background:#e74c3c;border-radius:6px;width:0%;transition:width 0.3s"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PWA 설치 배너 -->
+  <div class="pwa-install-banner" id="pwaInstallBanner">
+    <div class="pwa-banner-icon"><img src="images/icon-192-v2.png" alt="LifeCulture" /></div>
+    <div class="pwa-banner-text">
+      <div class="pwa-banner-title">라이프컬처</div>
+      <div class="pwa-banner-sub">생산관리 시스템을 설치하세요</div>
+    </div>
+    <div class="pwa-banner-actions">
+      <button class="pwa-install-btn" onclick="installPwa()">설치</button>
+      <button class="pwa-dismiss-btn" onclick="dismissPwaBanner()">닫기</button>
+    </div>
+  </div>
+
+  <!-- 바텀 내비게이션 -->
+  <nav class="bottom-nav" id="bottomNav">
+    <a href="index.html" class="bottom-nav-item"><i class="fas fa-tachometer-alt"></i><span>대시보드</span></a>
+    <a href="raw-materials.html" class="bottom-nav-item"><i class="fas fa-box-open"></i><span>수불부</span></a>
+    <a href="products.html" class="bottom-nav-item"><i class="fas fa-tag"></i><span>제품</span></a>
+    <a href="sales.html" class="bottom-nav-item active"><i class="fas fa-shopping-cart"></i><span>판매</span></a>
+    <button class="bottom-nav-item" id="moreNavBtn" onclick="openMoreMenu()"><i class="fas fa-th-large"></i><span>더보기</span></button>
+  </nav>
+
+  <style>
+    .bottom-sheet-overlay.show { opacity: 1; }
+    .bottom-sheet.show { transform: translateY(0); }
+  </style>
+
+  <script src="js/auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-init.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/sales.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var user = (typeof requireAuth === 'function') ? requireAuth('sales') : null;
+      var nav = document.getElementById('sidebarNav');
+      if (nav && typeof getSidebarHTML === 'function') nav.innerHTML = getSidebarHTML('sales.html');
+      if (typeof setupSidebar === 'function') setupSidebar();
+      var dateEl = document.getElementById('currentDate');
+      if (dateEl) {
+        var now = new Date();
+        var days = ['일','월','화','수','목','금','토'];
+        dateEl.textContent = now.getFullYear() + '년 ' + (now.getMonth()+1) + '월 ' + now.getDate() + '일 (' + days[now.getDay()] + ')';
+      }
+    });
+    function openMoreMenu() {
+      var overlay = document.getElementById('moreMenuOverlay');
+      var sheet = document.getElementById('moreMenuSheet');
+      if (overlay) { overlay.style.display='block'; setTimeout(()=>overlay.classList.add('show'),10); }
+      if (sheet) { sheet.style.display='block'; setTimeout(()=>sheet.classList.add('show'),10); }
+    }
+  </script>
+</body>
+</html>

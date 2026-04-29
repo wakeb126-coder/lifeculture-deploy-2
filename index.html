@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="라이프컬처" />
+  <meta name="description" content="더치커피 원부자재 입고부터 완제품 출고까지 전 공정 관리 시스템" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="images/icon-512-v2.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="images/icon-192-v2.png" />
+  <link rel="apple-touch-icon" sizes="120x120" href="images/icon-192-v2.png" />
+  <link rel="apple-touch-icon" sizes="76x76" href="images/icon-192-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192-v2.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="images/icon-512-v2.png" />
+  <link rel="shortcut icon" href="images/icon-192-v2.png" />
+  <title>라이프컬처 - 생산관리</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+</head>
+<body>
+
+  <!-- 스플래시 스크린 -->
+  <div class="app-splash" id="appSplash">
+    <div class="splash-logo"><img src="images/icon-512-v2.png" alt="라이프컬처" /></div>
+    <div class="splash-title">라이프컬처</div>
+    <div class="splash-sub">생산관리 시스템</div>
+    <div class="splash-loader"><div class="splash-loader-bar"></div></div>
+  </div>
+
+  <!-- 오프라인/온라인 바 -->
+  <div class="offline-bar" id="offlineBar"><i class="fas fa-wifi-slash"></i> 오프라인 상태 · 일부 기능이 제한됩니다</div>
+  <div class="online-bar" id="onlineBar"><i class="fas fa-wifi"></i> 인터넷 연결됨</div>
+
+  <!-- PWA 설치 배너 -->
+  <div class="pwa-install-banner" id="pwaInstallBanner">
+    <div class="pwa-banner-icon"><img src="images/icon-512-v2.png" alt="앱 아이콘" /></div>
+    <div class="pwa-banner-text">
+      <div class="pwa-banner-title">앱으로 설치하기</div>
+      <div class="pwa-banner-sub">홈 화면에 추가해서 더 빠르게 사용하세요</div>
+    </div>
+    <div class="pwa-banner-actions">
+      <button class="pwa-install-btn" onclick="installPWA()">설치</button>
+      <button class="pwa-dismiss-btn" onclick="dismissInstallBanner()"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+
+  <!-- 사이드바 (데스크탑) -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-wrap">
+        <div class="logo-icon"><i class="fas fa-coffee"></i></div>
+        <div class="logo-text">
+          <span class="brand">라이프컬처</span>
+          <span class="sub">생산관리 시스템</span>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <span class="nav-section-title">대시보드</span>
+        <a href="index.html" class="nav-item active"><i class="fas fa-tachometer-alt"></i><span>현황 대시보드</span></a>
+        <a href="traceability.html" class="nav-item"><i class="fas fa-search"></i><span>Lot 역추적</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">원부자재 관리</span>
+        <a href="materials-master.html" class="nav-item"><i class="fas fa-cubes"></i><span>원부재료 마스터</span></a>
+        <a href="raw-materials.html" class="nav-item"><i class="fas fa-box-open"></i><span>원료수불부</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">거래처 관리</span>
+        <a href="vendors.html" class="nav-item"><i class="fas fa-handshake"></i><span>거래처 정보</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">생산일지</span>
+        <a href="roasting.html" class="nav-item"><i class="fas fa-fire"></i><span>로스팅</span></a>
+        <a href="grinding.html" class="nav-item"><i class="fas fa-cog"></i><span>분쇄</span></a>
+        <a href="extraction.html" class="nav-item"><i class="fas fa-tint"></i><span>추출</span></a>
+        <a href="bottle-packing.html" class="nav-item"><i class="fas fa-wine-bottle"></i><span>제품(병)포장</span></a>
+        <a href="box-packing.html" class="nav-item"><i class="fas fa-boxes"></i><span>완제품(박스)포장</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">판매 관리</span>
+        <a href="sales.html" class="nav-item"><i class="fas fa-shopping-cart"></i><span>온라인몰 판매</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">제품 관리</span>
+        <a href="products.html" class="nav-item"><i class="fas fa-cube"></i><span>제품 정보</span></a>
+      </div>
+      <div class="nav-section">
+        <span class="nav-section-title">시스템</span>
+        <a href="backup.html" class="nav-item" style="color:#e67e22"><i class="fas fa-database" style="color:#e67e22"></i><span>데이터 백업/복원</span></a>
+        <a href="install-guide.html" class="nav-item"><i class="fas fa-mobile-alt"></i><span>앱 설치 가이드</span></a>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="install-guide.html" style="display:flex;align-items:center;gap:8px;color:rgba(255,255,255,0.5);text-decoration:none;font-size:12px;margin-bottom:8px;padding:6px 8px;border-radius:8px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+        <i class="fas fa-mobile-alt" style="font-size:14px;color:#4a9e4d"></i> 앱 설치 가이드
+      </a>
+      <span>LifeCulture Co.</span>
+      <span id="currentDate"></span>
+    </div>
+  </aside>
+
+  <!-- 메인 컨텐츠 -->
+  <main class="main-content" id="mainContent">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobileMenuBtn"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <img src="images/icon-512.png" alt="" style="width:28px;height:28px;border-radius:7px;display:none" class="topbar-app-icon" id="topbarAppIcon" />
+          <h1 class="page-title">현황 대시보드</h1>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="topbarDate"></span>
+      </div>
+    </header>
+
+    <div class="content-area" id="dashboardContent">
+
+      <!-- 앱 설치 안내 배너 (미설치 시만 표시) -->
+      <div id="appInstallGuideCard" style="display:none;margin-bottom:16px">
+        <div style="background:linear-gradient(135deg,#1a3d1c,#2C5F2E);border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 16px rgba(44,95,46,0.25)">
+          <div style="width:52px;height:52px;border-radius:14px;overflow:hidden;flex-shrink:0">
+            <img src="images/icon-512.png" alt="" style="width:100%;height:100%;object-fit:cover" />
+          </div>
+          <div style="flex:1">
+            <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:3px">📱 앱으로 설치하면 더 편리해요!</div>
+            <div style="color:rgba(255,255,255,0.65);font-size:12px">홈 화면에서 바로 실행 · 오프라인 지원</div>
+          </div>
+          <a href="install-guide.html" style="background:#D4A017;color:#fff;border:none;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;flex-shrink:0">설치 가이드</a>
+        </div>
+      </div>
+
+      <!-- KPI 카드 (6개) -->
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card kpi-raw">
+          <div class="kpi-icon"><i class="fas fa-box-open"></i></div>
+          <div class="kpi-info">
+            <div class="kpi-value" id="kpiRaw">-</div>
+            <div class="kpi-label">원부자재 입고</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-roasting">
+          <div class="kpi-icon"><i class="fas fa-fire"></i></div>
+          <div class="kpi-info">
+            <div class="kpi-value" id="kpiRoasting">-</div>
+            <div class="kpi-label">로스팅 이번달</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-extraction">
+          <div class="kpi-icon"><i class="fas fa-tint"></i></div>
+          <div class="kpi-info">
+            <div class="kpi-value" id="kpiExtraction">-</div>
+            <div class="kpi-label">추출 이번달</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-box">
+          <div class="kpi-icon"><i class="fas fa-boxes"></i></div>
+          <div class="kpi-info">
+            <div class="kpi-value" id="kpiBox">-</div>
+            <div class="kpi-label">출고 이번달</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-sales">
+          <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
+          <div class="kpi-info">
+            <div class="kpi-value" id="kpiSales">-</div>
+            <div class="kpi-label">이번달 매출</div>
+          </div>
+        </div>
+        <div class="kpi-card kpi-products">
+          <div class="kpi-icon"><i class="fas fa-cube"></i></div>
+          <div class="kpi-info">
+            <div class="kpi-value" id="kpiProducts">-</div>
+            <div class="kpi-label">등록 제품수</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 공정 플로우 -->
+      <div class="process-flow-section">
+        <h2 class="section-title"><i class="fas fa-project-diagram"></i> 더치커피 생산 공정</h2>
+        <div class="process-flow">
+          <div class="flow-step" onclick="location.href='raw-materials.html'">
+            <div class="flow-icon raw"><i class="fas fa-seedling"></i></div>
+            <div class="flow-title">원두 입고</div>
+            <div class="flow-sub">원료수불부</div>
+          </div>
+          <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+          <div class="flow-step" onclick="location.href='roasting.html'">
+            <div class="flow-icon roasting"><i class="fas fa-fire"></i></div>
+            <div class="flow-title">로스팅</div>
+            <div class="flow-sub">STEP 1</div>
+          </div>
+          <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+          <div class="flow-step" onclick="location.href='grinding.html'">
+            <div class="flow-icon grinding"><i class="fas fa-cog"></i></div>
+            <div class="flow-title">분쇄</div>
+            <div class="flow-sub">STEP 2</div>
+          </div>
+          <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+          <div class="flow-step" onclick="location.href='extraction.html'">
+            <div class="flow-icon extraction"><i class="fas fa-tint"></i></div>
+            <div class="flow-title">추출</div>
+            <div class="flow-sub">STEP 3</div>
+          </div>
+          <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+          <div class="flow-step" onclick="location.href='bottle-packing.html'">
+            <div class="flow-icon bottle"><i class="fas fa-wine-bottle"></i></div>
+            <div class="flow-title">병 포장</div>
+            <div class="flow-sub">STEP 4</div>
+          </div>
+          <div class="flow-arrow"><i class="fas fa-chevron-right"></i></div>
+          <div class="flow-step" onclick="location.href='box-packing.html'">
+            <div class="flow-icon box"><i class="fas fa-boxes"></i></div>
+            <div class="flow-title">박스 출고</div>
+            <div class="flow-sub">STEP 5</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 대시보드 그리드 (6개) -->
+      <div class="dashboard-grid">
+        <div class="dashboard-card">
+          <h3 class="card-title"><i class="fas fa-history"></i> 최근 로스팅</h3>
+          <div class="mini-table-wrap" id="recentRoasting">
+            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>
+          </div>
+        </div>
+        <div class="dashboard-card">
+          <h3 class="card-title"><i class="fas fa-history"></i> 최근 추출</h3>
+          <div class="mini-table-wrap" id="recentExtraction">
+            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>
+          </div>
+        </div>
+        <div class="dashboard-card">
+          <h3 class="card-title"><i class="fas fa-history"></i> 최근 완제품 출고</h3>
+          <div class="mini-table-wrap" id="recentBox">
+            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>
+          </div>
+        </div>
+        <div class="dashboard-card">
+          <h3 class="card-title"><i class="fas fa-exclamation-triangle"></i> 재고 알림</h3>
+          <div class="mini-table-wrap" id="stockAlert">
+            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>
+          </div>
+        </div>
+        <div class="dashboard-card">
+          <h3 class="card-title"><i class="fas fa-chart-bar"></i> 이번달 매출 현황</h3>
+          <div class="mini-table-wrap" id="monthlySales">
+            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>
+          </div>
+        </div>
+        <div class="dashboard-card">
+          <h3 class="card-title"><i class="fas fa-clipboard-check"></i> 서류 갱신 알림</h3>
+          <div class="mini-table-wrap" id="documentAlert">
+            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 바텀 내비게이션 (모바일) -->
+  <nav class="bottom-nav" id="bottomNav">
+    <a href="index.html" class="bottom-nav-item active">
+      <i class="fas fa-home"></i>
+      <span>홈</span>
+    </a>
+    <a href="raw-materials.html" class="bottom-nav-item">
+      <i class="fas fa-box-open"></i>
+      <span>원료</span>
+    </a>
+    <a href="extraction.html" class="bottom-nav-item">
+      <i class="fas fa-tint"></i>
+      <span>생산</span>
+    </a>
+    <a href="sales.html" class="bottom-nav-item">
+      <i class="fas fa-shopping-cart"></i>
+      <span>판매</span>
+    </a>
+    <button class="bottom-nav-item" onclick="openMoreMenu()">
+      <i class="fas fa-th-large"></i>
+      <span>더보기</span>
+    </button>
+  </nav>
+
+  <!-- 더보기 시트 -->
+  <div class="more-menu-overlay" id="moreMenuOverlay" onclick="closeMoreMenu()"></div>
+  <div class="more-menu-sheet" id="moreMenuSheet" style="display:none">
+    <div class="more-menu-handle"></div>
+    <div class="more-menu-title">전체 메뉴</div>
+
+        <div class="more-menu-section">
+      <div class="more-menu-section-title">대시보드</div>
+      <a href="index.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-tachometer-alt" style="background:#f0f4ff;color:#6c5ce7"></i>
+        현황 대시보드
+      </a>
+      <a href="traceability.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-search" style="background:#fff0ec;color:#e17055"></i>
+        Lot 역추적
+      </a>
+    </div>
+
+    <div class="more-menu-section">
+      <div class="more-menu-section-title">원부자재 관리</div>
+      <a href="materials-master.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-cubes" style="background:#e8f4fd;color:#3498db"></i>
+        원부재료 마스터
+      </a>
+      <a href="raw-materials.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-box-open" style="background:#e8f8f5;color:#1abc9c"></i>
+        원료수불부
+      </a>
+    </div>
+
+    <div class="more-menu-section">
+      <div class="more-menu-section-title">거래처 관리</div>
+      <a href="vendors.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-handshake" style="background:#eafaf1;color:#27ae60"></i>
+        거래처 정보
+      </a>
+    </div>
+
+    <div class="more-menu-section">
+      <div class="more-menu-section-title">생산일지</div>
+      <a href="roasting.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-fire" style="background:#fff0ec;color:#e17055"></i>
+        로스팅
+      </a>
+      <a href="grinding.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-cog" style="background:#f0f4ff;color:#6c5ce7"></i>
+        분쇄
+      </a>
+      <a href="extraction.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-tint" style="background:#e8f4fd;color:#3498db"></i>
+        추출
+      </a>
+      <a href="bottle-packing.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-wine-bottle" style="background:#e8f8f5;color:#1abc9c"></i>
+        제품(병)포장
+      </a>
+      <a href="box-packing.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-boxes" style="background:#eafaf1;color:#27ae60"></i>
+        완제품(박스)포장
+      </a>
+    </div>
+
+    <div class="more-menu-section">
+      <div class="more-menu-section-title">판매 관리</div>
+      <a href="sales.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-shopping-cart" style="background:#fff9e6;color:#f39c12"></i>
+        온라인몰 판매
+      </a>
+    </div>
+
+    <div class="more-menu-section">
+      <div class="more-menu-section-title">제품 관리</div>
+      <a href="products.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-cube" style="background:#fff9e6;color:#f39c12"></i>
+        제품 정보
+      </a>
+    </div>
+    <div class="more-menu-section">
+      <div class="more-menu-section-title">시스템</div>
+      <a href="backup.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-database" style="background:#fef5e7;color:#e67e22"></i>
+        데이터 백업/복원
+      </a>
+      <a href="install-guide.html" class="more-menu-item" onclick="closeMoreMenu()">
+        <i class="fas fa-mobile-alt" style="background:#eafaf1;color:#27ae60"></i>
+        앱 설치 가이드
+      </a>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/auth.js"></script>
+      <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-init.js"></script>
+    <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/dashboard.js"></script>
+
+  <script>
+    // 인증 체크
+    document.addEventListener('DOMContentLoaded', () => {
+      const user = requireAuth('dashboard');
+      if (!user) return;
+      // 사이드바 재구성 (권한 적용)
+      const sidebarNav = document.querySelector('.sidebar-nav');
+      if (sidebarNav) sidebarNav.innerHTML = getSidebarHTML('index.html');
+      // 사용자 정보 표시
+      const perms = ROLE_PERMISSIONS[user.role] || {};
+      const topbarRight = document.querySelector('.topbar-right');
+      if (topbarRight) {
+        topbarRight.innerHTML = `<span class="topbar-date" id="topbarDate"></span><span style="margin-left:12px;font-size:12px;color:#666">${user.name}</span><span style="margin-left:6px;background:${perms.color||'#999'};color:#fff;font-size:10px;padding:2px 7px;border-radius:8px">${perms.badge||user.role}</span><button onclick="logout()" style="margin-left:10px;background:none;border:1px solid #ddd;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;color:#666"><i class="fas fa-sign-out-alt"></i> 로그아웃</button>`;
+      }
+      initDateDisplay();
+      setupSidebar();
+    });
+    // 더보기 시트 토글
+    function openMoreMenu() {
+      document.getElementById('moreMenuOverlay').classList.add('show');
+      const sheet = document.getElementById('moreMenuSheet');
+      sheet.style.display = 'block';
+      setTimeout(() => sheet.style.animation = 'sheetUp 0.3s cubic-bezier(.4,0,.2,1)', 10);
+    }
+    function closeMoreMenu() {
+      document.getElementById('moreMenuOverlay').classList.remove('show');
+      document.getElementById('moreMenuSheet').style.display = 'none';
+    }
+    // 앱 모드에서 topbar 아이콘 표시
+    const isAppMode = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    if (isAppMode) {
+      document.getElementById('topbarAppIcon').style.display = 'block';
+    } else {
+      // 미설치 시 설치 가이드 배너 표시
+      document.getElementById('appInstallGuideCard').style.display = 'block';
+    }
+  </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

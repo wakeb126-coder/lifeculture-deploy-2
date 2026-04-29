@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="images/icon-512-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192-v2.png" />
+  <title>로그인 - 라이프컬처</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: linear-gradient(135deg, #1a3a1a 0%, #2C5F2E 50%, #1a4a2a 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-container {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      width: 100%;
+      max-width: 420px;
+      overflow: hidden;
+    }
+    .login-header {
+      background: linear-gradient(135deg, #2C5F2E, #4a8a4c);
+      padding: 40px 32px 32px;
+      text-align: center;
+      color: #fff;
+    }
+    .login-logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      margin: 0 auto 16px;
+      display: block;
+    }
+    .login-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .login-subtitle {
+      font-size: 13px;
+      opacity: 0.85;
+    }
+    .login-body {
+      padding: 32px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 8px;
+    }
+    .input-wrap {
+      position: relative;
+    }
+    .input-wrap i {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #aaa;
+      font-size: 15px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px 12px 42px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: 'Noto Sans KR', sans-serif;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    .form-group input:focus {
+      border-color: #2C5F2E;
+      box-shadow: 0 0 0 3px rgba(44,95,46,0.1);
+    }
+    .toggle-pw {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #aaa;
+      font-size: 15px;
+      padding: 0;
+    }
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #2C5F2E, #4a8a4c);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: 'Noto Sans KR', sans-serif;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 15px rgba(44,95,46,0.3);
+    }
+    .login-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(44,95,46,0.4); }
+    .login-btn:active { transform: translateY(0); }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .error-msg {
+      background: #ffeaea;
+      color: #c0392b;
+      border: 1px solid #f5c6cb;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error-msg.show { display: flex; align-items: center; gap: 8px; }
+    .login-footer {
+      padding: 16px 32px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+      border-top: 1px solid #f0f0f0;
+    }
+    .login-footer a { color: #2C5F2E; text-decoration: none; font-weight: 600; }
+    .demo-accounts {
+      background: #f8fdf8;
+      border: 1px solid #d4edda;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 20px;
+    }
+    .demo-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #2C5F2E;
+      margin-bottom: 10px;
+    }
+    .demo-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #e8f5e9;
+      font-size: 12px;
+    }
+    .demo-item:last-child { border-bottom: none; }
+    .demo-role {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .demo-fill-btn {
+      background: none;
+      border: 1px solid #2C5F2E;
+      color: #2C5F2E;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+    .demo-fill-btn:hover { background: #2C5F2E; color: #fff; }
+    .pwa-hint {
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #795548;
+      margin-top: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .pwa-hint i { color: #f57c00; margin-top: 1px; flex-shrink: 0; }
+    @media (max-width: 480px) {
+      .login-body { padding: 24px 20px; }
+      .login-header { padding: 30px 20px 24px; }
+    }
+  </style>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-init.js"></script>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-header">
+      <img src="images/icon-512-v2.png" alt="라이프컬처" class="login-logo" />
+      <div class="login-title">라이프컬처</div>
+      <div class="login-subtitle">생산·물류 통합관리 시스템</div>
+    </div>
+    <div class="login-body">
+      <div class="error-msg" id="errorMsg">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="errorText"></span>
+      </div>
+
+      <!-- 데모 계정 안내 -->
+      <div class="demo-accounts" id="demoAccounts">
+        <div class="demo-title"><i class="fas fa-info-circle"></i> 초기 계정 안내 (처음 사용 시)</div>
+        <div class="demo-item">
+          <span><span class="demo-role" style="background:#e74c3c">관리자</span> admin@lifeculture.co.kr</span>
+          <button class="demo-fill-btn" onclick="fillDemo('admin@lifeculture.co.kr','admin1234')">입력</button>
+        </div>
+        <div class="demo-item">
+          <span><span class="demo-role" style="background:#27ae60">생산팀</span> production@lifeculture.co.kr</span>
+          <button class="demo-fill-btn" onclick="fillDemo('production@lifeculture.co.kr','prod1234')">입력</button>
+        </div>
+        <div class="demo-item">
+          <span><span class="demo-role" style="background:#2980b9">물류팀</span> warehouse@lifeculture.co.kr</span>
+          <button class="demo-fill-btn" onclick="fillDemo('warehouse@lifeculture.co.kr','ware1234')">입력</button>
+        </div>
+        <div class="demo-item">
+          <span><span class="demo-role" style="background:#8e44ad">영업팀</span> sales@lifeculture.co.kr</span>
+          <button class="demo-fill-btn" onclick="fillDemo('sales@lifeculture.co.kr','sale1234')">입력</button>
+        </div>
+        <div class="demo-item">
+          <span><span class="demo-role" style="background:#7f8c8d">조회자</span> viewer@lifeculture.co.kr</span>
+          <button class="demo-fill-btn" onclick="fillDemo('viewer@lifeculture.co.kr','view1234')">입력</button>
+        </div>
+      </div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="emailInput"><i class="fas fa-envelope" style="color:#2C5F2E;margin-right:4px"></i> 이메일</label>
+          <div class="input-wrap">
+            <i class="fas fa-envelope"></i>
+            <input type="email" id="emailInput" placeholder="이메일 주소 입력" required autocomplete="email" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="passwordInput"><i class="fas fa-lock" style="color:#2C5F2E;margin-right:4px"></i> 비밀번호</label>
+          <div class="input-wrap">
+            <i class="fas fa-lock"></i>
+            <input type="password" id="passwordInput" placeholder="비밀번호 입력" required autocomplete="current-password" />
+            <button type="button" class="toggle-pw" onclick="togglePw()"><i class="fas fa-eye" id="pwEyeIcon"></i></button>
+          </div>
+        </div>
+        <button type="submit" class="login-btn" id="loginBtn">
+          <i class="fas fa-sign-in-alt"></i> 로그인
+        </button>
+      </form>
+
+      <div class="pwa-hint">
+        <i class="fas fa-mobile-alt"></i>
+        <div>
+          <strong>앱으로 설치하기:</strong> 브라우저 메뉴에서 "홈 화면에 추가"를 선택하면 앱처럼 사용할 수 있습니다.
+          <a href="install-guide.html" style="color:#f57c00;font-weight:600"> 설치 가이드 보기</a>
+        </div>
+      </div>
+    </div>
+    <div class="login-footer">
+      © 2026 라이프컬처 · 생산·물류 통합관리 시스템<br/>
+      계정 문의: <a href="mailto:admin@lifeculture.co.kr">admin@lifeculture.co.kr</a>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    // 이미 로그인된 경우 대시보드로
+    if (getCurrentUser()) {
+      window.location.href = 'index.html';
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('emailInput').value.trim();
+      const password = document.getElementById('passwordInput').value;
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로그인 중...';
+      setTimeout(() => {
+        const result = login(email, password);
+        if (result.success) {
+          btn.innerHTML = '<i class="fas fa-check"></i> 로그인 성공!';
+          setTimeout(() => { window.location.href = 'index.html'; }, 500);
+        } else {
+          showError(result.message);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> 로그인';
+        }
+      }, 300);
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      document.getElementById('errorText').textContent = msg;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    function togglePw() {
+      const input = document.getElementById('passwordInput');
+      const icon = document.getElementById('pwEyeIcon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'fas fa-eye-slash';
+      } else {
+        input.type = 'password';
+        icon.className = 'fas fa-eye';
+      }
+    }
+
+    function fillDemo(email, pw) {
+      document.getElementById('emailInput').value = email;
+      document.getElementById('passwordInput').value = pw;
+    }
+  </script>
+</body>
+</html>

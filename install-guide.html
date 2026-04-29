@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="images/icon-512-v2.png" />
+  <link rel="icon" type="image/png" href="images/icon-512-v2.png" />
+  <title>앱 설치 가이드 - 라이프컬처</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #2C5F2E;
+      --primary-light: #4a9e4d;
+      --bg: #f4f6f8;
+      --card: #fff;
+      --text: #1a1a2e;
+      --text-sub: #6b7280;
+      --border: #e5e7eb;
+      --ios: #007AFF;
+      --android: #34A853;
+      --gold: #D4A017;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* 헤더 */
+    .guide-header {
+      background: linear-gradient(135deg, #1a3d1c 0%, #2C5F2E 100%);
+      color: #fff;
+      padding: 48px 20px 40px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .guide-header::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Ccircle cx='30' cy='30' r='20'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .header-icon {
+      width: 80px; height: 80px;
+      border-radius: 20px;
+      overflow: hidden;
+      margin: 0 auto 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      position: relative;
+    }
+    .header-icon img { width: 100%; height: 100%; object-fit: cover; }
+    .guide-header h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; position: relative; }
+    .guide-header p { font-size: 13px; color: rgba(255,255,255,0.7); position: relative; }
+    .pwa-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px; font-weight: 600;
+      margin-top: 12px;
+      position: relative;
+    }
+
+    /* 앱 상태 배너 */
+    .already-installed {
+      display: none;
+      background: #e8f5e9; border: 1px solid #a5d6a7;
+      border-radius: 12px; padding: 14px 18px;
+      margin: 20px 20px 0;
+      font-size: 13px; color: #2e7d32;
+      font-weight: 600;
+      align-items: center; gap: 10px;
+    }
+    .already-installed.show { display: flex; }
+
+    /* 메인 컨텐츠 */
+    .guide-content {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    /* 탭 */
+    .tab-group {
+      display: flex; gap: 8px;
+      margin-bottom: 20px;
+      background: var(--card);
+      border-radius: 14px;
+      padding: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .tab-btn {
+      flex: 1; padding: 10px 12px;
+      border: none; border-radius: 10px;
+      font-family: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      color: var(--text-sub); background: transparent;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(44,95,46,0.3);
+    }
+    .tab-btn i { font-size: 16px; }
+
+    /* 탭 패널 */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* 스텝 카드 */
+    .steps-wrap { display: flex; flex-direction: column; gap: 14px; }
+    .step-card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+      display: flex; gap: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 800;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-num.ios { background: #e8f0ff; color: var(--ios); }
+    .step-num.android { background: #e8f5e9; color: var(--android); }
+    .step-body { flex: 1; }
+    .step-title { font-size: 14px; font-weight: 700; margin-bottom: 5px; }
+    .step-desc { font-size: 13px; color: var(--text-sub); line-height: 1.6; }
+    .step-visual {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 10px;
+      font-size: 13px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .step-visual i { font-size: 18px; flex-shrink: 0; }
+    .step-visual.ios-v { color: var(--ios); }
+    .step-visual.android-v { color: var(--android); }
+
+    /* 특징 카드 */
+    .features-section { margin-bottom: 24px; }
+    .features-title {
+      font-size: 13px; font-weight: 700;
+      color: var(--text-sub); text-transform: uppercase; letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .features-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .feature-item {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+    }
+    .feature-icon {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .feature-name { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+    .feature-desc { font-size: 11px; color: var(--text-sub); line-height: 1.5; }
+
+    /* 하단 버튼 */
+    .guide-footer {
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      padding: 16px 20px;
+      display: flex; gap: 10px;
+      position: sticky; bottom: 0;
+    }
+    .btn-go {
+      flex: 1; padding: 14px;
+      border: none; border-radius: 12px;
+      font-family: inherit; font-size: 14px; font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-go:active { transform: scale(0.97); }
+    .btn-go-primary {
+      background: var(--primary); color: #fff;
+      box-shadow: 0 4px 14px rgba(44,95,46,0.3);
+    }
+    .btn-go-outline {
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* 안내 박스 */
+    .info-box {
+      background: #fff8e6;
+      border: 1px solid #fcd34d;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 13px; color: #78350f;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .info-box i { color: var(--gold); margin-right: 6px; }
+
+    /* 크롬 FAB 버튼 설명 */
+    .chrome-fab {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--primary); color: #fff;
+      border-radius: 20px; padding: 5px 12px;
+      font-size: 12px; font-weight: 700;
+    }
+
+    /* QR 영역 */
+    .qr-section {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+      margin-bottom: 20px;
+    }
+    .qr-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .qr-sub { font-size: 12px; color: var(--text-sub); margin-bottom: 14px; }
+
+    /* 반응형 */
+    @media (max-width: 480px) {
+      .guide-header { padding: 40px 16px 32px; }
+      .features-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      .guide-footer { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 헤더 -->
+  <div class="guide-header">
+    <div class="header-icon"><img src="images/icon-512-v2.png" alt="라이프컬처 앱 아이콘" /></div>
+    <h1>📱 앱으로 설치하기</h1>
+    <p>라이프컬처 생산관리 시스템</p>
+    <div class="pwa-badge"><i class="fas fa-bolt"></i> PWA · 설치 불필요 · 오프라인 지원</div>
+  </div>
+
+  <!-- 이미 설치 메시지 -->
+  <div class="already-installed" id="alreadyInstalled">
+    <i class="fas fa-check-circle" style="font-size:20px"></i>
+    <span>앱이 이미 설치되어 있습니다! 🎉 홈 화면에서 실행하세요.</span>
+  </div>
+
+  <!-- 안드로이드 설치 버튼 (자동 감지) -->
+  <div style="padding:16px 16px 0;max-width:600px;margin:0 auto;display:none" id="androidInstallWrap">
+    <button onclick="triggerInstall()" style="width:100%;padding:16px;background:#34A853;color:#fff;border:none;border-radius:14px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 16px rgba(52,168,83,0.35)">
+      <i class="fab fa-android" style="font-size:20px"></i>
+      지금 바로 앱 설치하기
+    </button>
+  </div>
+
+  <div class="guide-content">
+
+    <!-- 앱 특징 -->
+    <div class="features-section">
+      <div class="features-title">🚀 앱의 장점</div>
+      <div class="features-grid">
+        <div class="feature-item">
+          <div class="feature-icon" style="background:#e8f5e9;color:#2C5F2E"><i class="fas fa-mobile-alt"></i></div>
+          <div class="feature-name">홈 화면 바로가기</div>
+          <div class="feature-desc">앱처럼 빠르게 실행</div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon" style="background:#e8f0ff;color:#007AFF"><i class="fas fa-wifi-slash"></i></div>
+          <div class="feature-name">오프라인 지원</div>
+          <div class="feature-desc">인터넷 없이도 화면 유지</div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon" style="background:#fff8e1;color:#D4A017"><i class="fas fa-expand-arrows-alt"></i></div>
+          <div class="feature-name">전체 화면 모드</div>
+          <div class="feature-desc">주소창 없는 앱 UI</div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon" style="background:#fce4ec;color:#e91e63"><i class="fas fa-bell"></i></div>
+          <div class="feature-name">알림 지원</div>
+          <div class="feature-desc">앱 업데이트 알림</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 탭 -->
+    <div class="tab-group">
+      <button class="tab-btn active" id="tabIos" onclick="switchTab('ios')">
+        <i class="fab fa-apple"></i> iPhone / iPad
+      </button>
+      <button class="tab-btn" id="tabAndroid" onclick="switchTab('android')">
+        <i class="fab fa-android"></i> 안드로이드
+      </button>
+      <button class="tab-btn" id="tabPc" onclick="switchTab('pc')">
+        <i class="fas fa-desktop"></i> PC
+      </button>
+    </div>
+
+    <!-- iOS 탭 -->
+    <div class="tab-panel active" id="panelIos">
+      <div class="info-box">
+        <i class="fas fa-info-circle"></i>
+        <strong>iPhone/iPad</strong>에서는 <strong>Safari 브라우저</strong>로 접속해야 홈 화면에 추가할 수 있습니다.
+      </div>
+      <div class="steps-wrap">
+        <div class="step-card">
+          <div class="step-num ios">1</div>
+          <div class="step-body">
+            <div class="step-title">Safari로 이 페이지 열기</div>
+            <div class="step-desc">Chrome이나 다른 브라우저가 아닌 <strong>Safari</strong>로 접속하세요. 주소창에 이 페이지 URL을 입력하거나, Safari에서 QR 코드를 스캔하세요.</div>
+            <div class="step-visual ios-v">
+              <i class="fab fa-safari"></i>
+              <span>Safari 앱 → 주소창에 URL 입력</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num ios">2</div>
+          <div class="step-body">
+            <div class="step-title">하단 공유 버튼 탭하기</div>
+            <div class="step-desc">Safari 하단 가운데에 있는 <strong>공유(↑) 버튼</strong>을 탭합니다.</div>
+            <div class="step-visual ios-v">
+              <i class="fas fa-arrow-up-from-bracket"></i>
+              <span>화면 하단 중앙 · 사각형에 화살표 아이콘</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num ios">3</div>
+          <div class="step-body">
+            <div class="step-title">홈 화면에 추가 선택</div>
+            <div class="step-desc">공유 시트가 열리면 스크롤해서 <strong>"홈 화면에 추가"</strong> 항목을 탭합니다.</div>
+            <div class="step-visual ios-v">
+              <i class="fas fa-plus-square"></i>
+              <span>"홈 화면에 추가" 탭 → 이름 확인 → 추가</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num ios">4</div>
+          <div class="step-body">
+            <div class="step-title">이름 확인 후 추가</div>
+            <div class="step-desc"><strong>"라이프컬처"</strong>로 이름이 설정된 것을 확인하고 우상단 <strong>"추가"</strong>를 탭합니다.</div>
+            <div class="step-visual ios-v">
+              <i class="fas fa-check-circle"></i>
+              <span>홈 화면에 라이프컬처 아이콘이 추가됩니다 🎉</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Android 탭 -->
+    <div class="tab-panel" id="panelAndroid">
+      <div class="info-box">
+        <i class="fas fa-info-circle"></i>
+        안드로이드에서는 <strong>Chrome 브라우저</strong>로 접속하면 자동 설치 배너가 표시됩니다.
+      </div>
+      <div class="steps-wrap">
+        <div class="step-card">
+          <div class="step-num android">1</div>
+          <div class="step-body">
+            <div class="step-title">Chrome으로 접속</div>
+            <div class="step-desc">Google Chrome 브라우저로 이 앱에 접속하세요. 잠시 후 화면 하단에 <strong>"앱으로 설치하기"</strong> 배너가 나타납니다.</div>
+            <div class="step-visual android-v">
+              <i class="fab fa-chrome"></i>
+              <span>Chrome 브라우저로 URL 접속</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num android">2</div>
+          <div class="step-body">
+            <div class="step-title">배너에서 "설치" 탭하기</div>
+            <div class="step-desc">화면 하단에 표시되는 <strong>"앱으로 설치하기"</strong> 배너에서 <strong>"설치"</strong> 버튼을 탭합니다.</div>
+            <div class="step-visual android-v">
+              <i class="fas fa-download"></i>
+              <span>하단 배너 → 설치 버튼 탭</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num android">3</div>
+          <div class="step-body">
+            <div class="step-title">배너가 없다면 메뉴에서 설치</div>
+            <div class="step-desc">배너가 보이지 않으면 Chrome 우상단 <strong>⋮ 메뉴 → "앱 설치"</strong> 또는 <strong>"홈 화면에 추가"</strong>를 선택하세요.</div>
+            <div class="step-visual android-v">
+              <i class="fas fa-ellipsis-v"></i>
+              <span>⋮ 메뉴 → "앱 설치" 또는 "홈 화면에 추가"</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num android">4</div>
+          <div class="step-body">
+            <div class="step-title">설치 확인</div>
+            <div class="step-desc">확인 대화상자에서 <strong>"설치"</strong>를 탭하면 홈 화면에 라이프컬처 아이콘이 추가됩니다.</div>
+            <div class="step-visual android-v">
+              <i class="fas fa-check-circle"></i>
+              <span>홈 화면에 아이콘 추가 완료 🎉</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PC 탭 -->
+    <div class="tab-panel" id="panelPc">
+      <div class="info-box">
+        <i class="fas fa-info-circle"></i>
+        PC에서는 <strong>Chrome, Edge</strong> 브라우저로 접속하면 주소창에 설치 아이콘이 나타납니다.
+      </div>
+      <div class="steps-wrap">
+        <div class="step-card">
+          <div class="step-num" style="background:#e3f2fd;color:#1565c0">1</div>
+          <div class="step-body">
+            <div class="step-title">Chrome / Edge로 접속</div>
+            <div class="step-desc">Chrome 또는 Microsoft Edge 브라우저로 이 앱에 접속하세요.</div>
+            <div class="step-visual" style="color:#1565c0">
+              <i class="fab fa-chrome"></i>
+              <span>Chrome 또는 Edge 브라우저</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num" style="background:#e3f2fd;color:#1565c0">2</div>
+          <div class="step-body">
+            <div class="step-title">주소창의 설치 아이콘 클릭</div>
+            <div class="step-desc">주소창 오른쪽에 <strong>컴퓨터+다운로드 아이콘(⊕)</strong>이 나타나면 클릭합니다.</div>
+            <div class="step-visual" style="color:#1565c0">
+              <i class="fas fa-download"></i>
+              <span>주소창 우측 설치 아이콘 클릭</span>
+            </div>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="step-num" style="background:#e3f2fd;color:#1565c0">3</div>
+          <div class="step-body">
+            <div class="step-title">"설치" 버튼 클릭</div>
+            <div class="step-desc">팝업에서 <strong>"설치"</strong>를 클릭하면 앱이 독립 창으로 설치되고 작업 표시줄에 등록됩니다.</div>
+            <div class="step-visual" style="color:#1565c0">
+              <i class="fas fa-check-circle"></i>
+              <span>데스크탑 앱으로 설치 완료 🎉</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.guide-content -->
+
+  <!-- 하단 버튼 -->
+  <div class="guide-footer">
+    <button class="btn-go btn-go-outline" onclick="history.back()">
+      <i class="fas fa-chevron-left"></i> 뒤로
+    </button>
+    <button class="btn-go btn-go-primary" onclick="location.href='index.html'">
+      <i class="fas fa-home"></i> 앱 시작하기
+    </button>
+  </div>
+
+  <script>
+    // 탭 전환
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+      document.getElementById('panel' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+    }
+
+    // 기기 자동 감지
+    const ua = navigator.userAgent;
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+
+    if (isStandalone) {
+      document.getElementById('alreadyInstalled').classList.add('show');
+    }
+
+    if (isAndroid) {
+      switchTab('android');
+    } else if (isIOS) {
+      switchTab('ios');
+    }
+
+    // Android PWA 설치 프롬프트
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('androidInstallWrap').style.display = 'block';
+    });
+
+    function triggerInstall() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(choice => {
+          if (choice.outcome === 'accepted') {
+            document.getElementById('androidInstallWrap').style.display = 'none';
+            document.getElementById('alreadyInstalled').classList.add('show');
+          }
+          deferredPrompt = null;
+        });
+      }
+    }
+
+    // Service Worker 등록
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

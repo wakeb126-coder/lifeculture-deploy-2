@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="images/icon-512-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192-v2.png" />
+  <title>물류관리 - 라이프컬처</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/production.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    .wh-tabs { display: flex; gap: 4px; border-bottom: 2px solid #e0e0e0; margin-bottom: 20px; flex-wrap: wrap; }
+    .wh-tab { padding: 10px 18px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 600; color: #888; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; border-radius: 6px 6px 0 0; }
+    .wh-tab.active { color: #2C5F2E; border-bottom-color: #2C5F2E; background: rgba(44,95,46,0.06); }
+    .wh-tab-content { display: none; }
+    .wh-tab-content.active { display: block; }
+    .location-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .location-card { border: 2px solid #ddd; border-radius: 10px; padding: 12px; text-align: center; cursor: pointer; transition: all 0.2s; }
+    .location-card:hover { border-color: #2C5F2E; background: #f0f8f1; }
+    .location-card.occupied { border-color: #27ae60; background: #eafaf1; }
+    .location-card.low { border-color: #f39c12; background: #fef9e7; }
+    .location-card.empty { border-color: #ddd; background: #f9f9f9; }
+    .location-code { font-size: 14px; font-weight: 800; color: #2C5F2E; margin-bottom: 4px; }
+    .location-item { font-size: 11px; color: #555; margin-bottom: 2px; }
+    .location-qty { font-size: 16px; font-weight: 700; color: #1e8449; }
+    .stock-alert { background: linear-gradient(135deg, #fff3cd, #fef9e7); border: 1px solid #ffc107; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; }
+    .stock-alert-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,193,7,0.3); }
+    .stock-alert-item:last-child { border-bottom: none; }
+    .picking-list-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 8px; background: #fff; }
+    .picking-list-item .lot-tag { background: #eafaf1; color: #27ae60; border: 1px solid #a9dfbf; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+    .gauge-bar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+    .gauge-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .wh-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .today-board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    @media (max-width: 640px) { .today-board { grid-template-columns: 1fr; } }
+    .today-card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; background: #fff; }
+    .today-card-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .today-card-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .today-card-item:last-child { border-bottom: none; }
+    @media print {
+      .sidebar, .topbar, .bottom-nav, .pwa-install-banner, .wh-tabs, .action-bar, .btn, .fab-btn { display: none !important; }
+      @page { size: A4; margin: 15mm; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-wrap">
+        <div class="logo-icon"><i class="fas fa-coffee"></i></div>
+        <div class="logo-text"><span class="brand">라이프컬처</span><span class="sub">생산관리 시스템</span></div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="menuToggle"><i class="fas fa-bars"></i></button>
+        <h1 class="page-title"><i class="fas fa-warehouse" style="color:#2C5F2E;margin-right:8px"></i>물류관리</h1>
+      </div>
+      <div class="topbar-right">
+        <span id="topUserName" style="font-size:12px;color:#666;margin-right:6px"></span>
+        <span class="topbar-date" id="topbarDate"></span>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <!-- 탭 메뉴 -->
+      <div class="wh-tabs">
+        <button class="wh-tab active" onclick="switchWhTab('dashboard')"><i class="fas fa-tachometer-alt"></i> 대시보드</button>
+        <button class="wh-tab" onclick="switchWhTab('location')"><i class="fas fa-map-marker-alt"></i> 창고/로케이션</button>
+        <button class="wh-tab" onclick="switchWhTab('inbound')"><i class="fas fa-arrow-down"></i> 입고관리</button>
+        <button class="wh-tab" onclick="switchWhTab('outbound')"><i class="fas fa-arrow-up"></i> 출고관리</button>
+        <button class="wh-tab" onclick="switchWhTab('ledger')"><i class="fas fa-book"></i> 재고수불</button>
+        <button class="wh-tab" onclick="switchWhTab('stocktake')"><i class="fas fa-clipboard-check"></i> 재고실사</button>
+      </div>
+
+      <!-- ===== 대시보드 탭 ===== -->
+      <div class="wh-tab-content active" id="tab-dashboard">
+        <!-- 창고 가동률 KPI -->
+        <div class="wh-kpi-grid" id="warehouseKpiGrid">
+          <div class="kpi-card" style="border-left:4px solid #2C5F2E">
+            <div class="kpi-icon" style="background:#eafaf1;color:#2C5F2E"><i class="fas fa-warehouse"></i></div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="kpi_normal_rate">-</div>
+              <div class="kpi-label">일반창고 가동률</div>
+              <div class="gauge-bar"><div class="gauge-fill" id="gauge_normal" style="background:#2C5F2E;width:0%"></div></div>
+            </div>
+          </div>
+          <div class="kpi-card" style="border-left:4px solid #3498db">
+            <div class="kpi-icon" style="background:#e8f4fd;color:#3498db"><i class="fas fa-snowflake"></i></div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="kpi_cold_rate">-</div>
+              <div class="kpi-label">냉장창고 가동률</div>
+              <div class="gauge-bar"><div class="gauge-fill" id="gauge_cold" style="background:#3498db;width:0%"></div></div>
+            </div>
+          </div>
+          <div class="kpi-card" style="border-left:4px solid #e74c3c">
+            <div class="kpi-icon" style="background:#fdedec;color:#e74c3c"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="kpi_expiry_count">0</div>
+              <div class="kpi-label">소비기한 임박 품목 (30일)</div>
+            </div>
+          </div>
+          <div class="kpi-card" style="border-left:4px solid #f39c12">
+            <div class="kpi-icon" style="background:#fef9e7;color:#f39c12"><i class="fas fa-bell"></i></div>
+            <div class="kpi-info">
+              <div class="kpi-value" id="kpi_low_stock">0</div>
+              <div class="kpi-label">재고 부족 품목</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 오늘 입출고 현황판 -->
+        <div class="today-board">
+          <div class="today-card">
+            <div class="today-card-title" style="color:#27ae60"><i class="fas fa-arrow-down" style="background:#eafaf1;padding:6px;border-radius:6px"></i> 오늘 입고 예정</div>
+            <div id="todayInboundList"><div class="empty-msg" style="font-size:12px">오늘 입고 예정 없음</div></div>
+          </div>
+          <div class="today-card">
+            <div class="today-card-title" style="color:#e74c3c"><i class="fas fa-arrow-up" style="background:#fdedec;padding:6px;border-radius:6px"></i> 오늘 출고 예정</div>
+            <div id="todayOutboundList"><div class="empty-msg" style="font-size:12px">오늘 출고 예정 없음</div></div>
+          </div>
+        </div>
+
+        <!-- 소비기한 임박 알림 -->
+        <div id="expiryAlertSection" style="display:none">
+          <div style="font-size:13px;font-weight:700;color:#e74c3c;margin-bottom:10px"><i class="fas fa-exclamation-triangle"></i> 소비기한 임박 품목</div>
+          <div class="stock-alert" id="expiryAlertList"></div>
+        </div>
+
+        <!-- 재고 부족 알림 -->
+        <div id="lowStockSection" style="display:none">
+          <div style="font-size:13px;font-weight:700;color:#f39c12;margin-bottom:10px"><i class="fas fa-bell"></i> 재고 부족 알림 (하한선 미만)</div>
+          <div class="stock-alert" style="border-color:#f39c12;background:linear-gradient(135deg,#fef9e7,#fff3cd)" id="lowStockList"></div>
+        </div>
+      </div>
+
+      <!-- ===== 창고/로케이션 탭 ===== -->
+      <div class="wh-tab-content" id="tab-location">
+        <div class="form-container" style="margin-bottom:20px">
+          <div class="form-header">
+            <div class="form-header-left">
+              <div class="form-header-icon" style="background:#eafaf1;color:#27ae60"><i class="fas fa-map-marker-alt"></i></div>
+              <div>
+                <div class="form-title">로케이션 등록</div>
+                <div class="form-subtitle">창고 내 구역/선반 위치를 등록합니다. 코드 형식: LW-01-A-01 (창고-구역-열-번호)</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>창고 구분 <span class="required">*</span></label>
+              <select id="loc_warehouse_type">
+                <option value="일반">일반창고</option>
+                <option value="냉장">냉장창고</option>
+                <option value="냉동">냉동창고</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>로케이션 코드 <span class="required">*</span></label>
+              <input type="text" id="loc_code" placeholder="예) LW-01-A-01" style="font-family:monospace;font-weight:700" />
+            </div>
+            <div class="form-group">
+              <label>로케이션명</label>
+              <input type="text" id="loc_name" placeholder="예) 1구역 A선반 1번" />
+            </div>
+            <div class="form-group">
+              <label>최대 용량</label>
+              <input type="number" id="loc_capacity" placeholder="0" min="0" />
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>재고상태 구분</label>
+              <select id="loc_stock_status">
+                <option value="가용재고">가용재고</option>
+                <option value="불량재고">불량재고</option>
+                <option value="보류재고">보류재고(검사대기)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>비고</label>
+              <input type="text" id="loc_notes" placeholder="특이사항" />
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="btn btn-primary" onclick="saveLocation()"><i class="fas fa-save"></i> 로케이션 등록</button>
+          </div>
+        </div>
+
+        <!-- 로케이션 현황 -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:700"><i class="fas fa-th" style="color:#2C5F2E"></i> 로케이션 현황</div>
+          <div style="display:flex;gap:8px">
+            <select id="locWarehouseFilter" onchange="renderLocations()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px">
+              <option value="">전체 창고</option>
+              <option value="일반">일반창고</option>
+              <option value="냉장">냉장창고</option>
+              <option value="냉동">냉동창고</option>
+            </select>
+          </div>
+        </div>
+        <div class="location-grid" id="locationGrid">
+          <div class="empty-msg">로케이션을 등록하세요.</div>
+        </div>
+      </div>
+
+      <!-- ===== 입고관리 탭 ===== -->
+      <div class="wh-tab-content" id="tab-inbound">
+        <div class="form-container" style="margin-bottom:20px">
+          <div class="form-header">
+            <div class="form-header-left">
+              <div class="form-header-icon" style="background:#eafaf1;color:#27ae60"><i class="fas fa-arrow-down"></i></div>
+              <div>
+                <div class="form-title">입고 등록</div>
+                <div class="form-subtitle">생산 입고(생산라인→창고) 또는 구매 입고(원부재료 등)를 등록합니다.</div>
+              </div>
+            </div>
+            <div class="lot-display">
+              <div class="lot-display-label">입고 Lot No.</div>
+              <div class="lot-display-value" id="inboundLotDisplay">생성 중...</div>
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>입고일자 <span class="required">*</span></label>
+              <input type="date" id="ib_date" required />
+            </div>
+            <div class="form-group">
+              <label>입고 구분 <span class="required">*</span></label>
+              <select id="ib_type" required onchange="onInboundTypeChange()">
+                <option value="">선택</option>
+                <option value="생산입고">생산 입고 (생산라인→창고)</option>
+                <option value="구매입고">구매 입고 (원부재료 등)</option>
+              </select>
+            </div>
+            <div class="form-group span-2">
+              <label>품목명 <span class="required">*</span></label>
+              <input type="text" id="ib_item_name" required placeholder="품목명 입력" />
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>수량 <span class="required">*</span></label>
+              <input type="number" id="ib_qty" required min="0" step="0.01" placeholder="0" />
+            </div>
+            <div class="form-group">
+              <label>단위</label>
+              <select id="ib_unit">
+                <option value="ea">ea</option>
+                <option value="box">box</option>
+                <option value="kg">kg</option>
+                <option value="L">L</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>제조일자</label>
+              <input type="date" id="ib_mfg_date" />
+            </div>
+            <div class="form-group">
+              <label>소비기한 <span class="required">*</span></label>
+              <input type="date" id="ib_expiry_date" required />
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>입고 시 온도 (℃)</label>
+              <input type="number" id="ib_temp" step="0.1" placeholder="예) 4.5" />
+            </div>
+            <div class="form-group">
+              <label>로케이션 (적치)</label>
+              <select id="ib_location">
+                <option value="">선택</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>공급업체/생산라인</label>
+              <input type="text" id="ib_supplier" placeholder="공급업체명" />
+            </div>
+            <div class="form-group">
+              <label>담당자</label>
+              <input type="text" id="ib_manager" placeholder="담당자명" />
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>원 Lot No (생산/구매)</label>
+              <input type="text" id="ib_ref_lot" placeholder="연결 Lot No" style="font-family:monospace" />
+            </div>
+            <div class="form-group">
+              <label>재고상태</label>
+              <select id="ib_stock_status">
+                <option value="가용재고">가용재고</option>
+                <option value="불량재고">불량재고</option>
+                <option value="보류재고">보류재고(검사대기)</option>
+              </select>
+            </div>
+            <div class="form-group span-2">
+              <label>비고</label>
+              <input type="text" id="ib_notes" placeholder="특이사항" />
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="btn btn-secondary" onclick="resetInboundForm()"><i class="fas fa-undo"></i> 초기화</button>
+            <button class="btn btn-primary" style="background:#27ae60;border:none" onclick="saveInbound()"><i class="fas fa-save"></i> 입고 등록</button>
+          </div>
+        </div>
+
+        <!-- 입고 이력 -->
+        <div class="table-section">
+          <div class="table-header">
+            <div class="table-title"><i class="fas fa-list" style="color:#27ae60"></i> 입고 이력</div>
+            <div class="table-actions">
+              <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="ibSearch" placeholder="품목명, Lot No 검색..." oninput="filterInbound()" />
+              </div>
+              <button class="btn btn-secondary" onclick="exportInbound()"><i class="fas fa-file-excel"></i> 엑셀</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lot No</th><th>입고일</th><th>구분</th><th>품목명</th><th>수량</th><th>단위</th>
+                  <th>제조일</th><th>소비기한</th><th>온도</th><th>로케이션</th><th>재고상태</th><th>담당자</th><th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="inboundTableBody">
+                <tr><td colspan="13" class="empty-msg">입고 내역이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span id="ibCount">0건</span>
+            <div class="pagination" id="ibPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 출고관리 탭 ===== -->
+      <div class="wh-tab-content" id="tab-outbound">
+        <div class="form-container" style="margin-bottom:20px">
+          <div class="form-header">
+            <div class="form-header-left">
+              <div class="form-header-icon" style="background:#fdedec;color:#e74c3c"><i class="fas fa-arrow-up"></i></div>
+              <div>
+                <div class="form-title">출고 등록</div>
+                <div class="form-subtitle">선입선출(FIFO) 자동 배정. 소비기한이 임박한 Lot를 우선 출고합니다.</div>
+              </div>
+            </div>
+            <div class="lot-display" style="border-color:#e74c3c">
+              <div class="lot-display-label" style="color:#e74c3c">출고 Lot No.</div>
+              <div class="lot-display-value" id="outboundLotDisplay" style="color:#e74c3c">생성 중...</div>
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>출고일자 <span class="required">*</span></label>
+              <input type="date" id="ob_date" required />
+            </div>
+            <div class="form-group span-2">
+              <label>품목명 <span class="required">*</span></label>
+              <input type="text" id="ob_item_name" required placeholder="품목명 입력" oninput="loadFifoSuggestion()" />
+            </div>
+            <div class="form-group">
+              <label>출고 수량 <span class="required">*</span></label>
+              <input type="number" id="ob_qty" required min="0" step="0.01" placeholder="0" oninput="loadFifoSuggestion()" />
+            </div>
+          </div>
+          <!-- FIFO 선입선출 추천 -->
+          <div id="fifoSuggestionBox" style="display:none;background:#f0f8f1;border:1px solid #a9dfbf;border-radius:10px;padding:12px;margin-bottom:12px">
+            <div style="font-size:12px;font-weight:700;color:#1e8449;margin-bottom:8px"><i class="fas fa-sort-amount-down"></i> 선입선출(FIFO) 자동 배정 - 소비기한 임박 순</div>
+            <div id="fifoSuggestionList"></div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>차량 번호</label>
+              <input type="text" id="ob_vehicle_no" placeholder="예) 12가 3456" />
+            </div>
+            <div class="form-group">
+              <label>배송 기사 연락처</label>
+              <input type="text" id="ob_driver_contact" placeholder="010-0000-0000" />
+            </div>
+            <div class="form-group">
+              <label>상차 시 온도 (℃)</label>
+              <input type="number" id="ob_temp" step="0.1" placeholder="예) 4.5" />
+            </div>
+            <div class="form-group">
+              <label>담당자</label>
+              <input type="text" id="ob_manager" placeholder="담당자명" />
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>거래처/수령처</label>
+              <input type="text" id="ob_destination" placeholder="거래처명" />
+            </div>
+            <div class="form-group span-3">
+              <label>비고</label>
+              <input type="text" id="ob_notes" placeholder="특이사항" />
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="btn btn-secondary" onclick="resetOutboundForm()"><i class="fas fa-undo"></i> 초기화</button>
+            <button class="btn btn-primary" style="background:#e74c3c;border:none" onclick="saveOutbound()"><i class="fas fa-save"></i> 출고 등록</button>
+          </div>
+        </div>
+
+        <!-- 피킹리스트 -->
+        <div style="margin-bottom:20px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px"><i class="fas fa-clipboard-list" style="color:#e74c3c"></i> 피킹리스트 (오늘 출고 예정)</div>
+          <div id="pickingListContainer">
+            <div class="empty-msg">오늘 출고 예정 내역이 없습니다.</div>
+          </div>
+        </div>
+
+        <!-- 출고 이력 -->
+        <div class="table-section">
+          <div class="table-header">
+            <div class="table-title"><i class="fas fa-list" style="color:#e74c3c"></i> 출고 이력</div>
+            <div class="table-actions">
+              <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="obSearch" placeholder="품목명, Lot No 검색..." oninput="filterOutbound()" />
+              </div>
+              <button class="btn btn-secondary" onclick="exportOutbound()"><i class="fas fa-file-excel"></i> 엑셀</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lot No</th><th>출고일</th><th>품목명</th><th>수량</th><th>단위</th>
+                  <th>소비기한</th><th>차량번호</th><th>기사연락처</th><th>온도</th><th>거래처</th><th>담당자</th><th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="outboundTableBody">
+                <tr><td colspan="12" class="empty-msg">출고 내역이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span id="obCount">0건</span>
+            <div class="pagination" id="obPagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 재고수불 탭 ===== -->
+      <div class="wh-tab-content" id="tab-ledger">
+        <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+          <div class="search-bar" style="flex:1;min-width:200px">
+            <i class="fas fa-search"></i>
+            <input type="text" id="ledgerSearch" placeholder="품목명 검색..." oninput="renderLedger()" />
+          </div>
+          <button class="btn btn-secondary" onclick="exportLedger()"><i class="fas fa-file-excel"></i> 엑셀 다운로드</button>
+          <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> 인쇄</button>
+        </div>
+        <div class="table-section">
+          <div class="table-header">
+            <div class="table-title"><i class="fas fa-book" style="color:#2C5F2E"></i> 실시간 재고수불부 (Lot별)</div>
+            <div style="font-size:12px;color:#888">기초재고 + 입고 - 출고 = 기말재고</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lot No</th><th>품목명</th><th>입고일</th><th>소비기한</th><th>기초재고</th>
+                  <th>입고</th><th>출고</th><th>기말재고</th><th>단위</th><th>로케이션</th><th>재고상태</th>
+                </tr>
+              </thead>
+              <tbody id="ledgerTableBody">
+                <tr><td colspan="11" class="empty-msg">데이터를 로드 중입니다...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer"><span id="ledgerCount">0건</span></div>
+        </div>
+      </div>
+
+      <!-- ===== 재고실사 탭 ===== -->
+      <div class="wh-tab-content" id="tab-stocktake">
+        <div class="form-container" style="margin-bottom:20px">
+          <div class="form-header">
+            <div class="form-header-left">
+              <div class="form-header-icon" style="background:#f0f8f1;color:#2C5F2E"><i class="fas fa-clipboard-check"></i></div>
+              <div>
+                <div class="form-title">재고 실사</div>
+                <div class="form-subtitle">전산 재고와 실제 재고의 차이를 조정합니다.</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>실사일자 <span class="required">*</span></label>
+              <input type="date" id="st_date" />
+            </div>
+            <div class="form-group span-2">
+              <label>품목명 <span class="required">*</span></label>
+              <input type="text" id="st_item_name" placeholder="품목명 입력" />
+            </div>
+            <div class="form-group">
+              <label>Lot No</label>
+              <input type="text" id="st_lot_no" placeholder="Lot No" style="font-family:monospace" />
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group">
+              <label>전산 재고</label>
+              <input type="number" id="st_system_qty" readonly placeholder="자동조회" class="calc-field" />
+            </div>
+            <div class="form-group">
+              <label>실제 재고 <span class="required">*</span></label>
+              <input type="number" id="st_actual_qty" placeholder="실제 수량 입력" step="0.01" oninput="calcStocktakeDiff()" />
+            </div>
+            <div class="form-group">
+              <label>차이 수량</label>
+              <input type="number" id="st_diff_qty" readonly class="calc-field" />
+            </div>
+            <div class="form-group">
+              <label>담당자</label>
+              <input type="text" id="st_manager" placeholder="담당자명" />
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
+            <div class="form-group span-4">
+              <label>조정 사유</label>
+              <input type="text" id="st_reason" placeholder="조정 사유 입력 (예: 파손, 오입력 수정 등)" />
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="btn btn-primary" onclick="saveStocktake()"><i class="fas fa-save"></i> 실사 조정 등록</button>
+          </div>
+        </div>
+
+        <!-- 실사 이력 -->
+        <div class="table-section">
+          <div class="table-header">
+            <div class="table-title"><i class="fas fa-history" style="color:#2C5F2E"></i> 실사 조정 이력</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>실사일</th><th>품목명</th><th>Lot No</th><th>전산재고</th><th>실제재고</th><th>차이</th><th>조정사유</th><th>담당자</th><th>관리</th></tr>
+              </thead>
+              <tbody id="stocktakeTableBody">
+                <tr><td colspan="9" class="empty-msg">실사 이력이 없습니다.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 수정 모달 -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-dialog" style="max-width:600px">
+      <div class="modal-header">
+        <h3><i class="fas fa-edit" style="color:#2C5F2E"></i> 수정</h3>
+        <button class="modal-close" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="editModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditModal()">취소</button>
+        <button class="btn btn-danger" onclick="deleteCurrentRecord()" style="margin-right:auto"><i class="fas fa-trash"></i> 삭제</button>
+        <button class="btn btn-primary" onclick="saveCurrentEdit()"><i class="fas fa-save"></i> 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="offline-bar" id="offlineBar"><i class="fas fa-wifi-slash"></i> 오프라인 상태</div>
+  <div class="online-bar" id="onlineBar"><i class="fas fa-wifi"></i> 인터넷 연결됨</div>
+  <div class="pwa-install-banner" id="pwaInstallBanner">
+    <div class="pwa-banner-icon"><img src="images/icon-192-v2.png" alt="LifeCulture" /></div>
+    <div class="pwa-banner-text"><div class="pwa-banner-title">라이프컬처</div><div class="pwa-banner-sub">생산관리 시스템을 설치하세요</div></div>
+    <div class="pwa-banner-actions">
+      <button class="pwa-install-btn" onclick="installPwa()">설치</button>
+      <button class="pwa-dismiss-btn" onclick="dismissPwaBanner()">닫기</button>
+    </div>
+  </div>
+
+  <nav class="bottom-nav" id="bottomNav">
+    <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>홈</span></a>
+    <a href="raw-materials.html" class="bottom-nav-item"><i class="fas fa-box-open"></i><span>원료</span></a>
+    <a href="warehouse.html" class="bottom-nav-item active"><i class="fas fa-warehouse"></i><span>물류</span></a>
+    <a href="traceability.html" class="bottom-nav-item"><i class="fas fa-search"></i><span>역추적</span></a>
+    <a href="index.html" class="bottom-nav-item"><i class="fas fa-th-large"></i><span>더보기</span></a>
+  </nav>
+
+  <script src="js/auth.js"></script>
+      <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-init.js"></script>
+    <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/warehouse.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const user = requireAuth('logistics');
+      if (!user) return;
+      document.getElementById('sidebarNav').innerHTML = getSidebarHTML('warehouse.html');
+      renderUserHeader();
+      setupSidebar();
+      initDateDisplay();
+    });
+  </script>
+</body>
+</html>

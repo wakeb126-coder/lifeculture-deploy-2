@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2C5F2E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="라이프컬처" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="images/icon-512-v2.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="images/icon-192-v2.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="images/icon-192-v2.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="images/icon-512-v2.png" />
+  <link rel="shortcut icon" href="images/icon-192-v2.png" />
+  <title>원료수불부 - 라이프컬처</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    @media print {
+      .sidebar, .topbar, .bottom-nav, .pwa-install-banner, .offline-bar, .online-bar,
+      .action-bar, .table-actions, .btn, .pagination, .form-container, .tab-bar,
+      #printBtn, .more-menu-overlay, .more-menu-sheet { display: none !important; }
+      body { background: #fff; }
+      .print-section { display: block !important; }
+      .main-content { margin: 0 !important; padding: 0 !important; }
+      table { font-size: 11px; }
+      th, td { padding: 4px 6px !important; }
+    }
+    .tab-bar { display:flex; gap:4px; margin-bottom:16px; border-bottom:2px solid #e8e8e8; }
+    .tab-btn { padding:10px 20px; border:none; background:#f0f2f5; cursor:pointer; font-size:14px; font-weight:600; color:#555; border-bottom:3px solid transparent; margin-bottom:-2px; font-family:'Noto Sans KR',sans-serif; border-radius:6px 6px 0 0; }
+    .tab-btn:hover { background:#e4e8ef; color:#333; }
+    .tab-btn.active { color:#fff !important; background:var(--primary) !important; border-bottom-color:var(--primary); }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .period-filter { background:#f8f9fa; border-radius:12px; padding:16px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+    .period-filter .form-group { margin-bottom:0; }
+    .qc-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; }
+    .qc-합격 { background:#d4edda; color:#155724; }
+    .qc-불합격 { background:#f8d7da; color:#721c24; }
+    .qc-특채 { background:#fff3cd; color:#856404; }
+    .stock-card { background:#fff; border-radius:12px; border:1px solid #e8e8e8; padding:16px; }
+    .stock-card-title { font-size:12px; font-weight:700; color:#888; margin-bottom:8px; }
+    .stock-card-value { font-size:22px; font-weight:700; color:#222; }
+    .stock-card-unit { font-size:13px; color:#888; margin-left:4px; }
+    .edit-row-btn { background:none; border:1px solid #ddd; border-radius:6px; padding:3px 8px; font-size:12px; cursor:pointer; color:#555; }
+    .edit-row-btn:hover { background:#f0f0f0; }
+    .inline-edit input, .inline-edit select { padding:4px 8px; border:1.5px solid var(--primary); border-radius:6px; font-size:12px; width:100%; }
+    /* 출고 전용 FIFO 패널 */
+    #fifoPanel { background:linear-gradient(135deg,#fff8e1,#fff3cd); border:1.5px solid #f0c040; border-radius:12px; padding:16px; margin-bottom:16px; }
+    #fifoPanel .fifo-title { font-size:13px; font-weight:700; color:#856404; margin-bottom:10px; }
+    .fifo-lot-row { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#fff; border:1px solid #fce8a0; border-radius:8px; margin-bottom:6px; font-size:12px; }
+    .fifo-lot-row.fifo-selected { border-color:#f0c040; background:#fffde7; }
+    .fifo-lot-badge { font-size:11px; font-weight:700; padding:2px 8px; border-radius:8px; background:#fff3cd; color:#856404; }
+    .fifo-lot-expiry { color:#e74c3c; font-weight:700; }
+    .fifo-lot-qty { color:#27ae60; font-weight:700; margin-left:auto; }
+    .fifo-empty { color:#aaa; font-size:12px; text-align:center; padding:12px; }
+    /* 입고/출고 섹션 전환 */
+    .section-in-only { }
+    .section-out-only { display:none; }
+  </style>
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-wrap">
+        <div class="logo-icon"><i class="fas fa-coffee"></i></div>
+        <div class="logo-text"><span class="brand">라이프컬처</span><span class="sub">생산관리 시스템</span></div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav"></nav>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="menuToggle"><i class="fas fa-bars"></i></button>
+        <h1 class="page-title"><i class="fas fa-box-open" style="color:var(--accent);margin-right:8px"></i>원료수불부 관리대장</h1>
+      </div>
+      <div class="topbar-right">
+        <span id="topUserName" style="font-size:12px;color:#666;margin-right:6px"></span>
+        <span id="topUserRole" style="font-size:11px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;margin-right:8px"></span>
+        <span class="topbar-date" id="topbarDate"></span>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <!-- 재고 현황 요약 카드 -->
+      <div id="stockSummaryCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px"></div>
+
+      <!-- 탭 바 -->
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('input')" id="tabInput"><i class="fas fa-plus-circle"></i> 입고/출고 등록</button>
+        <button class="tab-btn" onclick="switchTab('ledger')" id="tabLedger"><i class="fas fa-book"></i> 수불부 현황</button>
+        <button class="tab-btn" onclick="switchTab('journal')" id="tabJournal"><i class="fas fa-file-alt"></i> 입출고 일지</button>
+      </div>
+
+      <!-- 탭1: 입고/출고 등록 -->
+      <div class="tab-content active" id="tabContent_input">
+        <div class="form-container">
+          <div class="form-header">
+            <div class="form-header-left">
+              <div class="form-header-icon" style="background:#fff9e6;color:var(--accent)"><i class="fas fa-plus-circle"></i></div>
+              <div>
+                <div class="form-title">원부자재 입고/출고 등록</div>
+                <div class="form-subtitle">자재코드를 선택하면 품목명이 자동 입력되고 Lot No가 자동 생성됩니다.</div>
+              </div>
+            </div>
+            <div class="lot-display">
+              <div class="lot-display-label">자동 Lot No.</div>
+              <div class="lot-display-value" id="lotDisplay">생성 중...</div>
+            </div>
+          </div>
+
+          <form id="rawForm">
+            <!-- 자재코드 선택 -->
+            <div style="background:linear-gradient(135deg,#f0f8f1,#e8f5e9);border:1px solid #a9dfbf;border-radius:12px;padding:14px 16px;margin-bottom:16px">
+              <div style="font-size:12px;font-weight:700;color:#1e8449;margin-bottom:10px">
+                <i class="fas fa-cubes"></i> 자재코드 선택 → 품목명 자동입력 + Lot No 자동생성
+              </div>
+              <select id="f_item_code_select" onchange="onMaterialSelect()" style="width:100%;padding:10px 12px;border:1.5px solid #a9dfbf;border-radius:8px;font-size:13px;background:#fff;color:#333">
+                <option value="">-- 자재코드 선택 (클릭하면 품목명 자동입력) --</option>
+              </select>
+            </div>
+
+            <div class="form-grid form-grid-4">
+              <div class="form-group">
+                <label>거래유형 <span class="required">*</span></label>
+                <select id="f_transaction_type" required onchange="handleTransactionType()">
+                  <option value="">선택</option>
+                  <option value="입고">📥 입고</option>
+                  <option value="출고">📤 출고</option>
+                  <option value="조정">🔧 재고조정</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>거래일자 <span class="required">*</span></label>
+                <input type="date" id="f_receive_date" required />
+              </div>
+              <div class="form-group">
+                <label>품목구분 <span class="required">*</span></label>
+                <select id="f_item_type" required>
+                  <option value="">선택</option>
+                  <option value="생두">생두</option>
+                  <option value="부재료">부재료</option>
+                  <option value="포장재">포장재</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>품목코드</label>
+                <input type="text" id="f_item_code" placeholder="자동입력 또는 직접 입력" />
+              </div>
+            </div>
+
+            <div class="form-grid form-grid-4">
+              <div class="form-group span-2">
+                <label>품목명 <span class="required">*</span></label>
+                <input type="text" id="f_item_name" required placeholder="자재코드 선택 시 자동입력" />
+              </div>
+              <div class="form-group span-2">
+                <label>공급업체명</label>
+                <input type="text" id="f_supplier" placeholder="자동입력 또는 직접 입력" />
+              </div>
+            </div>
+
+            <!-- 수량 관련 -->
+            <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:10px;margin-top:4px">📦 수량 정보</div>
+            <div class="form-grid form-grid-4">
+              <div class="form-group" id="carryOverWrap">
+                <label>이월재고 (kg)</label>
+                <input type="number" id="f_carry_over" min="0" step="0.01" placeholder="0.00" oninput="calcCurrentStock()" />
+              </div>
+              <div class="form-group">
+                <label id="qty_label" for="f_qty">금일입고수량 <span class="required">*</span></label>
+                <input type="number" id="f_qty" min="0" step="0.01" required placeholder="0.00" oninput="calcCurrentStock()" />
+              </div>
+              <div class="form-group" id="usedQtyWrap">
+                <label>금일사용량 (kg)</label>
+                <input type="number" id="f_used_qty" min="0" step="0.01" placeholder="0.00" oninput="calcCurrentStock()" />
+              </div>
+              <div class="form-group" id="balanceWrap">
+                <label id="balance_label">현재재고 (자동계산)</label>
+                <input type="number" id="f_balance" class="calc-field" readonly placeholder="자동계산" style="background:#f0f8f1;font-weight:700;color:#1e8449" />
+              </div>
+            </div>
+
+            <div class="form-grid form-grid-4">
+              <div class="form-group">
+                <label>단위 <span class="required">*</span></label>
+                <select id="f_unit">
+                  <option value="">선택</option>
+                  <option value="kg">kg</option>
+                  <option value="g">g</option>
+                  <option value="L">L</option>
+                  <option value="mL">mL</option>
+                  <option value="ea">ea</option>
+                  <option value="box">box</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>단가 (원)</label>
+                <input type="number" id="f_unit_price" min="0" placeholder="0" />
+              </div>
+              <div class="form-group">
+                <label>원산지</label>
+                <input type="text" id="f_country" placeholder="예) 에티오피아" />
+              </div>
+              <div class="form-group">
+                <label>보관위치</label>
+                <input type="text" id="f_storage_location" placeholder="예) 창고 A-1" />
+              </div>
+            </div>
+
+            <!-- 선입선출(FIFO) 확인 패널 - 출고 시에만 표시 -->
+            <div id="fifoPanel" style="display:none">
+              <div class="fifo-title"><i class="fas fa-layer-group"></i> 선입선출(FIFO) 확인 — 소비기한 빠른 순으로 출고하세요</div>
+              <div id="fifoList"><div class="fifo-empty">품목을 선택하면 입고 Lot 목록이 표시됩니다.</div></div>
+              <div style="font-size:11px;color:#888;margin-top:8px"><i class="fas fa-info-circle"></i> 소비기한이 가장 빠른 Lot부터 출고하는 것이 원칙입니다. 위 목록에서 출고할 Lot을 확인하세요.</div>
+            </div>
+
+            <!-- 출고 전용 필드 -->
+            <div id="outSection" class="section-out-only">
+              <div style="font-size:12px;font-weight:700;color:#c0392b;margin-bottom:10px;margin-top:4px">📤 출고 정보</div>
+              <div class="form-grid form-grid-4">
+                <div class="form-group">
+                  <label>출고 Lot No (참조)</label>
+                  <input type="text" id="f_source_lot" placeholder="입고 Lot No 입력 (FIFO 목록 참조)" />
+                </div>
+                <div class="form-group">
+                  <label>출고 목적 <span class="required">*</span></label>
+                  <select id="f_out_purpose">
+                    <option value="">선택</option>
+                    <option value="생산투입">🏭 생산투입</option>
+                    <option value="폐기">🗑️ 폐기</option>
+                    <option value="반품">↩️ 반품</option>
+                    <option value="샘플">🧪 샘플</option>
+                    <option value="기타">기타</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>담당자 <span class="required">*</span></label>
+                  <input type="text" id="f_manager" placeholder="담당자명" />
+                </div>
+                <div class="form-group">
+                  <label>연관 생산 Lot No</label>
+                  <input type="text" id="f_reference_lot" placeholder="로스팅 등 생산일지 Lot No" />
+                </div>
+              </div>
+            </div>
+
+            <!-- QC 및 소비기한 - 입고 시에만 표시 -->
+            <div id="inSection" class="section-in-only">
+              <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:10px;margin-top:4px">🔬 QC 수입검사 & 소비기한</div>
+              <div class="form-grid form-grid-4">
+                <div class="form-group">
+                  <label>소비기한 <span class="required">*</span></label>
+                  <input type="date" id="f_expiry_date" />
+                </div>
+                <div class="form-group">
+                  <label>QC 수입검사 결과 <span class="required">*</span></label>
+                  <select id="f_qc_result">
+                    <option value="">선택</option>
+                    <option value="합격">✅ 합격</option>
+                    <option value="불합격">❌ 불합격</option>
+                    <option value="특채">⚠️ 특채</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>담당자 <span class="required">*</span></label>
+                  <input type="text" id="f_manager_in" placeholder="담당자명" />
+                </div>
+                <div class="form-group">
+                  <label>검수자</label>
+                  <input type="text" id="f_inspector" placeholder="검수자명" />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-grid form-grid-4">
+              <div class="form-group" id="manufacturerWrap">
+                <label>제조사</label>
+                <input type="text" id="f_manufacturer" placeholder="제조사명" />
+              </div>
+              <div class="form-group span-2">
+                <label>비고</label>
+                <input type="text" id="f_notes" placeholder="특이사항 입력" />
+              </div>
+            </div>
+
+            <div class="action-bar">
+              <button type="button" class="btn btn-secondary" onclick="resetForm()"><i class="fas fa-undo"></i> 초기화</button>
+              <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> 등록</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 탭2: 수불부 현황 -->
+      <div class="tab-content" id="tabContent_ledger">
+        <div class="table-section">
+          <div class="table-header">
+            <div class="table-title"><i class="fas fa-book" style="color:var(--primary)"></i> 원료수불부 현황</div>
+            <div class="table-actions">
+              <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="품목명 또는 Lot No 검색..." oninput="filterTable()" />
+              </div>
+              <select class="btn btn-secondary" id="typeFilter" onchange="filterTable()" style="height:38px;min-width:100px">
+                <option value="">전체</option>
+                <option value="입고">📥 입고</option>
+                <option value="출고">📤 출고</option>
+                <option value="조정">🔧 조정</option>
+              </select>
+              <button class="btn btn-secondary" onclick="exportLedger()"><i class="fas fa-file-excel"></i> 엑셀</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="rawTable">
+              <thead>
+                <tr>
+                  <th>Lot No</th>
+                  <th>거래유형</th>
+                  <th>거래일자</th>
+                  <th>품목구분</th>
+                  <th>품목명</th>
+                  <th>이월재고</th>
+                  <th>금일입고</th>
+                  <th>금일사용량</th>
+                  <th>현재재고</th>
+                  <th>단위</th>
+                  <th>소비기한</th>
+                  <th>QC검사</th>
+                  <th>담당자</th>
+                  <th>공급업체</th>
+                  <th>비고</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="rawTableBody">
+                <tr><td colspan="16" class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span id="tableCount">0건</span>
+            <div class="pagination" id="pagination"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 탭3: 입출고 일지 (기간별 출력) -->
+      <div class="tab-content" id="tabContent_journal">
+        <div class="period-filter">
+          <div class="form-group">
+            <label style="font-size:12px;font-weight:700">조회 시작일</label>
+            <input type="date" id="journalFrom" style="padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;font-weight:700">조회 종료일</label>
+            <input type="date" id="journalTo" style="padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;font-weight:700">거래유형</label>
+            <select id="journalType" style="padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;height:38px">
+              <option value="">전체</option>
+              <option value="입고">입고</option>
+              <option value="출고">출고</option>
+              <option value="조정">조정</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px;font-weight:700">품목명 검색</label>
+            <input type="text" id="journalSearch" placeholder="품목명 검색..." style="padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+          <button class="btn btn-primary" onclick="loadJournal()"><i class="fas fa-search"></i> 조회</button>
+          <button class="btn btn-secondary" onclick="printJournal()"><i class="fas fa-print"></i> 인쇄(A4)</button>
+          <button class="btn btn-secondary" onclick="exportJournal()"><i class="fas fa-file-excel"></i> 엑셀 다운로드</button>
+        </div>
+
+        <!-- 인쇄용 헤더 -->
+        <div id="journalPrintHeader" style="display:none;text-align:center;margin-bottom:16px">
+          <h2 style="font-size:18px;font-weight:700">라이프컬처 원부자재 입출고 일지</h2>
+          <p id="journalPrintPeriod" style="font-size:13px;color:#666"></p>
+        </div>
+
+        <div class="table-section">
+          <div class="table-header">
+            <div class="table-title"><i class="fas fa-file-alt" style="color:var(--primary)"></i> 입출고 일지</div>
+            <div style="font-size:13px;color:#888" id="journalResultCount">조회 기간을 선택 후 조회하세요.</div>
+          </div>
+          <div class="table-wrap">
+            <table id="journalTable">
+              <thead>
+                <tr>
+                  <th>No</th>
+                  <th>Lot No</th>
+                  <th>거래일자</th>
+                  <th>거래유형</th>
+                  <th>품목구분</th>
+                  <th>품목명</th>
+                  <th>이월재고</th>
+                  <th>금일입고</th>
+                  <th>금일사용량</th>
+                  <th>현재재고</th>
+                  <th>단위</th>
+                  <th>소비기한</th>
+                  <th>QC검사</th>
+                  <th>담당자</th>
+                  <th>공급업체</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody id="journalTableBody">
+                <tr><td colspan="16" class="empty-msg">조회 기간을 선택하고 [조회] 버튼을 클릭하세요.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- 합계 행 -->
+          <div id="journalSummary" style="background:#f8f9fa;border-radius:8px;padding:12px 16px;margin-top:12px;display:none">
+            <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px">
+              <div><strong>총 입고:</strong> <span id="sumIn" style="color:#27ae60;font-weight:700">0</span></div>
+              <div><strong>총 사용량:</strong> <span id="sumUsed" style="color:#e74c3c;font-weight:700">0</span></div>
+              <div><strong>건수:</strong> <span id="sumCount" style="font-weight:700">0</span>건</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 수정 모달 -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal-dialog" style="max-width:700px">
+      <div class="modal-header">
+        <h3><i class="fas fa-edit" style="color:var(--primary)"></i> 수불 내역 수정</h3>
+        <button class="modal-close" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="editModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditModal()">취소</button>
+        <button class="btn btn-danger" onclick="deleteRecord()" style="margin-right:auto"><i class="fas fa-trash"></i> 삭제</button>
+        <button class="btn btn-primary" onclick="saveEdit()"><i class="fas fa-save"></i> 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 바텀 내비게이션 -->
+  <nav class="bottom-nav" id="bottomNav">
+    <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>홈</span></a>
+    <a href="raw-materials.html" class="bottom-nav-item active"><i class="fas fa-box-open"></i><span>원료</span></a>
+    <a href="extraction.html" class="bottom-nav-item"><i class="fas fa-tint"></i><span>추출</span></a>
+    <a href="traceability.html" class="bottom-nav-item"><i class="fas fa-search"></i><span>역추적</span></a>
+    <button class="bottom-nav-item" onclick="openMoreMenu()"><i class="fas fa-th-large"></i><span>더보기</span></button>
+  </nav>
+  <div class="more-menu-overlay" id="moreMenuOverlay" onclick="closeMoreMenu()"></div>
+  <div class="more-menu-sheet" id="moreMenuSheet" style="display:none">
+    <div class="more-menu-handle"></div>
+    <div class="more-menu-title">생산일지</div>
+    <a href="roasting.html" class="more-menu-item" onclick="closeMoreMenu()"><i class="fas fa-fire" style="background:#fff0ec;color:#e17055"></i>로스팅 생산일지</a>
+    <a href="grinding.html" class="more-menu-item" onclick="closeMoreMenu()"><i class="fas fa-cog" style="background:#f0f4ff;color:#6c5ce7"></i>분쇄 생산일지</a>
+    <a href="extraction.html" class="more-menu-item" onclick="closeMoreMenu()"><i class="fas fa-tint" style="background:#e8f4fd;color:#3498db"></i>추출 생산일지</a>
+    <a href="bottle-packing.html" class="more-menu-item" onclick="closeMoreMenu()"><i class="fas fa-wine-bottle" style="background:#e8f8f5;color:#1abc9c"></i>제품(병) 포장일지</a>
+    <a href="box-packing.html" class="more-menu-item" onclick="closeMoreMenu()"><i class="fas fa-boxes" style="background:#eafaf1;color:#27ae60"></i>완제품(박스) 포장일지</a>
+  </div>
+
+  <div class="offline-bar" id="offlineBar"><i class="fas fa-wifi-slash"></i> 오프라인 상태</div>
+  <div class="online-bar" id="onlineBar"><i class="fas fa-wifi"></i> 인터넷 연결됨</div>
+
+  <div class="pwa-install-banner" id="pwaInstallBanner">
+    <div class="pwa-banner-icon"><img src="images/icon-192-v2.png" alt="LifeCulture" /></div>
+    <div class="pwa-banner-text">
+      <div class="pwa-banner-title">라이프컬처</div>
+      <div class="pwa-banner-sub">생산관리 시스템을 설치하세요</div>
+    </div>
+    <div class="pwa-banner-actions">
+      <button class="pwa-install-btn" onclick="installPwa()">설치</button>
+      <button class="pwa-dismiss-btn" onclick="dismissPwaBanner()">닫기</button>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+      <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-init.js"></script>
+    <script src="js/db.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/raw-materials.js"></script>
+  <script>
+    // 인증 체크
+    document.addEventListener('DOMContentLoaded', () => {
+      const user = requireAuth('raw-materials');
+      if (!user) return;
+      document.getElementById('sidebarNav').innerHTML = getSidebarHTML('raw-materials.html');
+      renderUserHeader();
+      setupSidebar();
+      initDateDisplay();
+    });
+    function openMoreMenu(){document.getElementById('moreMenuOverlay').classList.add('show');const s=document.getElementById('moreMenuSheet');s.style.display='block';}
+    function closeMoreMenu(){document.getElementById('moreMenuOverlay').classList.remove('show');document.getElementById('moreMenuSheet').style.display='none';}
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+      document.getElementById('tabContent_' + tab).classList.add('active');
+    }
+  </script>
+</body>
+</html>
