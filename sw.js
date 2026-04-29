@@ -2,7 +2,7 @@
 // 라이프컬처 생산관리 앱 - Service Worker v2.7
 // 오프라인 캐싱 및 PWA 지원
 // ================================================
-const CACHE_NAME = 'lifeculture-mes-v3.3';
+const CACHE_NAME = 'lifeculture-mes-v3.4';
 
 const STATIC_ASSETS = [
   './login.html',
