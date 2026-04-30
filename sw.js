@@ -1,8 +1,8 @@
 // ================================================
-// 라이프컬처 생산관리 앱 - Service Worker v2.7
+// 라이프컬처 생산관리 앱 - Service Worker v3.5
 // 오프라인 캐싱 및 PWA 지원
 // ================================================
-const CACHE_NAME = 'lifeculture-mes-v3.4';
+const CACHE_NAME = 'lifeculture-mes-v3.5';
 
 const STATIC_ASSETS = [
   './login.html',
@@ -22,6 +22,7 @@ const STATIC_ASSETS = [
   './materials-master.html',
   './products.html',
   './sales.html',
+  './logistics.html',
   './css/style.css',
   './css/production.css',
   './css/traceability.css',
@@ -53,7 +54,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      console.log('[SW] 캐시 설치 중...');
+      console.log('[SW] 캐시 설치 중... v3.5');
       // 각 파일을 개별적으로 캐싱 (하나 실패해도 나머지 진행)
       const results = await Promise.allSettled(
         STATIC_ASSETS.map(url =>
@@ -64,7 +65,7 @@ self.addEventListener('install', (event) => {
       const succeeded = results.filter(r => r.status === 'fulfilled').length;
       console.log(`[SW] 캐싱 완료: ${succeeded}/${STATIC_ASSETS.length}`);
     }).then(() => {
-      console.log('[SW] 설치 완료');
+      console.log('[SW] 설치 완료 v3.5');
       self.skipWaiting();
     })
   );
@@ -83,18 +84,19 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => {
-      console.log('[SW] 활성화 완료');
+      console.log('[SW] 활성화 완료 v3.5');
       return self.clients.claim();
     })
   );
 });
 
-// 패치: 네트워크 우선, 실패 시 캐시 사용 (API는 항상 네트워크)
+// 패치: 네트워크 우선, 실패 시 캐시 사용
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API 요청 (tables/)은 항상 네트워크 우선
-  if (url.pathname.includes('/tables/') || url.pathname.includes('tables/')) {
+  // API 요청 (Firebase 등)은 항상 네트워크 우선
+  if (url.pathname.includes('/tables/') || url.pathname.includes('tables/') ||
+      url.hostname.includes('firestore') || url.hostname.includes('firebase')) {
     event.respondWith(
       fetch(event.request).catch(() => {
         return new Response(JSON.stringify({ data: [], total: 0, error: 'offline' }), {
@@ -123,29 +125,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 정적 자산: 네트워크 우선 → 캐시 폴백 (Stale-While-Revalidate)
+  // 정적 자산: 네트워크 우선 → 캐시 폴백 (항상 최신 버전 우선)
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await caches.match(event.request);
-
-      const networkPromise = fetch(event.request).then(response => {
-        if (response && response.status === 200 && event.request.method === 'GET') {
-          cache.put(event.request, response.clone());
-        }
-        return response;
-      }).catch(() => null);
-
-      // 캐시 있으면 즉시 반환하고 백그라운드에서 업데이트
-      if (cached) {
-        networkPromise.catch(() => {});
-        return cached;
+    fetch(event.request).then(response => {
+      if (response && response.status === 200 && event.request.method === 'GET') {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
       }
-
-      // 캐시 없으면 네트워크 기다림
-      const networkResponse = await networkPromise;
-      if (networkResponse) return networkResponse;
-
-      // 둘 다 실패 시 오프라인 폴백
+      return response;
+    }).catch(async () => {
+      // 네트워크 실패 시 캐시에서 폴백
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
       if (event.request.destination === 'document') {
         return caches.match('./login.html') || caches.match('./index.html');
       }
@@ -159,8 +150,8 @@ self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   const options = {
     body: data.body || '새로운 알림이 있습니다.',
-    icon: './images/icon-512.png',
-    badge: './images/icon-192.png',
+    icon: './images/icon-512-v2.png',
+    badge: './images/icon-192-v2.png',
     vibrate: [100, 50, 100],
     data: { url: data.url || './index.html' },
     actions: [
