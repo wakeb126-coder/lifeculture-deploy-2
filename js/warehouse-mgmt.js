@@ -2,6 +2,7 @@
 // 창고 재고 관리 시스템 (warehouse-mgmt.js)
 // 저온창고(C) / 일반창고(W)
 // 위치 코드: C-[구역번호]-[단]-[파렛트] / W-[구역번호]-[단]-[파렛트]
+// v2.0 성능 최적화: whCalcStock 중복 호출 제거, new Date() 단일화, HTML 캐싱
 // =====================================================
 
 // ── 전역 상태 ──────────────────────────────────────
@@ -9,6 +10,11 @@ let whInboundData = [];
 let whOutboundData = [];
 let whStocktakeData = [];
 let whCurrentMap = 'cold';
+
+// ── 배치도 HTML 캐시 ──────────────────────────────
+// 재고 데이터가 변경되지 않으면 이전 렌더링 결과를 재사용
+let _whMapCache = { cold: null, warm: null, stockHash: null };
+function whInvalidateMapCache() { _whMapCache.stockHash = null; }
 
 // ── 저온창고 위치 정의 ─────────────────────────────
 // 구역 A~F, 각 구역번호 A1~A6, B1~B4, C1~C6, D1~D4, E1~E6, F1~F6
@@ -83,15 +89,20 @@ async function whLoadAll() {
     whInboundData = results[0] || [];
     whOutboundData = results[1] || [];
     whStocktakeData = results[2] || [];
-    whUpdateMapKpi();
-    whUpdateDashKpi();
+
+    // ── 최적화: stockMap을 1회만 계산하여 모든 함수에 전달 ──
+    whInvalidateMapCache(); // 데이터 변경 시 캐시 무효화
+    var stockMap = whCalcStock();
+    whUpdateMapKpi(stockMap);
+    whUpdateDashKpi(stockMap);
     whRenderInTable();
     whRenderOutTable();
-    whRenderLedger();
+    whRenderLedger(stockMap);
     whRenderStocktakeTable();
+
     var mapTab = document.getElementById('tabContent_wh_map');
     if (mapTab && mapTab.classList.contains('active')) {
-      whShowMap(whCurrentMap);
+      whShowMap(whCurrentMap, stockMap);
     }
   } catch(e) {
     console.error('[warehouse-mgmt] 데이터 로드 실패:', e);
@@ -183,8 +194,9 @@ function whCalcStock() {
 }
 
 // ── 대시보드 KPI (전체현황 탭) ──────────────────────
-function whUpdateDashKpi() {
-  var stockMap = whCalcStock();
+// 최적화: stockMap을 인수로 받아 중복 계산 방지 (없으면 자체 계산)
+function whUpdateDashKpi(stockMap) {
+  stockMap = stockMap || whCalcStock();
   var today = new Date();
   var soon30 = new Date(today); soon30.setDate(today.getDate() + 30);
   var coldUsed = Object.keys(stockMap).filter(function(k) {
@@ -212,16 +224,17 @@ function whUpdateDashKpi() {
 }
 
 // ── KPI 업데이트 (창고현황 탭) ──────────────────────
-function whUpdateMapKpi() {
-  var stockMap = whCalcStock();
+// 최적화: stockMap을 인수로 받아 중복 계산 방지 (없으면 자체 계산)
+function whUpdateMapKpi(stockMap) {
+  stockMap = stockMap || whCalcStock();
+  var today = new Date();
+  var soon30 = new Date(today); soon30.setDate(today.getDate() + 30);
   var coldUsed = Object.keys(stockMap).filter(function(k) {
     return k.startsWith('C-') && Object.values(stockMap[k]).some(function(v){ return v.qty > 0; });
   }).length;
   var warmUsed = Object.keys(stockMap).filter(function(k) {
     return k.startsWith('W-') && Object.values(stockMap[k]).some(function(v){ return v.qty > 0; });
   }).length;
-  var today = new Date();
-  var soon30 = new Date(today); soon30.setDate(today.getDate() + 30);
   var expirySoon = 0;
   var allItems = {};
   whInboundData.forEach(function(r) {
@@ -261,10 +274,13 @@ function whUpdateMapKpi() {
 }
 
 // ── 창고 배치도 시각화 ────────────────────────────
-function whShowMap(type) {
+// 최적화: stockMap 인수 전달 + HTML 캐싱 + 로딩 스켈레톤
+function whShowMap(type, stockMap) {
   whCurrentMap = type;
   var container = document.getElementById('whMapContainer');
   if (!container) return;
+
+  // 버튼 스타일 업데이트
   var coldBtn = document.getElementById('btnColdMap');
   var warmBtn = document.getElementById('btnWarmMap');
   if (coldBtn && warmBtn) {
@@ -276,13 +292,31 @@ function whShowMap(type) {
       coldBtn.style.cssText = 'background:#f8f9fa;color:#555;border:2px solid #ddd;font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer';
     }
   }
-  var stockMap = whCalcStock();
-  if (type === 'cold') {
-    container.innerHTML = whBuildColdMap(stockMap);
-  } else {
-    container.innerHTML = whBuildWarmMap(stockMap);
+
+  // ── 최적화 1: 로딩 스켈레톤 즉시 표시 ──
+  container.innerHTML =
+    '<div style="text-align:center;padding:40px 20px;color:#aaa">' +
+    '<i class="fas fa-spinner fa-spin" style="font-size:24px;color:#2980b9"></i>' +
+    '<div style="margin-top:10px;font-size:13px">배치도 렌더링 중...</div>' +
+    '</div>';
+
+  // ── 최적화 2: stockMap을 외부에서 받아 중복 계산 방지 ──
+  stockMap = stockMap || whCalcStock();
+
+  // ── 최적화 3: 재고 변경이 없으면 캐시된 HTML 재사용 ──
+  var hash = JSON.stringify(stockMap);
+  if (_whMapCache.stockHash !== hash) {
+    // 데이터가 변경된 경우에만 HTML 재생성
+    _whMapCache.cold = whBuildColdMap(stockMap);
+    _whMapCache.warm = whBuildWarmMap(stockMap);
+    _whMapCache.stockHash = hash;
   }
-  whUpdateMapKpi();
+
+  // requestAnimationFrame으로 렌더링을 브라우저 페인트 사이클에 맞춤
+  requestAnimationFrame(function() {
+    container.innerHTML = type === 'cold' ? _whMapCache.cold : _whMapCache.warm;
+    whUpdateMapKpi(stockMap);
+  });
 }
 
 function whGetSlotColor(stockMap, code) {
@@ -300,6 +334,9 @@ function whGetSlotColor(stockMap, code) {
 }
 
 function whBuildColdMap(stockMap) {
+  // ── 최적화: new Date()를 함수 상단에서 1회만 생성 ──
+  var today = new Date();
+
   function zoneBlock(zone, count) {
     var html = '';
     for (var n = 1; n <= count; n++) {
@@ -308,7 +345,6 @@ function whBuildColdMap(stockMap) {
       var totalSlots = pallets * 4;
       var used = 0;
       var hasExpiry = false;
-      var today = new Date();
       for (var d = 1; d <= 4; d++) {
         for (var p = 1; p <= pallets; p++) {
           var code = 'C-' + zk + '-' + d + '-' + p;
@@ -345,11 +381,9 @@ function whBuildColdMap(stockMap) {
     '<div style="font-size:14px;font-weight:700;color:#2980b9;margin-bottom:12px;display:flex;align-items:center;gap:8px">' +
     '<i class="fas fa-snowflake"></i> 저온창고 (C) — 4단 적재 · 총 ' + totalSlots + '슬롯 · 사용 ' + usedSlots + '슬롯</div>' +
     '<div style="background:#f0f7ff;border:2px solid #2980b9;border-radius:10px;padding:14px;position:relative">' +
-    // A구역 (상단)
     '<div style="margin-bottom:10px">' +
     '<div style="font-size:10px;color:#2980b9;font-weight:700;margin-bottom:5px">▲ A구역 (상단)</div>' +
     '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('A', 6) + '</div></div>' +
-    // 중앙
     '<div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start">' +
     '<div style="display:flex;flex-direction:column;align-items:center">' +
     '<div style="font-size:10px;color:#2980b9;font-weight:700;margin-bottom:4px">B구역</div>' +
@@ -370,7 +404,6 @@ function whBuildColdMap(stockMap) {
     '<div style="font-size:10px;color:#2980b9;font-weight:700;margin-bottom:4px">E구역</div>' +
     '<div style="display:flex;flex-direction:column;gap:4px">' + zoneBlock('E', 6) + '</div></div>' +
     '</div>' +
-    // F구역 (하단)
     '<div style="margin-top:4px">' +
     '<div style="font-size:10px;color:#2980b9;font-weight:700;margin-bottom:5px">▼ F구역 (하단)</div>' +
     '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('F', 6) + '</div></div>' +
@@ -388,7 +421,10 @@ function whBuildColdMap(stockMap) {
 }
 
 function whBuildWarmMap(stockMap) {
-  function zoneBlock(zone, count, color, bgColor) {
+  // ── 최적화: new Date()를 함수 상단에서 1회만 생성 ──
+  var today = new Date();
+
+  function zoneBlock(zone, count) {
     var html = '';
     for (var n = 1; n <= count; n++) {
       var zk = zone + n;
@@ -396,7 +432,6 @@ function whBuildWarmMap(stockMap) {
       var totalSlots = pallets * 3;
       var used = 0;
       var hasExpiry = false;
-      var today = new Date();
       for (var d = 1; d <= 3; d++) {
         for (var p = 1; p <= pallets; p++) {
           var code = 'W-' + zk + '-' + d + '-' + p;
@@ -433,30 +468,24 @@ function whBuildWarmMap(stockMap) {
     '<div style="font-size:14px;font-weight:700;color:#27ae60;margin-bottom:12px;display:flex;align-items:center;gap:8px">' +
     '<i class="fas fa-warehouse"></i> 일반창고 (W) — 3단 적재 · 총 ' + totalSlots + '슬롯 · 사용 ' + usedSlots + '슬롯</div>' +
     '<div style="background:#f0fff4;border:2px solid #27ae60;border-radius:10px;padding:14px;position:relative">' +
-    // A구역
     '<div style="margin-bottom:12px;background:#e8f5e9;border-radius:8px;padding:10px">' +
     '<div style="font-size:11px;font-weight:700;color:#1b5e20;margin-bottom:6px">A구역 (1~6)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('A', 6, '#1b5e20', '#e8f5e9') + '</div></div>' +
-    // B구역
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('A', 6) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#e3f2fd;border-radius:8px;padding:10px">' +
     '<div style="font-size:11px;font-weight:700;color:#0d47a1;margin-bottom:6px">B구역 (1~4)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('B', 4, '#0d47a1', '#e3f2fd') + '</div></div>' +
-    // C구역
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('B', 4) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#fff3e0;border-radius:8px;padding:10px">' +
     '<div style="font-size:11px;font-weight:700;color:#e65100;margin-bottom:6px">C구역 (1~10)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('C', 10, '#e65100', '#fff3e0') + '</div></div>' +
-    // D구역
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('C', 10) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#f3e5f5;border-radius:8px;padding:10px">' +
     '<div style="font-size:11px;font-weight:700;color:#4a148c;margin-bottom:6px">D구역 (1~4)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('D', 4, '#4a148c', '#f3e5f5') + '</div></div>' +
-    // E구역
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('D', 4) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#e0f7fa;border-radius:8px;padding:10px">' +
     '<div style="font-size:11px;font-weight:700;color:#006064;margin-bottom:6px">E구역 (1~7)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('E', 7, '#006064', '#e0f7fa') + '</div></div>' +
-    // F구역
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('E', 7) + '</div></div>' +
     '<div style="margin-bottom:4px;background:#fce4ec;border-radius:8px;padding:10px">' +
     '<div style="font-size:11px;font-weight:700;color:#880e4f;margin-bottom:6px">F구역 (1~7)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('F', 7, '#880e4f', '#fce4ec') + '</div></div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('F', 7) + '</div></div>' +
     '<div style="position:absolute;bottom:-13px;left:50%;transform:translateX(-50%);background:#2C5F2E;color:#fff;font-size:11px;font-weight:700;padding:2px 14px;border-radius:20px">🚪 입구</div>' +
     '</div>' +
     '<div style="display:flex;gap:14px;margin-top:18px;flex-wrap:wrap;font-size:12px">' +
@@ -471,6 +500,7 @@ function whBuildWarmMap(stockMap) {
 
 // ── 위치 상세 팝업 ────────────────────────────────
 function whShowLocDetail(locCode) {
+  // 최적화: stockMap 1회 계산
   var stockMap = whCalcStock();
   var parts = locCode.split('-');
   var wh = parts[0];
@@ -484,6 +514,7 @@ function whShowLocDetail(locCode) {
   var whName = wh === 'C' ? '저온창고' : '일반창고';
   title.innerHTML = '<i class="fas fa-map-marker-alt"></i> ' + whName + ' ' + zoneKey + '구역 상세';
   var levels = wh === 'C' ? 4 : 3;
+  // 최적화: today를 루프 밖에서 1회 생성
   var today = new Date();
   var bodyHtml = '<div style="font-size:12px;color:#555;margin-bottom:12px"><b>' + whName + '</b> · <b>' + zoneKey + '구역</b> · ' + (wh==='C'?'4단':'3단') + ' 적재</div>';
   for (var d = 1; d <= levels; d++) {
@@ -535,6 +566,7 @@ async function whSubmitInbound() {
   try {
     await apiPost('wh_inbound', data);
     showToast('입고 등록 완료: ' + data.lot_no, 'success');
+    whInvalidateMapCache(); // 캐시 무효화
     await whLoadAll();
     whRefreshInLot();
     var form = document.getElementById('whInboundForm');
@@ -578,6 +610,7 @@ async function whDeleteInbound(id) {
   try {
     await apiDelete('wh_inbound', id);
     showToast('삭제 완료', 'success');
+    whInvalidateMapCache(); // 캐시 무효화
     await whLoadAll();
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
@@ -612,6 +645,7 @@ async function whSubmitOutbound() {
   try {
     await apiPost('wh_outbound', data);
     showToast('출고 등록 완료: ' + data.lot_no, 'success');
+    whInvalidateMapCache(); // 캐시 무효화
     await whLoadAll();
     whRefreshOutLot();
     var form = document.getElementById('whOutboundForm');
@@ -644,9 +678,9 @@ function whFifoGuide() {
     return;
   }
   candidates.sort(function(a,b){ return (a.expiry||'9999').localeCompare(b.expiry||'9999'); });
+  var today = new Date();
   var html = '<div style="font-weight:700;color:#27ae60;margin-bottom:8px"><i class="fas fa-sort-amount-up"></i> FIFO 출고 권장 순서</div>';
   candidates.forEach(function(c, i) {
-    var today = new Date();
     var diff = c.expiry ? Math.ceil((new Date(c.expiry) - today) / 86400000) : null;
     var badge = i === 0 ? '<span style="background:#e74c3c;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px">우선출고</span>' : '';
     html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee">' +
@@ -691,6 +725,7 @@ async function whDeleteOutbound(id) {
   try {
     await apiDelete('wh_outbound', id);
     showToast('삭제 완료', 'success');
+    whInvalidateMapCache(); // 캐시 무효화
     await whLoadAll();
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
@@ -698,10 +733,11 @@ async function whDeleteOutbound(id) {
 }
 
 // ── 수불부 렌더 ───────────────────────────────────
-function whRenderLedger() {
+// 최적화: stockMap을 인수로 받아 중복 계산 방지 (없으면 자체 계산)
+function whRenderLedger(stockMap) {
   var tbody = document.getElementById('whLedgerBody');
   if (!tbody) return;
-  var stockMap = whCalcStock();
+  stockMap = stockMap || whCalcStock();
   var rows = [];
   Object.entries(stockMap).forEach(function(entry) {
     var locCode = entry[0], items = entry[1];
@@ -717,8 +753,9 @@ function whRenderLedger() {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:30px">등록된 재고가 없습니다.</td></tr>';
     return;
   }
+  // 최적화: today를 루프 밖에서 1회 생성
+  var today = new Date();
   tbody.innerHTML = rows.map(function(r) {
-    var today = new Date();
     var diff = r.expiry ? Math.ceil((new Date(r.expiry) - today) / 86400000) : null;
     var expiryColor = diff !== null && diff <= 30 ? '#e74c3c' : '#555';
     return '<tr>' +
@@ -802,6 +839,7 @@ async function whSubmitStocktake() {
       await apiPost('wh_stocktake', records[i]);
     }
     showToast('재고 실사 저장 완료 (' + records.length + '건)', 'success');
+    whInvalidateMapCache(); // 캐시 무효화
     await whLoadAll();
   } catch(e) {
     showToast('저장 실패: ' + e.message, 'error');
@@ -867,7 +905,6 @@ function whPrintLabel(lotNo) {
   if (!record) { showToast('해당 Lot No. 기록을 찾을 수 없습니다.', 'warning'); return; }
   var modal = document.getElementById('whLabelModal');
   if (!modal) {
-    // 모달이 없으면 직접 생성
     var m = document.createElement('div');
     m.id = 'whLabelModal';
     m.className = 'modal-overlay show';
@@ -1064,7 +1101,6 @@ function whProcessScan(rawValue) {
   if (!rawValue || !rawValue.trim()) return;
   var val = rawValue.trim();
   var resultEl = document.getElementById('whQrScanResult');
-  // JSON 형태의 QR 데이터 파싱 시도
   try {
     var parsed = JSON.parse(decodeURIComponent(val));
     if (parsed.lot) {
@@ -1075,7 +1111,6 @@ function whProcessScan(rawValue) {
       if (locEl) locEl.value = parsed.loc || '';
       if (itemEl) itemEl.value = parsed.item || '';
       if (refEl) refEl.value = parsed.lot || '';
-      // 창고 선택 후 위치 드롭다운 업데이트
       var whEl = document.getElementById('whout_warehouse');
       if (whEl && parsed.loc) {
         whEl.value = parsed.loc.startsWith('C') ? 'C' : 'W';
@@ -1086,7 +1121,6 @@ function whProcessScan(rawValue) {
       return;
     }
   } catch(e) {}
-  // Lot No. 직접 입력
   var record = whInboundData.find(function(r){ return r.lot_no === val; });
   if (record) {
     whCloseQrScanner();
