@@ -236,7 +236,7 @@
   </main>
 
   <!-- 바텀 내비게이션 (모바일) -->
-  <nav class="bottom-nav" id="bottomNav">
+  <nav class="bottom-nav" id="bottomNav" style="background:#1e2329;">
     <a href="index.html" class="bottom-nav-item active"><i class="fas fa-home"></i><span>홈</span></a>
     <button class="bottom-nav-item" onclick="openTeamMenu("logistics")"><i class="fas fa-truck"></i><span>물류팀</span></button>
     <button class="bottom-nav-item" onclick="openTeamMenu("production")"><i class="fas fa-industry"></i><span>생산팀</span></button>
@@ -245,6 +245,10 @@
   </nav>
 
 
+  <!-- 더보기 메뉴 오버레이 -->
+  <div class="more-menu-overlay" id="moreMenuOverlay" onclick="closeMoreMenu()"></div>
+  <div class="more-menu-sheet" id="moreMenuSheet" style="display:none;background:#1e2329;">
+    <div class="more-menu-handle"></div>
     <div class="more-menu-title">전체 메뉴</div>
 
         <div class="more-menu-section">
@@ -331,6 +335,7 @@
     </div>
   </div>
 
+
   <!-- Scripts -->
   <script src="js/auth.js"></script>
       <!-- Firebase SDK -->
@@ -371,7 +376,7 @@
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
   <!-- 팀 메뉴 오버레이 -->
   <div class="more-menu-overlay" id="teamMenuOverlay" onclick="closeTeamMenu()"></div>
-  <div class="more-menu-sheet" id="teamMenuSheet" style="display:none">
+  <div class="more-menu-sheet" id="teamMenuSheet" style="display:none;background:#1e2329;">
     <div class="more-menu-handle"></div>
 
     <!-- 물류팀 메뉴 -->
@@ -402,6 +407,14 @@
   </div>
 
   <script>
+  function openMoreMenu() {
+    document.getElementById('moreMenuOverlay').classList.add('show');
+    document.getElementById('moreMenuSheet').style.display = 'block';
+  }
+  function closeMoreMenu() {
+    document.getElementById('moreMenuOverlay').classList.remove('show');
+    document.getElementById('moreMenuSheet').style.display = 'none';
+  }
   function openTeamMenu(team) {
     ['logistics','production','sales'].forEach(function(t){
       var el = document.getElementById('teamMenu_' + t);
