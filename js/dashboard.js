@@ -10,7 +10,9 @@ async function loadDashboard() {
       loadRecentRoasting(),
       loadRecentExtraction(),
       loadRecentBox(),
-      loadStockAlert()
+      loadStockAlert(),
+      loadMonthlySales(),
+      loadDocumentAlert()
     ]);
   } catch (e) {
     console.error('Dashboard load error:', e);
@@ -140,6 +142,143 @@ async function loadRecentBox() {
     `;
   } catch (e) {
     container.innerHTML = '<div class="empty-msg">데이터 로드 실패</div>';
+  }
+}
+
+// ─────────────────────────────────────────────
+// 이번달 매출 현황
+// ─────────────────────────────────────────────
+async function loadMonthlySales() {
+  const container = document.getElementById('monthlySales');
+  if (!container) return;
+  try {
+    const thisMonth = today().substring(0, 7); // YYYY-MM
+    const all = await apiGetAll('sales') || [];
+    const monthData = all.filter(r => r.sale_date && r.sale_date.startsWith(thisMonth));
+
+    if (!monthData.length) {
+      container.innerHTML = '<div class="empty-msg"><i class="fas fa-inbox"></i> 이번달 매출 데이터 없음</div>';
+      return;
+    }
+
+    // 채널별 집계
+    const channelMap = {};
+    let totalPayment = 0;
+    let totalSettlement = 0;
+    monthData.forEach(r => {
+      const ch = r.channel || '기타';
+      if (!channelMap[ch]) channelMap[ch] = { payment: 0, settlement: 0, count: 0 };
+      channelMap[ch].payment += parseFloat(r.payment) || 0;
+      channelMap[ch].settlement += parseFloat(r.settlement) || 0;
+      channelMap[ch].count += 1;
+      totalPayment += parseFloat(r.payment) || 0;
+      totalSettlement += parseFloat(r.settlement) || 0;
+    });
+
+    const rows = Object.entries(channelMap)
+      .sort((a, b) => b[1].settlement - a[1].settlement);
+
+    container.innerHTML = `
+      <div style="margin-bottom:8px;display:flex;gap:16px;flex-wrap:wrap">
+        <span style="font-size:12px;color:#555">결제합계: <strong style="color:#2C5F2E">${numFormat(totalPayment, 0)}원</strong></span>
+        <span style="font-size:12px;color:#555">정산합계: <strong style="color:#2980b9">${numFormat(totalSettlement, 0)}원</strong></span>
+        <span style="font-size:12px;color:#555">건수: <strong>${monthData.length}건</strong></span>
+      </div>
+      <table class="mini-table">
+        <thead><tr><th>채널</th><th>건수</th><th>결제금액</th><th>정산금액</th></tr></thead>
+        <tbody>
+          ${rows.map(([ch, v]) => `
+            <tr>
+              <td>${ch}</td>
+              <td>${v.count}건</td>
+              <td>${numFormat(v.payment, 0)}원</td>
+              <td><strong>${numFormat(v.settlement, 0)}원</strong></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    const container2 = document.getElementById('monthlySales');
+    if (container2) container2.innerHTML = '<div class="empty-msg"><i class="fas fa-inbox"></i> 이번달 매출 데이터 없음</div>';
+  }
+}
+
+// ─────────────────────────────────────────────
+// 서류 갱신 알림
+// ─────────────────────────────────────────────
+async function loadDocumentAlert() {
+  const container = document.getElementById('documentAlert');
+  if (!container) return;
+  try {
+    const all = await apiGetAll('vendors') || [];
+    const todayStr = today(); // YYYY-MM-DD
+    const alerts = [];
+
+    all.forEach(v => {
+      const name = v.vendor_name || v.company_name || v.name || '(거래처명 없음)';
+      // 각 서류별 확인
+      const docs = [
+        { label: '사업자등록증', date: v.doc_registration_date, status: v.doc_registration_status },
+        { label: '통장사본', date: v.doc_bank_date, status: v.doc_bank_status },
+        { label: '기타서류', date: v.doc_other_date, status: v.doc_other_status },
+      ];
+      // 추가 서류 (extra)
+      if (v.extra_docs && Array.isArray(v.extra_docs)) {
+        v.extra_docs.forEach((d, i) => {
+          docs.push({ label: d.name || `추가서류${i+1}`, date: d.date, status: d.status });
+        });
+      }
+      docs.forEach(doc => {
+        if (!doc.date) return;
+        // 기한만료 상태이거나 등록일로부터 1년(365일) 이내 갱신 필요 판단
+        const docDate = new Date(doc.date);
+        const todayDate = new Date(todayStr);
+        const diffDays = Math.floor((todayDate - docDate) / (1000 * 60 * 60 * 24));
+        const isExpired = doc.status === '기한만료';
+        const isSoonExpire = diffDays >= 335; // 등록일로부터 335일 이상 = 30일 이내 갱신 필요
+        if (isExpired || isSoonExpire) {
+          alerts.push({
+            vendor: name,
+            doc: doc.label,
+            date: doc.date,
+            status: doc.status || '-',
+            diffDays,
+            isExpired
+          });
+        }
+      });
+    });
+
+    if (!alerts.length) {
+      container.innerHTML = '<div class="empty-msg" style="color:#27ae60"><i class="fas fa-check-circle"></i> 갱신 필요 서류 없음</div>';
+      return;
+    }
+
+    // 만료 우선 정렬
+    alerts.sort((a, b) => b.diffDays - a.diffDays);
+
+    container.innerHTML = `
+      <table class="mini-table">
+        <thead><tr><th>거래처</th><th>서류</th><th>등록일</th><th>상태</th></tr></thead>
+        <tbody>
+          ${alerts.slice(0, 8).map(a => `
+            <tr>
+              <td>${a.vendor}</td>
+              <td>${a.doc}</td>
+              <td>${a.date}</td>
+              <td>${a.isExpired
+                ? '<span class="badge badge-danger">기한만료</span>'
+                : '<span class="badge badge-warning" style="background:#fff3cd;color:#856404">갱신임박</span>'
+              }</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    const container2 = document.getElementById('documentAlert');
+    if (container2) container2.innerHTML = '<div class="empty-msg"><i class="fas fa-inbox"></i> 서류 데이터 없음</div>';
   }
 }
 
