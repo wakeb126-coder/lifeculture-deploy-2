@@ -16,10 +16,17 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    .tab-bar { display:flex; gap:4px; margin-bottom:16px; border-bottom:2px solid #e8e8e8; overflow-x:auto; }
-    .tab-btn { padding:10px 18px; border:none; background:#f0f2f5; cursor:pointer; font-size:13px; font-weight:600; color:#555; border-bottom:3px solid transparent; margin-bottom:-2px; font-family:'Noto Sans KR',sans-serif; white-space:nowrap; border-radius:6px 6px 0 0; transition:all 0.2s; }
+    .tab-bar-wrap { position:relative; margin-bottom:16px; }
+    .tab-bar { display:flex; gap:4px; border-bottom:2px solid #e8e8e8; overflow-x:auto; scrollbar-width:none; -ms-overflow-style:none; }
+    .tab-bar::-webkit-scrollbar { display:none; }
+    .tab-bar-wrap::after { content:''; position:absolute; right:0; top:0; bottom:2px; width:32px; background:linear-gradient(to right, transparent, #f5f6f7); pointer-events:none; border-radius:0 6px 0 0; }
+    .tab-btn { padding:10px 14px; border:none; background:#f0f2f5; cursor:pointer; font-size:13px; font-weight:600; color:#555; border-bottom:3px solid transparent; margin-bottom:-2px; font-family:'Noto Sans KR',sans-serif; white-space:nowrap; border-radius:6px 6px 0 0; transition:all 0.2s; flex-shrink:0; }
     .tab-btn:hover { background:#e4e8ef; color:#333; }
     .tab-btn.active { color:#fff !important; background:var(--primary) !important; border-bottom-color:var(--primary); }
+    @media (max-width:768px) {
+      .tab-btn { padding:8px 10px; font-size:11px; }
+      .tab-btn i { display:none; }
+    }
     .tab-content { display:none; }
     .tab-content.active { display:block; }
     .product-type-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; }
@@ -98,15 +105,17 @@
       </div>
 
       <!-- 탭 바 -->
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchTab('all')" id="tabAll"><i class="fas fa-tachometer-alt"></i> 전체현황</button>
-        <button class="tab-btn" onclick="switchTab('import')" id="tabImport"><i class="fas fa-ship"></i> 수입제품</button>
-        <button class="tab-btn" onclick="switchTab('oem')" id="tabOem"><i class="fas fa-industry"></i> OEM제품</button>
-        <button class="tab-btn" onclick="switchTab('own')" id="tabOwn"><i class="fas fa-flask"></i> 자체생산</button>
-        <button class="tab-btn" onclick="switchTab('wh_map')" id="tabWhMap" style="border-left:2px solid #e0e0e0;margin-left:4px"><i class="fas fa-warehouse"></i> 창고현황</button>
-        <button class="tab-btn" onclick="switchTab('wh_in')" id="tabWhIn"><i class="fas fa-arrow-circle-down" style="color:#27ae60"></i> 입고관리</button>
-        <button class="tab-btn" onclick="switchTab('wh_out')" id="tabWhOut"><i class="fas fa-arrow-circle-up" style="color:#e74c3c"></i> 출고관리</button>
-        <button class="tab-btn" onclick="switchTab('wh_stocktake')" id="tabWhStocktake"><i class="fas fa-clipboard-check" style="color:#8e44ad"></i> 재고실사</button>
+      <div class="tab-bar-wrap">
+        <div class="tab-bar" id="mainTabBar">
+          <button class="tab-btn active" onclick="switchTab('all')" id="tabAll"><i class="fas fa-tachometer-alt"></i> 전체현황</button>
+          <button class="tab-btn" onclick="switchTab('import')" id="tabImport"><i class="fas fa-ship"></i> 수입제품</button>
+          <button class="tab-btn" onclick="switchTab('oem')" id="tabOem"><i class="fas fa-industry"></i> OEM제품</button>
+          <button class="tab-btn" onclick="switchTab('own')" id="tabOwn"><i class="fas fa-flask"></i> 자체생산</button>
+          <button class="tab-btn" onclick="switchTab('wh_map')" id="tabWhMap" style="border-left:2px solid #e0e0e0;margin-left:4px"><i class="fas fa-warehouse"></i> 창고현황</button>
+          <button class="tab-btn" onclick="switchTab('wh_in')" id="tabWhIn"><i class="fas fa-arrow-circle-down" style="color:#27ae60"></i> 입고관리</button>
+          <button class="tab-btn" onclick="switchTab('wh_out')" id="tabWhOut"><i class="fas fa-arrow-circle-up" style="color:#e74c3c"></i> 출고관리</button>
+          <button class="tab-btn" onclick="switchTab('wh_stocktake')" id="tabWhStocktake"><i class="fas fa-clipboard-check" style="color:#8e44ad"></i> 재고실사</button>
+        </div>
       </div>
 
       <!-- 탭1: 입출고 등록 (숨김 - 각 제품 탭에서 직접 등록) -->
@@ -346,7 +355,8 @@
               <button class="btn btn-secondary" onclick="lgExport('import')"><i class="fas fa-file-excel"></i> 엑셀</button>
             </div>
           </div>
-          <div class="table-wrap">
+          <div id="importCardView" style="display:none"></div>
+          <div id="importTableWrap" class="table-wrap">
             <table id="importTable">
               <thead>
                 <tr>
@@ -385,7 +395,8 @@
               <button class="btn btn-secondary" onclick="lgExport('oem')"><i class="fas fa-file-excel"></i> 엑셀</button>
             </div>
           </div>
-          <div class="table-wrap">
+          <div id="oemCardView" style="display:none"></div>
+          <div id="oemTableWrap" class="table-wrap">
             <table id="oemTable">
               <thead>
                 <tr>
@@ -424,7 +435,8 @@
               <button class="btn btn-secondary" onclick="lgExport('own')"><i class="fas fa-file-excel"></i> 엑셀</button>
             </div>
           </div>
-          <div class="table-wrap">
+          <div id="ownCardView" style="display:none"></div>
+          <div id="ownTableWrap" class="table-wrap">
             <table id="ownTable">
               <thead>
                 <tr>
@@ -528,7 +540,8 @@
             <div class="table-title"><i class="fas fa-list" style="color:var(--primary)"></i> 전체 물류현황</div>
             <div style="font-size:13px;color:#888" id="allResultCount">0건</div>
           </div>
-          <div class="table-wrap">
+          <div id="allCardView" style="display:none"></div>
+          <div id="allTableWrap" class="table-wrap">
             <table id="allTable">
               <thead>
                 <tr>
@@ -589,7 +602,10 @@
         </div>
 
         <!-- 배치도 -->
-        <div id="whMapContainer"></div>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px">
+          <div id="whMapContainer" style="min-width:320px"></div>
+        </div>
+        <div class="pull-hint" style="font-size:11px;color:#aaa;text-align:center;padding:6px 0"><i class="fas fa-arrows-alt-h"></i> 좌우로 스크롤하여 배치도 전체를 확인하세요</div>
 
         <!-- 위치 상세 팝업 -->
         <div class="modal-overlay" id="whLocDetailModal">

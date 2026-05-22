@@ -888,15 +888,47 @@ function whPrintStocktakeReport() {
     if (diffText !== '-' && diffText !== '0') diffRows.push(row.outerHTML);
   });
   if (diffRows.length === 0) { showToast('차이가 발생한 항목이 없습니다.', 'info'); return; }
-  var win = window.open('', '_blank');
-  win.document.write('<html><head><title>재고 실사 조정 보고서</title>' +
-    '<style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;font-size:12px}th{background:#f8f9fa}h2{color:#2C5F2E}</style></head><body>' +
-    '<h2>재고 실사 조정 보고서</h2>' +
-    '<p>작성일: ' + new Date().toLocaleDateString('ko-KR') + ' | 차이 발생 항목: ' + diffRows.length + '건</p>' +
-    '<table><thead><tr><th>위치코드</th><th>품목명</th><th>전산수량</th><th>실제수량</th><th>차이</th><th>소비기한</th></tr></thead><tbody>' +
-    diffRows.join('') + '</tbody></table></body></html>');
-  win.document.close();
-  win.print();
+  var isMobile = window.innerWidth <= 768;
+  // 데스크탑: 기존 window.open 방식 유지
+  if (!isMobile) {
+    var win = window.open('', '_blank');
+    win.document.write('<html><head><title>재고 실사 조정 보고서</title>' +
+      '<style>body{font-family:sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;font-size:12px}th{background:#f8f9fa}h2{color:#2C5F2E}</style></head><body>' +
+      '<h2>재고 실사 조정 보고서</h2>' +
+      '<p>작성일: ' + new Date().toLocaleDateString('ko-KR') + ' | 차이 발생 항목: ' + diffRows.length + '건</p>' +
+      '<table><thead><tr><th>위치코드</th><th>품목명</th><th>전산수량</th><th>실제수량</th><th>차이</th><th>소비기한</th></tr></thead><tbody>' +
+      diffRows.join('') + '</tbody></table></body></html>');
+    win.document.close();
+    win.print();
+    return;
+  }
+  // 모바일: 모달 내 미리보기
+  var modalId = 'whStocktakeReportModal';
+  var existing = document.getElementById(modalId);
+  if (existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = modalId;
+  m.className = 'modal-overlay show';
+  m.innerHTML = '<div class="modal-dialog" style="max-width:700px">' +
+    '<div class="modal-header"><h3><i class="fas fa-clipboard-check"></i> 재고 실사 조정 보고서</h3>' +
+    '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove()"><i class="fas fa-times"></i></button></div>' +
+    '<div class="modal-body" style="padding:16px">' +
+    '<div style="font-size:12px;color:#666;margin-bottom:12px">작성일: ' + new Date().toLocaleDateString('ko-KR') + ' | 차이 발생 항목: ' + diffRows.length + '건</div>' +
+    '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">' +
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+    '<thead><tr style="background:#f8f9fa">' +
+    '<th style="border:1px solid #ddd;padding:8px">위치코드</th>' +
+    '<th style="border:1px solid #ddd;padding:8px">품목명</th>' +
+    '<th style="border:1px solid #ddd;padding:8px">전산수량</th>' +
+    '<th style="border:1px solid #ddd;padding:8px">실제수량</th>' +
+    '<th style="border:1px solid #ddd;padding:8px">차이</th>' +
+    '<th style="border:1px solid #ddd;padding:8px">소비기한</th>' +
+    '</tr></thead><tbody>' + diffRows.join('') + '</tbody></table></div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px">' +
+    '<button onclick="window.print()" style="flex:1;padding:10px;background:#2C5F2E;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700"><i class="fas fa-print"></i> 인쇄</button>' +
+    '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer">닫기</button>' +
+    '</div></div></div>';
+  document.body.appendChild(m);
 }
 
 // ── 라벨 출력 (제브라/빅솔론) ────────────────────
@@ -979,36 +1011,97 @@ function whPrintBrowserLabel(lotNo) {
   var record = whInboundData.find(function(r){ return r.lot_no === lotNo; });
   if (!record) return;
   var qrData = encodeURIComponent(JSON.stringify({ lot: record.lot_no, loc: record.location, item: record.item_name, expiry: record.expiry_date }));
-  var win = window.open('', '_blank', 'width=400,height=500');
-  win.document.write('<html><head><title>창고 라벨</title>' +
-    '<style>body{font-family:sans-serif;padding:20px;width:300px}h3{color:#2C5F2E;margin:0 0 10px}table{width:100%;font-size:13px}td{padding:3px 0}td:first-child{font-weight:700;width:80px}.qr{text-align:center;margin:10px 0}hr{border:1px dashed #ccc}</style></head><body>' +
-    '<h3>📦 입고 라벨</h3><hr>' +
-    '<table><tr><td>품목명</td><td>' + (record.item_name||'-') + '</td></tr>' +
-    '<tr><td>Lot No.</td><td>' + (record.lot_no||'-') + '</td></tr>' +
-    '<tr><td>위치</td><td>' + (record.location||'-') + '</td></tr>' +
-    '<tr><td>수량</td><td>' + (record.qty||0) + ' ' + (record.unit||'') + '</td></tr>' +
-    '<tr><td>소비기한</td><td>' + (record.expiry_date||'-') + '</td></tr>' +
-    '<tr><td>공급업체</td><td>' + (record.supplier||'-') + '</td></tr></table>' +
-    '<div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + qrData + '" alt="QR"></div>' +
-    '<hr><div style="font-size:10px;color:#888;text-align:center">라이프컬처 창고관리시스템</div>' +
-    '</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); }, 500);
+  var isMobile = window.innerWidth <= 768;
+  // 데스크탑: 기존 window.open 방식 유지
+  if (!isMobile) {
+    var win = window.open('', '_blank', 'width=400,height=500');
+    win.document.write('<html><head><title>창고 라벨</title>' +
+      '<style>body{font-family:sans-serif;padding:20px;width:300px}h3{color:#2C5F2E;margin:0 0 10px}table{width:100%;font-size:13px}td{padding:3px 0}td:first-child{font-weight:700;width:80px}.qr{text-align:center;margin:10px 0}hr{border:1px dashed #ccc}</style></head><body>' +
+      '<h3>📦 입고 라벨</h3><hr>' +
+      '<table><tr><td>품목명</td><td>' + (record.item_name||'-') + '</td></tr>' +
+      '<tr><td>Lot No.</td><td>' + (record.lot_no||'-') + '</td></tr>' +
+      '<tr><td>위치</td><td>' + (record.location||'-') + '</td></tr>' +
+      '<tr><td>수량</td><td>' + (record.qty||0) + ' ' + (record.unit||'') + '</td></tr>' +
+      '<tr><td>소비기한</td><td>' + (record.expiry_date||'-') + '</td></tr>' +
+      '<tr><td>공급업체</td><td>' + (record.supplier||'-') + '</td></tr></table>' +
+      '<div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + qrData + '" alt="QR"></div>' +
+      '<hr><div style="font-size:10px;color:#888;text-align:center">라이프컬처 창고관리시스템</div>' +
+      '</body></html>');
+    win.document.close();
+    setTimeout(function(){ win.print(); }, 500);
+    return;
+  }
+  // 모바일: 모달 내 미리보기 + 인쇄 버튼
+  var modalId = 'whBrowserLabelModal';
+  var existing = document.getElementById(modalId);
+  if (existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = modalId;
+  m.className = 'modal-overlay show';
+  m.innerHTML = '<div class="modal-dialog" style="max-width:380px">' +
+    '<div class="modal-header"><h3><i class="fas fa-print"></i> 입고 라벨 미리보기</h3>' +
+    '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove()"><i class="fas fa-times"></i></button></div>' +
+    '<div class="modal-body" style="padding:16px">' +
+    '<div style="border:2px dashed #2C5F2E;border-radius:8px;padding:16px;background:#fff;font-family:sans-serif">' +
+    '<div style="font-size:14px;font-weight:700;color:#2C5F2E;margin-bottom:8px">📦 입고 라벨</div>' +
+    '<table style="width:100%;font-size:13px;border-collapse:collapse">' +
+    '<tr><td style="font-weight:700;width:80px;padding:3px 0">품목명</td><td>' + (record.item_name||'-') + '</td></tr>' +
+    '<tr><td style="font-weight:700;padding:3px 0">Lot No.</td><td style="font-family:monospace">' + (record.lot_no||'-') + '</td></tr>' +
+    '<tr><td style="font-weight:700;padding:3px 0">위치</td><td>' + (record.location||'-') + '</td></tr>' +
+    '<tr><td style="font-weight:700;padding:3px 0">수량</td><td>' + (record.qty||0) + ' ' + (record.unit||'') + '</td></tr>' +
+    '<tr><td style="font-weight:700;padding:3px 0">소비기한</td><td>' + (record.expiry_date||'-') + '</td></tr>' +
+    '<tr><td style="font-weight:700;padding:3px 0">공급업체</td><td>' + (record.supplier||'-') + '</td></tr>' +
+    '</table>' +
+    '<div style="text-align:center;margin:12px 0"><img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + qrData + '" alt="QR" style="border-radius:4px"></div>' +
+    '<div style="font-size:10px;color:#888;text-align:center">라이프컬처 창고관리시스템</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px">' +
+    '<button onclick="window.print()" style="flex:1;padding:10px;background:#2C5F2E;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700"><i class="fas fa-print"></i> 인쇄</button>' +
+    '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer">닫기</button>' +
+    '</div></div></div>';
+  document.body.appendChild(m);
 }
 
 // ── 위치 라벨 출력 ────────────────────────────────
 function whPrintLocLabel(locCode) {
   var qrData = encodeURIComponent(locCode);
-  var win = window.open('', '_blank', 'width=350,height=400');
-  win.document.write('<html><head><title>위치 라벨</title>' +
-    '<style>body{font-family:sans-serif;padding:20px;text-align:center}h3{color:#2980b9}.code{font-size:24px;font-weight:700;color:#2C5F2E;margin:10px 0}hr{border:1px dashed #ccc}</style></head><body>' +
-    '<h3>📍 위치 라벨</h3><hr>' +
-    '<div class="code">' + locCode + '</div>' +
-    '<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + qrData + '" alt="QR" style="margin:10px 0">' +
-    '<hr><div style="font-size:10px;color:#888">라이프컬처 창고관리시스템</div>' +
-    '</body></html>');
-  win.document.close();
-  setTimeout(function(){ win.print(); }, 500);
+  var isMobile = window.innerWidth <= 768;
+  // 데스크탑: 기존 window.open 방식 유지
+  if (!isMobile) {
+    var win = window.open('', '_blank', 'width=350,height=400');
+    win.document.write('<html><head><title>위치 라벨</title>' +
+      '<style>body{font-family:sans-serif;padding:20px;text-align:center}h3{color:#2980b9}.code{font-size:24px;font-weight:700;color:#2C5F2E;margin:10px 0}hr{border:1px dashed #ccc}</style></head><body>' +
+      '<h3>📍 위치 라벨</h3><hr>' +
+      '<div class="code">' + locCode + '</div>' +
+      '<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + qrData + '" alt="QR" style="margin:10px 0">' +
+      '<hr><div style="font-size:10px;color:#888">라이프컬처 창고관리시스템</div>' +
+      '</body></html>');
+    win.document.close();
+    setTimeout(function(){ win.print(); }, 500);
+    return;
+  }
+  // 모바일: 모달 내 미리보기
+  var modalId = 'whLocLabelModal';
+  var existing = document.getElementById(modalId);
+  if (existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = modalId;
+  m.className = 'modal-overlay show';
+  m.innerHTML = '<div class="modal-dialog" style="max-width:320px">' +
+    '<div class="modal-header"><h3><i class="fas fa-map-marker-alt"></i> 위치 라벨 미리보기</h3>' +
+    '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove()"><i class="fas fa-times"></i></button></div>' +
+    '<div class="modal-body" style="padding:16px">' +
+    '<div style="border:2px dashed #2980b9;border-radius:8px;padding:16px;background:#fff;text-align:center">' +
+    '<div style="font-size:14px;font-weight:700;color:#2980b9;margin-bottom:8px">📍 위치 라벨</div>' +
+    '<div style="font-size:28px;font-weight:700;color:#2C5F2E;margin:10px 0;font-family:monospace">' + locCode + '</div>' +
+    '<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + qrData + '" alt="QR" style="margin:10px 0;border-radius:4px">' +
+    '<div style="font-size:10px;color:#888">라이프컬처 창고관리시스템</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px">' +
+    '<button onclick="window.print()" style="flex:1;padding:10px;background:#2980b9;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700"><i class="fas fa-print"></i> 인쇄</button>' +
+    '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer">닫기</button>' +
+    '</div></div></div>';
+  document.body.appendChild(m);
 }
 
 // ── 엑셀 내보내기 ─────────────────────────────────

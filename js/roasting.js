@@ -493,12 +493,38 @@ function printCurrentForm() {
   window.print();
 }
 
-// 특정 기록 A4 출력
+// 특정 기록 A4 출력 (모바일: 모달 미리보기 / 데스크탑: 기존 window.open)
 function printRecord(id) {
   const rec = allData.find(r => r.id === id);
   if (!rec) return;
 
-  const printWin = window.open('', '_blank');
+  const isMobile = window.innerWidth <= 768;
+
+  // 데스크탑: 기존 window.open 방식 유지
+  let printWin;
+  if (!isMobile) {
+    printWin = window.open('', '_blank');
+  } else {
+    // 모바일: 모달 컨테이너 생성
+    const modalId = 'rstPrintModal';
+    let existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+    const modalEl = document.createElement('div');
+    modalEl.id = modalId;
+    modalEl.className = 'modal-overlay show';
+    document.body.appendChild(modalEl);
+    printWin = { document: { write: function(html) {
+      modalEl.innerHTML = '<div class="modal-dialog" style="max-width:720px">' +
+        '<div class="modal-header"><h3><i class="fas fa-print"></i> 로스팅 생산일지 미리보기</h3>' +
+        '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove()"><i class="fas fa-times"></i></button></div>' +
+        '<div class="modal-body" style="padding:0">' +
+        '<div style="padding:20px;background:#fff;overflow-x:auto">' + html + '</div>' +
+        '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid #eee">' +
+        '<button onclick="window.print()" style="flex:1;padding:10px;background:#e17055;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700"><i class="fas fa-print"></i> 인쇄</button>' +
+        '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer">닫기</button>' +
+        '</div></div></div>';
+    }, close: function() {} } };
+  }
   const checklistHtml = rec.checklist ? (() => {
     try {
       const data = JSON.parse(rec.checklist);

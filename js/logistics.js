@@ -130,6 +130,7 @@ function lgUpdateKpiCards() {
 // 테이블 필터 및 렌더링
 // =====================================================
 function lgFilterTable(tab) {
+  const isMobile = window.innerWidth <= 768;
   if (tab === 'import') {
     const q = (document.getElementById('importSearch')?.value || '').toLowerCase();
     const sf = document.getElementById('importStatusFilter')?.value || '';
@@ -138,7 +139,12 @@ function lgFilterTable(tab) {
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!sf || r.status === sf)
     );
-    lgRenderTable('importTableBody', data, 'import');
+    if (isMobile) {
+      lgShowMobileCard('importCardView', 'importTableWrap', data, 'import');
+    } else {
+      lgShowDesktopTable('importCardView', 'importTableWrap');
+      lgRenderTable('importTableBody', data, 'import');
+    }
     const el = document.getElementById('importCount');
     if (el) el.textContent = `${data.length}건`;
   } else if (tab === 'oem') {
@@ -149,7 +155,12 @@ function lgFilterTable(tab) {
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!sf || r.status === sf)
     );
-    lgRenderTable('oemTableBody', data, 'oem');
+    if (isMobile) {
+      lgShowMobileCard('oemCardView', 'oemTableWrap', data, 'oem');
+    } else {
+      lgShowDesktopTable('oemCardView', 'oemTableWrap');
+      lgRenderTable('oemTableBody', data, 'oem');
+    }
     const el = document.getElementById('oemCount');
     if (el) el.textContent = `${data.length}건`;
   } else if (tab === 'own') {
@@ -160,7 +171,12 @@ function lgFilterTable(tab) {
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!sf || r.status === sf)
     );
-    lgRenderTable('ownTableBody', data, 'own');
+    if (isMobile) {
+      lgShowMobileCard('ownCardView', 'ownTableWrap', data, 'own');
+    } else {
+      lgShowDesktopTable('ownCardView', 'ownTableWrap');
+      lgRenderTable('ownTableBody', data, 'own');
+    }
     const el = document.getElementById('ownCount');
     if (el) el.textContent = `${data.length}건`;
   } else if (tab === 'all') {
@@ -176,12 +192,81 @@ function lgFilterTable(tab) {
       (!from || (r.date || '') >= from) &&
       (!to || (r.date || '') <= to)
     );
-    lgRenderTable('allTableBody', data, 'all');
+    if (isMobile) {
+      lgShowMobileCard('allCardView', 'allTableWrap', data, 'all');
+    } else {
+      lgShowDesktopTable('allCardView', 'allTableWrap');
+      lgRenderTable('allTableBody', data, 'all');
+    }
     const el = document.getElementById('allCount');
     const el2 = document.getElementById('allResultCount');
     if (el) el.textContent = `${data.length}건`;
     if (el2) el2.textContent = `${data.length}건 조회됨`;
   }
+}
+
+function lgShowMobileCard(cardId, tableWrapId, data, tab) {
+  const card = document.getElementById(cardId);
+  const wrap = document.getElementById(tableWrapId);
+  if (card) { card.style.display = 'block'; lgRenderCardView(cardId, data, tab); }
+  if (wrap) wrap.style.display = 'none';
+}
+
+function lgShowDesktopTable(cardId, tableWrapId) {
+  const card = document.getElementById(cardId);
+  const wrap = document.getElementById(tableWrapId);
+  if (card) card.style.display = 'none';
+  if (wrap) wrap.style.display = 'block';
+}
+
+// ── 모바일 카드뷰 렌더링 (데스크탑은 기존 테이블 유지) ──
+function lgRenderCardView(containerId, data, tab) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!data.length) {
+    container.innerHTML = '<div style="text-align:center;padding:32px;color:#aaa"><i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:8px"></i>등록된 내역이 없습니다.</div>';
+    return;
+  }
+  const txColor = { '입고': '#27ae60', '출고': '#e74c3c', '반품': '#e67e22', '조정': '#8e44ad' };
+  const statusClass = { '입고대기': 'status-입고대기', '입고완료': 'status-입고완료', '출고중': 'status-출고중', '출고완료': 'status-출고완료', '반품': 'status-반품' };
+  const typeClass = { '수입제품': 'type-import', 'OEM제품': 'type-oem', '자체생산': 'type-own' };
+  const now = new Date();
+  container.innerHTML = data.map(r => {
+    const txBadge = `<span style="color:${txColor[r.transaction_type]||'#555'};font-weight:700;font-size:12px">${r.transaction_type||'-'}</span>`;
+    const statusBadge = `<span class="status-badge ${statusClass[r.status]||''}" style="font-size:11px">${r.status||'-'}</span>`;
+    const typeBadge = tab === 'all' ? `<span class="product-type-badge ${typeClass[r.product_type]||''}" style="font-size:11px">${r.product_type||'-'}</span>` : '';
+    let expiryHtml = r.expiry_date || '-';
+    if (r.expiry_date) {
+      const daysLeft = Math.ceil((new Date(r.expiry_date) - now) / 86400000);
+      if (daysLeft <= 30 && daysLeft > 0) expiryHtml = `<span style="color:#e67e22;font-weight:700">${r.expiry_date} <small>(D-${daysLeft})</small></span>`;
+      else if (daysLeft <= 0) expiryHtml = `<span style="color:#e74c3c;font-weight:700">${r.expiry_date} <small>(만료)</small></span>`;
+    }
+    const totalFmt = r.total_amount ? Number(r.total_amount).toLocaleString() + '원' : '-';
+    const extraInfo = tab === 'import' ? `<div style="font-size:11px;color:#666">원산지: ${r.origin||'-'}</div>` :
+      tab === 'oem' ? `<div style="font-size:11px;color:#666">OEM제조사: ${r.oem_manufacturer||'-'}</div>` :
+      tab === 'own' ? `<div style="font-size:11px;color:#666">공정: ${r.process||'-'} | 생산Lot: ${r.production_lot||'-'}</div>` :
+      `<div style="font-size:11px;color:#666">${typeBadge}</div>`;
+    return `<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-left:3px solid ${txColor[r.transaction_type]||'#ddd'}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-weight:700;font-size:13px">${r.product_name||'-'}</div>
+          <div style="font-size:10px;color:#888;font-family:monospace;margin-top:2px">${r.lot_no||'-'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">${txBadge}${statusBadge}</div>
+      </div>
+      <div style="display:flex;gap:12px;font-size:12px;color:#555;flex-wrap:wrap;margin-bottom:6px">
+        <span><i class="fas fa-calendar" style="color:#aaa"></i> ${r.date||'-'}</span>
+        <span><i class="fas fa-boxes" style="color:#aaa"></i> ${r.quantity!=null?Number(r.quantity).toLocaleString():'-'} ${r.unit||''}</span>
+        <span style="color:#1e8449;font-weight:700">${totalFmt}</span>
+      </div>
+      ${extraInfo}
+      <div style="font-size:11px;color:#666;margin-top:4px">소비기한: ${expiryHtml} | 담당: ${r.manager||'-'}</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="edit-row-btn" onclick="lgOpenEditModal('${r.id}')" style="flex:1;padding:6px;font-size:12px"><i class="fas fa-edit"></i> 수정</button>
+        <button class="edit-row-btn" style="flex:1;padding:6px;font-size:12px;color:#e74c3c;border-color:#e74c3c" onclick="lgDeleteRecord('${r.id}')"><i class="fas fa-trash"></i> 삭제</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function lgRenderTable(tbodyId, data, tab) {

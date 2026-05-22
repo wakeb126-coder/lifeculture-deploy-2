@@ -249,14 +249,18 @@ function requireAuth(requiredMenu) {
   if (requiredMenu) {
     // user-admin은 관리자 전용
     if (requiredMenu === 'user-admin' && user.role !== 'admin') {
-      alert('관리자만 접근 가능합니다.');
-      window.location.href = 'index.html';
+      // 모바일 PWA 호환: alert → showToast
+      if (typeof showToast === 'function') showToast('관리자만 접근 가능합니다.', 'error');
+      else alert('관리자만 접근 가능합니다.');
+      setTimeout(function(){ window.location.href = 'index.html'; }, 1200);
       return null;
     }
     const allowed = getUserAllowedMenus(user);
     if (!allowed.includes(requiredMenu)) {
-      alert('이 페이지에 대한 접근 권한이 없습니다.');
-      window.location.href = 'index.html';
+      // 모바일 PWA 호환: alert → showToast
+      if (typeof showToast === 'function') showToast('이 페이지에 대한 접근 권한이 없습니다.', 'error');
+      else alert('이 페이지에 대한 접근 권한이 없습니다.');
+      setTimeout(function(){ window.location.href = 'index.html'; }, 1200);
       return null;
     }
   }
