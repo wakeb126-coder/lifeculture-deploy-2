@@ -288,7 +288,7 @@
   </div>
 
   <!-- 더보기 메뉴 -->
-  <div class="bottom-sheet-overlay" id="moreMenuOverlay" style="display:none"></div>
+  <div class="bottom-sheet-overlay" id="legacyMenuOverlay" style="display:none"></div>
   <div class="bottom-sheet" id="moreMenuSheet" style="display:none">
     <div class="bottom-sheet-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px">
       <h3 style="font-size:15px;font-weight:700">메뉴</h3>
@@ -325,6 +325,10 @@
     <button class="bottom-nav-item active" onclick="openTeamMenu('sales')"><i class="fas fa-shopping-cart"></i><span>영업팀</span></button>
     <a href="traceability.html" class="bottom-nav-item"><i class="fas fa-search"></i><span>품질관리</span></a>
   </nav>
+  <!-- 더보기 메뉴 오버레이 -->
+  <div class="more-menu-overlay" id="moreMenuOverlay" onclick="closeMoreMenu()"></div>
+  <div class="more-menu-sheet" id="moreMenuSheet" style="display:none;background:#1e2329;">
+    <div class="more-menu-handle"></div>
 
   <script src="js/auth.js"></script>
       <!-- Firebase SDK -->

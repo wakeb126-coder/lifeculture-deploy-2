@@ -262,6 +262,10 @@
     <button class="bottom-nav-item" onclick="openTeamMenu('sales')"><i class="fas fa-shopping-cart"></i><span>영업팀</span></button>
     <a href="traceability.html" class="bottom-nav-item"><i class="fas fa-search"></i><span>품질관리</span></a>
   </nav>
+  <!-- 더보기 메뉴 오버레이 -->
+  <div class="more-menu-overlay" id="moreMenuOverlay" onclick="closeMoreMenu()"></div>
+  <div class="more-menu-sheet" id="moreMenuSheet" style="display:none;background:#1e2329;">
+    <div class="more-menu-handle"></div>
     <div class="more-menu-title">생산일지</div>
     <a href="roasting.html" class="more-menu-item" onclick="closeMoreMenu()"><i class="fas fa-fire" style="background:#fff0ec;color:#e17055"></i>로스팅 생산일지</a>
     <a href="grinding.html" class="more-menu-item" onclick="closeMoreMenu()"><i class="fas fa-cog" style="background:#f0f4ff;color:#6c5ce7"></i>분쇄 생산일지</a>
