@@ -95,27 +95,22 @@ function getSidebarHTML(activePage = '') {
 
   const navGroups = [
     {
-      category: '대시보드',
+      category: '홈',
       items: [
-        { label: '현황 대시보드', href: 'index.html', icon: 'fa-tachometer-alt', menu: 'dashboard' },
-        { label: 'Lot 역추적', href: 'traceability.html', icon: 'fa-search', menu: 'traceability' }
+        { label: '현황 대시보드', href: 'index.html', icon: 'fa-tachometer-alt', menu: 'dashboard' }
       ]
     },
     {
-      category: '재고 관리',
+      category: '물류팀',
       items: [
         { label: '원부재료 마스터', href: 'materials-master.html', icon: 'fa-cubes', menu: 'materials-master' },
-        { label: '원료수불부 (자체생산)', href: 'raw-materials.html', icon: 'fa-box-open', menu: 'raw-materials' }
+        { label: '원료수불부 (자체생산)', href: 'raw-materials.html', icon: 'fa-box-open', menu: 'raw-materials' },
+        { label: '거래처 정보', href: 'vendors.html', icon: 'fa-handshake', menu: 'vendors' },
+        { label: '물류관리 (수입/OEM/자체)', href: 'logistics.html', icon: 'fa-truck', menu: 'logistics' }
       ]
     },
     {
-      category: '거래처 관리',
-      items: [
-        { label: '거래처 정보', href: 'vendors.html', icon: 'fa-handshake', menu: 'vendors' }
-      ]
-    },
-    {
-      category: '생산일지',
+      category: '생산팀',
       items: [
         { label: '로스팅', href: 'roasting.html', icon: 'fa-fire', menu: 'roasting' },
         { label: '분쇄', href: 'grinding.html', icon: 'fa-cog', menu: 'grinding' },
@@ -125,21 +120,16 @@ function getSidebarHTML(activePage = '') {
       ]
     },
     {
-      category: '판매 관리',
+      category: '영업팀',
       items: [
+        { label: '제품마스터정보', href: 'products.html', icon: 'fa-tag', menu: 'products' },
         { label: '온라인몰 판매', href: 'sales.html', icon: 'fa-shopping-cart', menu: 'sales' }
       ]
     },
     {
-      category: '제품 관리',
+      category: '품질관리팀',
       items: [
-        { label: '제품마스터정보', href: 'products.html', icon: 'fa-tag', menu: 'products' }
-      ]
-    },
-    {
-      category: '물류 관리',
-      items: [
-        { label: '물류관리 (수입/OEM/자체)', href: 'logistics.html', icon: 'fa-truck', menu: 'logistics' }
+        { label: 'Lot 역추적', href: 'traceability.html', icon: 'fa-search', menu: 'traceability' }
       ]
     },
     {

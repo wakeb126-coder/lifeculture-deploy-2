@@ -166,10 +166,10 @@
 
   <nav class="bottom-nav" id="bottomNav">
     <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>홈</span></a>
-    <a href="raw-materials.html" class="bottom-nav-item"><i class="fas fa-box-open"></i><span>원료</span></a>
-    <a href="warehouse.html" class="bottom-nav-item"><i class="fas fa-warehouse"></i><span>물류</span></a>
-    <a href="traceability.html" class="bottom-nav-item active"><i class="fas fa-search"></i><span>역추적</span></a>
-    <a href="index.html" class="bottom-nav-item"><i class="fas fa-th-large"></i><span>더보기</span></a>
+    <button class="bottom-nav-item" onclick="openTeamMenu("logistics")"><i class="fas fa-truck"></i><span>물류팀</span></button>
+    <button class="bottom-nav-item" onclick="openTeamMenu("production")"><i class="fas fa-industry"></i><span>생산팀</span></button>
+    <button class="bottom-nav-item" onclick="openTeamMenu("sales")"><i class="fas fa-shopping-cart"></i><span>영업팀</span></button>
+    <a href="traceability.html" class="bottom-nav-item active"><i class="fas fa-search"></i><span>품질관리</span></a>
   </nav>
 
   <div class="pwa-install-banner" id="pwaInstallBanner">
@@ -214,6 +214,53 @@
       document.getElementById('traceInput').value = prefix;
       document.getElementById('traceInput').focus();
     }
+  </script>
+  <!-- 팀 메뉴 오버레이 -->
+  <div class="more-menu-overlay" id="teamMenuOverlay" onclick="closeTeamMenu()"></div>
+  <div class="more-menu-sheet" id="teamMenuSheet" style="display:none">
+    <div class="more-menu-handle"></div>
+
+    <!-- 물류팀 메뉴 -->
+    <div id="teamMenu_logistics" style="display:none">
+      <div class="more-menu-title">물류팀</div>
+      <a href="materials-master.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-cubes" style="background:#e8f4fd;color:#2980b9"></i>원부재료 마스터</a>
+      <a href="raw-materials.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-box-open" style="background:#fef9e7;color:#d68910"></i>원료수불부 (자체생산)</a>
+      <a href="vendors.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-handshake" style="background:#eafaf1;color:#27ae60"></i>거래처 정보</a>
+      <a href="logistics.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-truck" style="background:#f0f4ff;color:#3498db"></i>물류관리 (수입/OEM/자체)</a>
+    </div>
+
+    <!-- 생산팀 메뉴 -->
+    <div id="teamMenu_production" style="display:none">
+      <div class="more-menu-title">생산팀 — 생산일지</div>
+      <a href="roasting.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-fire" style="background:#fff0ec;color:#e17055"></i>로스팅 생산일지</a>
+      <a href="grinding.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-cog" style="background:#f0f4ff;color:#6c5ce7"></i>분쇄 생산일지</a>
+      <a href="extraction.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-tint" style="background:#e8f4fd;color:#3498db"></i>추출 생산일지</a>
+      <a href="bottle-packing.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-wine-bottle" style="background:#e8f8f5;color:#1abc9c"></i>제품(병) 포장일지</a>
+      <a href="box-packing.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-boxes" style="background:#eafaf1;color:#27ae60"></i>완제품(박스) 포장일지</a>
+    </div>
+
+    <!-- 영업팀 메뉴 -->
+    <div id="teamMenu_sales" style="display:none">
+      <div class="more-menu-title">영업팀</div>
+      <a href="products.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-tag" style="background:#fef9e7;color:#d68910"></i>제품마스터정보</a>
+      <a href="sales.html" class="more-menu-item" onclick="closeTeamMenu()"><i class="fas fa-shopping-cart" style="background:#f8d7da;color:#c0392b"></i>온라인몰 판매</a>
+    </div>
+  </div>
+
+  <script>
+  function openTeamMenu(team) {
+    ['logistics','production','sales'].forEach(function(t){
+      var el = document.getElementById('teamMenu_' + t);
+      if (el) el.style.display = (t === team) ? 'block' : 'none';
+    });
+    document.getElementById('teamMenuOverlay').classList.add('show');
+    var sheet = document.getElementById('teamMenuSheet');
+    sheet.style.display = 'block';
+  }
+  function closeTeamMenu() {
+    document.getElementById('teamMenuOverlay').classList.remove('show');
+    document.getElementById('teamMenuSheet').style.display = 'none';
+  }
   </script>
 </body>
 </html>
