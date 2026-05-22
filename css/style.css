@@ -512,7 +512,7 @@ table tbody tr:hover td { background: #fafbff; }
   align-items: center; justify-content: center;
 }
 .modal-overlay.show { display: flex; }
-.modal {
+.modal, .modal-dialog {
   background: var(--bg-card);
   border-radius: 14px;
   width: 90%; max-width: 800px;
@@ -520,6 +520,7 @@ table tbody tr:hover td { background: #fafbff; }
   display: flex; flex-direction: column;
   box-shadow: var(--shadow-lg);
   animation: modalIn 0.25s ease;
+  overflow-y: auto;
 }
 @keyframes modalIn {
   from { transform: scale(0.96) translateY(16px); opacity: 0; }

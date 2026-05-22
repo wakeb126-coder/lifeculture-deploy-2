@@ -87,7 +87,7 @@
   position: fixed;
   bottom: 0; left: 0; right: 0;
   height: 64px;
-  background: var(--bg-sidebar);
+  background: #1e2329;
   border-top: 1px solid rgba(255,255,255,0.08);
   z-index: 500;
   align-items: stretch;
@@ -135,7 +135,7 @@
 .more-menu-sheet {
   position: fixed;
   bottom: 64px; left: 0; right: 0;
-  background: var(--bg-sidebar);
+  background: #1e2329;
   border-radius: 20px 20px 0 0;
   padding: 16px 0 8px;
   z-index: 601;

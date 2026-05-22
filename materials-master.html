@@ -310,6 +310,7 @@
   <script src="js/materials-master.js"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 
+  <script>
     document.addEventListener('DOMContentLoaded', function() {
       var user = (typeof requireAuth === 'function') ? requireAuth('materials-master') : null;
       var nav = document.getElementById('sidebarNav');
@@ -318,6 +319,7 @@
       if (typeof setupSidebar === 'function') setupSidebar();
       if (typeof initDateDisplay === 'function') initDateDisplay();
     });
+  </script>
   <!-- 팀 메뉴 오버레이 -->
   <div class="more-menu-overlay" id="teamMenuOverlay" onclick="closeTeamMenu()"></div>
   <div class="more-menu-sheet" id="teamMenuSheet" style="display:none">
