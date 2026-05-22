@@ -13,20 +13,23 @@ const pageSize = 15;
 let editingId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const today = new Date().toISOString().split('T')[0];
+  // new Date() 1회 생성 후 재사용 (중복 생성 제거)
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+
   const dateEl = document.getElementById('f_receive_date');
   if (dateEl) dateEl.value = today;
 
   // 기간 필터 기본값 (이번달)
-  const y = new Date().getFullYear();
-  const m = String(new Date().getMonth() + 1).padStart(2, '0');
   const fromEl = document.getElementById('journalFrom');
   const toEl = document.getElementById('journalTo');
   if (fromEl) fromEl.value = `${y}-${m}-01`;
   if (toEl) toEl.value = today;
 
-  await loadMasterData();
-  await loadRawMaterials();
+  // Promise.all 병렬 로드 (독립적인 두 컬렉션을 동시에 요청)
+  await Promise.all([loadMasterData(), loadRawMaterials()]);
   renderStockSummaryCards();
 
   const form = document.getElementById('rawForm');

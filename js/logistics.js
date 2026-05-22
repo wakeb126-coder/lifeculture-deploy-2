@@ -6,21 +6,21 @@ let allLogisticsData = [];
 let lgEditingId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const today = new Date().toISOString().split('T')[0];
+  // new Date() 1회 생성 후 재사용 (중복 생성 제거)
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+
   const dateEl = document.getElementById('lg_date');
   if (dateEl) dateEl.value = today;
-
   // 전체현황 기본 기간 (이번달)
-  const y = new Date().getFullYear();
-  const m = String(new Date().getMonth() + 1).padStart(2, '0');
   const fromEl = document.getElementById('allDateFrom');
   const toEl = document.getElementById('allDateTo');
   if (fromEl) fromEl.value = `${y}-${m}-01`;
   if (toEl) toEl.value = today;
-
   await lgRefreshLotNo();
   await loadLogisticsData();
-
   const form = document.getElementById('logisticsForm');
   if (form) form.addEventListener('submit', lgHandleSubmit);
 });
