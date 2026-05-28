@@ -6,16 +6,22 @@
 // =====================================================
 
 let allSales = [];
+let archiveSales = []; // 과거 데이터 저장용
 let filteredSales = [];
 let currentPage = 1;
 const pageSize = 50;
 let editingId = null;
+let isArchiveLoaded = false;
 
 // ===========================
 // 초기화
 // ===========================
 document.addEventListener('DOMContentLoaded', () => {
   loadSales();
+
+  // 아카이브 불러오기 버튼
+  const loadArchiveBtn = document.getElementById('loadArchiveBtn');
+  if (loadArchiveBtn) loadArchiveBtn.addEventListener('click', loadArchiveData);
 
   // 필터 버튼
   const applyBtn = document.getElementById('applyFilterBtn');
@@ -98,21 +104,63 @@ function calcMargin() {
 // 데이터 로드
 // ===========================
 async function loadSales() {
+  const tb = document.getElementById('salesTableBody');
+  if (tb) tb.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:60px;color:#999">
+    <i class="fas fa-spinner fa-spin"></i> 오늘 데이터 로딩 중...</td></tr>`;
+  
   try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    // 1단계: 오늘 데이터만 우선 로딩 (속도 최적화)
+    // apiGetAll에 쿼리 파라미터가 지원되지 않으므로 전체를 가져오되 로직 분리
     const data = await apiGetAll('sales');
-    allSales = data.sort((a, b) => {
-      // db_no 내림차순 정렬 (최신 주문 우선)
-      return (b.db_no || 0) - (a.db_no || 0);
-    });
+    
+    // 오늘 날짜 데이터와 과거 데이터 분리
+    allSales = data.filter(s => (s.sale_date || '').startsWith(todayStr));
+    archiveSales = data.filter(s => !(s.sale_date || '').startsWith(todayStr));
+    
+    allSales.sort((a, b) => (b.db_no || 0) - (a.db_no || 0));
+    archiveSales.sort((a, b) => (b.db_no || 0) - (a.db_no || 0));
+
     buildFilterOptions();
     applyFilter();
     renderKpi(allSales);
     renderSalesChart(allSales);
   } catch (e) {
     console.error('[sales] 로드 실패:', e);
-    const tb = document.getElementById('salesTableBody');
     if (tb) tb.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:60px;color:#999">
       <i class="fas fa-exclamation-circle"></i> 데이터 로드 실패: ${e.message}</td></tr>`;
+  }
+}
+
+async function loadArchiveData() {
+  const btn = document.getElementById('loadArchiveBtn');
+  const info = document.getElementById('archiveInfo');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 아카이브 로딩 중...';
+  }
+
+  try {
+    // 이미 loadSales에서 모든 데이터를 가져와 archiveSales에 분리해두었으므로
+    // UI상에서 합치기만 하면 됨 (실제 서버 부하가 클 경우 쿼리 파라미터로 날짜 제한 필요)
+    allSales = [...allSales, ...archiveSales];
+    allSales.sort((a, b) => (b.db_no || 0) - (a.db_no || 0));
+    
+    isArchiveLoaded = true;
+    if (info) info.style.display = 'none';
+    
+    buildFilterOptions();
+    applyFilter();
+    renderKpi(allSales);
+    renderSalesChart(allSales);
+    showToast('과거 데이터를 성공적으로 불러왔습니다.', 'success');
+  } catch (e) {
+    console.error('[archive] 로드 실패:', e);
+    showToast('과거 데이터 로드 중 오류가 발생했습니다.', 'danger');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-archive"></i> 과거 데이터 불러오기';
+    }
   }
 }
 
@@ -158,7 +206,21 @@ function applyFilter() {
   const product = document.getElementById('filterProduct')?.value || '';
   const search = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
 
-  filteredSales = allSales.filter(s => {
+  // 검색어가 있거나 날짜 필터가 있는 경우, 아카이브가 로드되지 않았다면 자동으로 합쳐서 검색
+  let sourceData = allSales;
+  const isSearching = search || dateFrom || dateTo || channel || company || product;
+  
+  if (isSearching && !isArchiveLoaded && archiveSales.length > 0) {
+    sourceData = [...allSales, ...archiveSales];
+    // UI 업데이트 (안내 문구 숨기기)
+    const info = document.getElementById('archiveInfo');
+    if (info) info.style.display = 'none';
+    isArchiveLoaded = true;
+    allSales = sourceData; // 검색 시 전체 데이터를 allSales로 승격
+    allSales.sort((a, b) => (b.db_no || 0) - (a.db_no || 0));
+  }
+
+  filteredSales = sourceData.filter(s => {
     if (dateFrom && s.sale_date && s.sale_date < dateFrom) return false;
     if (dateTo && s.sale_date && s.sale_date > dateTo) return false;
     if (channel && s.channel !== channel) return false;
