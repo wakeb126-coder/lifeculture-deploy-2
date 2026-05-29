@@ -110,9 +110,11 @@ async function loadSales() {
   
   try {
     const todayStr = new Date().toISOString().slice(0, 10);
-    // 1단계: 오늘 데이터만 우선 로딩 (속도 최적화)
-    // apiGetAll에 쿼리 파라미터가 지원되지 않으므로 전체를 가져오되 로직 분리
-    const data = await apiGetAll('sales');
+    const rawData = await apiGetAll('sales');
+    
+    // 유효한 데이터만 필터링 (업체명, 제품명, 주문번호 중 하나라도 있어야 함)
+    // 입력하지 않았는데 1건이 보이는 현상 방지
+    const data = rawData.filter(s => s.company || s.product_name || s.order_no);
     
     // 오늘 날짜 데이터와 과거 데이터 분리
     allSales = data.filter(s => (s.sale_date || '').startsWith(todayStr));
@@ -122,6 +124,19 @@ async function loadSales() {
     archiveSales.sort((a, b) => (b.db_no || 0) - (a.db_no || 0));
 
     buildFilterOptions();
+    
+    // 초기 로드 시 날짜 필터가 이미 설정되어 있을 수 있으므로 체크
+    const dateFrom = document.getElementById('filterDateFrom')?.value || '';
+    const dateTo = document.getElementById('filterDateTo')?.value || '';
+    if (dateFrom || dateTo) {
+      // 날짜 필터가 있으면 자동으로 아카이브 포함
+      allSales = [...allSales, ...archiveSales];
+      allSales.sort((a, b) => (b.db_no || 0) - (a.db_no || 0));
+      isArchiveLoaded = true;
+      const info = document.getElementById('archiveInfo');
+      if (info) info.style.display = 'none';
+    }
+
     applyFilter();
     renderKpi(allSales);
     renderSalesChart(allSales);
@@ -210,6 +225,7 @@ function applyFilter() {
   let sourceData = allSales;
   const isSearching = search || dateFrom || dateTo || channel || company || product;
   
+  // 날짜 필터가 있거나 검색어가 있으면 자동으로 아카이브 로드
   if (isSearching && !isArchiveLoaded && archiveSales.length > 0) {
     sourceData = [...allSales, ...archiveSales];
     // UI 업데이트 (안내 문구 숨기기)
@@ -303,6 +319,33 @@ function toggleChartCollapse() {
   if (text) text.textContent = chartCollapsed ? '펼치기' : '접어두기';
 }
 
+// 차트 키(날짜) 클릭 시 필터링
+function filterByChartKey(key) {
+  const dateFrom = document.getElementById('filterDateFrom');
+  const dateTo = document.getElementById('filterDateTo');
+  
+  if (chartMode === 'day') {
+    if (dateFrom) dateFrom.value = key;
+    if (dateTo) dateTo.value = key;
+  } else if (chartMode === 'month') {
+    // 해당 월의 시작일과 종료일 계산
+    const [y, m] = key.split('-');
+    const lastDay = new Date(y, m, 0).getDate();
+    if (dateFrom) dateFrom.value = `${y}-${m}-01`;
+    if (dateTo) dateTo.value = `${y}-${m}-${lastDay.toString().padStart(2, '0')}`;
+  } else if (chartMode === 'week') {
+    // 해당 주의 시작일(월)과 종료일(일) 계산
+    const d = new Date(key);
+    const last = new Date(key);
+    last.setDate(d.getDate() + 6);
+    if (dateFrom) dateFrom.value = key;
+    if (dateTo) dateTo.value = last.toISOString().slice(0, 10);
+  }
+  
+  applyFilter();
+  showToast(`${key} 기간의 데이터를 필터링했습니다.`, 'info');
+}
+
 function renderSalesChart(data) {
   const canvas = document.getElementById('salesChart');
   if (!canvas) return;
@@ -366,6 +409,13 @@ function renderSalesChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (e, elements) => {
+        if (elements.length > 0) {
+          const index = elements[0].index;
+          const key = labels[index];
+          filterByChartKey(key);
+        }
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
