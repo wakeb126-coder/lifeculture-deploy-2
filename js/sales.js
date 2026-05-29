@@ -33,6 +33,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('searchInput');
   if (searchInput) searchInput.addEventListener('input', applyFilter);
 
+  // 필터 드롭다운 즉시 적용
+  ['filterChannel', 'filterCompany', 'filterProduct', 'filterDateFrom', 'filterDateTo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilter);
+  });
+
   // 신규 등록 버튼
   const addBtn = document.getElementById('addSalesBtn');
   if (addBtn) addBtn.addEventListener('click', openNewModal);
@@ -183,9 +189,11 @@ async function loadArchiveData() {
 // 필터 옵션 빌드
 // ===========================
 function buildFilterOptions() {
-  const channels = [...new Set(allSales.map(s => s.channel).filter(Boolean))].sort();
-  const companies = [...new Set(allSales.map(s => s.company).filter(Boolean))].sort();
-  const products = [...new Set(allSales.map(s => s.product_name).filter(Boolean))].sort();
+  // 아카이브 로드 여부와 관계없이 전체 데이터에서 옵션 추출
+  const combined = [...allSales, ...archiveSales];
+  const channels = [...new Set(combined.map(s => s.channel).filter(Boolean))].sort();
+  const companies = [...new Set(combined.map(s => s.company).filter(Boolean))].sort();
+  const products = [...new Set(combined.map(s => s.product_name).filter(Boolean))].sort();
 
   const chSel = document.getElementById('filterChannel');
   if (chSel) {
