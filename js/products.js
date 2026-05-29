@@ -148,18 +148,20 @@ function filterProducts() {
 }
 
 // ===========================
-// 서류 상태 뱃지
+// 서류 상태 백지 (체크박스 기반)
 // ===========================
 function docStatusBadge(docs) {
   if (!docs) return '<span style="color:#999">-</span>';
   try {
     const d = typeof docs === 'string' ? JSON.parse(docs) : docs;
     const items = Object.values(d);
-    const completed = items.filter(v => v && v.status === '등록완료').length;
-    const needed = items.filter(v => v && v.status === '갱신필요').length;
-    if (needed > 0) return `<span class="badge badge-danger">${needed}건 갱신필요</span>`;
-    if (completed === items.length && items.length > 0) return `<span class="badge badge-success">완료</span>`;
-    return `<span class="badge badge-warning">${completed}/${items.length}</span>`;
+    const checked = items.filter(v => v && v.checked === true).length;
+    const total = items.length;
+    
+    if (total === 0) return '<span style="color:#999">-</span>';
+    if (checked === total) return `<span class="badge badge-success">전부 입수</span>`;
+    if (checked === 0) return `<span class="badge badge-warning">서류 미입수</span>`;
+    return `<span class="badge badge-info">${checked}/${total} 입수</span>`;
   } catch {
     return '<span style="color:#999">-</span>';
   }
@@ -210,16 +212,37 @@ function renderPagination() {
 }
 
 // ===========================
-// 제품 코드 자동 생성
+// 제품 코드 자동 생성 (제품구분별)
 // ===========================
-async function generateProductCode() {
+async function generateProductCode(productType = '') {
   try {
     const data = await apiGetAll('products');
-    const seq = String(data.length + 1).padStart(3, '0');
-    return `PRD-${seq}`;
+    
+    // 제품구분별 코드 프리픽스
+    const prefixes = {
+      '자사제품': 'LCS',
+      '수입제품': 'LCI',
+      'OEM제품': 'LCO',
+      '기타제품': 'LCE'
+    };
+    
+    const prefix = prefixes[productType] || 'LCS'; // 기본값: 자사제품
+    
+    // 같은 제품구분의 제품 개수 계산
+    const sameTypeProducts = data.filter(p => p.product_type === productType);
+    const seq = String(sameTypeProducts.length + 1).padStart(3, '0');
+    
+    return `${prefix}-${seq}`;
   } catch (e) {
+    const prefixes = {
+      '자사제품': 'LCS',
+      '수입제품': 'LCI',
+      'OEM제품': 'LCO',
+      '기타제품': 'LCE'
+    };
+    const prefix = prefixes[productType] || 'LCS';
     const rand = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-    return `PRD-${rand}`;
+    return `${prefix}-${rand}`;
   }
 }
 
@@ -241,10 +264,19 @@ async function openNewModal() {
   const titleEl = document.getElementById('modalTitle');
   if (titleEl) titleEl.textContent = '신규 제품 등록';
 
-  // 코드 자동생성
-  const code = await generateProductCode();
+  // 코드 자동생성 (기본값)
+  const code = await generateProductCode('자사제품');
   const codeEl = document.getElementById('productCode');
   if (codeEl) codeEl.value = code;
+
+  // 제품구분 선택 시 코드 자동 재생성
+  const productTypeEl = document.getElementById('productType');
+  if (productTypeEl) {
+    productTypeEl.addEventListener('change', async function() {
+      const newCode = await generateProductCode(this.value);
+      if (codeEl) codeEl.value = newCode;
+    });
+  }
 
   const modal = document.getElementById('productModal');
   if (modal) modal.classList.add('show');
@@ -282,15 +314,21 @@ function openEditModal(id) {
     if (el && val !== undefined && val !== null) el.value = val;
   });
 
-  // 서류 상태 채우기
+  // 서류 상태 채우기 (체크박스 기반)
   if (p.documents) {
     try {
       const docs = typeof p.documents === 'string' ? JSON.parse(p.documents) : p.documents;
       Object.entries(docs).forEach(([docName, info]) => {
-        const statusEl = document.querySelector(`.document-status[data-doc="${docName}"]`);
-        if (statusEl && info) statusEl.value = info.status || '미등록';
-        const dateEl = document.querySelector(`.document-date[data-doc="${docName}"]`);
-        if (dateEl && info) dateEl.value = info.date || '';
+        const checkboxEl = document.querySelector(`.document-checkbox[data-doc="${docName}"]`);
+        if (checkboxEl && info) {
+          checkboxEl.checked = info.checked || false;
+        }
+        
+        // 기타 서류 기재 내용 채우기
+        if (docName === '기타') {
+          const remarksEl = document.querySelector(`.document-remarks[data-doc="${docName}"]`);
+          if (remarksEl && info) remarksEl.value = info.remarks || '';
+        }
       });
     } catch (e) { /* 무시 */ }
   }
@@ -312,28 +350,31 @@ function closeModal() {
 }
 
 // ===========================
-// 서류 데이터 수집
+// 서류 데이터 수집 (체크박스 기반)
 // ===========================
 function collectDocuments() {
   const docs = {};
-  document.querySelectorAll('.document-status[data-doc]').forEach(el => {
+  
+  // 체크박스 중심으로 데이터 수집
+  document.querySelectorAll('.document-checkbox[data-doc]').forEach(el => {
     const docName = el.getAttribute('data-doc');
-    if (!docName.includes('-')) {
-      const dateEl = document.querySelector(`.document-date[data-doc="${docName}"]`);
+    const isChecked = el.checked;
+    
+    if (docName === '기타') {
+      // 기타 서류는 기재 내용 포함
+      const remarksEl = document.querySelector(`.document-remarks[data-doc="${docName}"]`);
       docs[docName] = {
-        status: el.value || '미등록',
-        date: dateEl?.value || ''
+        checked: isChecked,
+        remarks: remarksEl?.value || ''
+      };
+    } else {
+      // 나머지 서류는 슨단히 체크 여부만 기록
+      docs[docName] = {
+        checked: isChecked
       };
     }
   });
-  // 시험성적서 특수 처리
-  const regDate = document.querySelector('.document-date[data-doc="시험성적서-등록일"]');
-  const expDate = document.querySelector('.document-date[data-doc="시험성적서-유효기간"]');
-  if (docs['시험성적서']) {
-    docs['시험성적서'].reg_date = regDate?.value || '';
-    docs['시험성적서'].exp_date = expDate?.value || '';
-    delete docs['시험성적서'].date;
-  }
+  
   return JSON.stringify(docs);
 }
 

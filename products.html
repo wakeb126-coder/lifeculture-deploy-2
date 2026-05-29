@@ -231,48 +231,33 @@
 
           <!-- 서류관리 -->
           <div style="border-top:1px solid var(--border);padding-top:20px;margin-top:12px">
-            <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:16px;text-transform:uppercase;letter-spacing:1px">📎 서류관리</div>
+            <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:16px;text-transform:uppercase;letter-spacing:1px">📎 서류관리 (입수 서류만 체크)</div>
             <div class="documents-checklist" style="display:grid;gap:12px">
 
-              <div class="document-item" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center">
-                <span style="font-size:13px;font-weight:600">품목제조보고서</span>
-                <select class="document-status" data-doc="품목제조보고서" style="padding:6px;border:1px solid var(--border);border-radius:6px">
-                  <option value="미등록">미등록</option><option value="등록완료">등록완료</option><option value="갱신필요">갱신필요</option>
-                </select>
-                <input type="text" class="document-date" data-doc="품목제조보고서" placeholder="등록일" style="padding:6px;border:1px solid var(--border);border-radius:6px" />
-              </div>
-
-              <div class="document-item" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;align-items:center">
+              <div class="document-item" style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px;background:rgba(44,95,46,0.05);border-radius:6px">
+                <input type="checkbox" class="document-checkbox" data-doc="시험성적서" style="width:20px;height:20px;cursor:pointer" />
                 <span style="font-size:13px;font-weight:600">시험성적서</span>
-                <select class="document-status" data-doc="시험성적서" style="padding:6px;border:1px solid var(--border);border-radius:6px">
-                  <option value="미등록">미등록</option><option value="등록완료">등록완료</option><option value="갱신필요">갱신필요</option>
-                </select>
-                <input type="text" class="document-date" data-doc="시험성적서-등록일" placeholder="등록일" style="padding:6px;border:1px solid var(--border);border-radius:6px" />
-                <input type="text" class="document-date" data-doc="시험성적서-유효기간" placeholder="유효기간" style="padding:6px;border:1px solid var(--border);border-radius:6px" />
               </div>
 
-              <div class="document-item" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center">
-                <span style="font-size:13px;font-weight:600">구분유통증명서</span>
-                <select class="document-status" data-doc="구분유통증명서" style="padding:6px;border:1px solid var(--border);border-radius:6px">
-                  <option value="미등록">미등록</option><option value="등록완료">등록완료</option><option value="갱신필요">갱신필요</option>
-                </select>
-                <input type="text" class="document-date" data-doc="구분유통증명서" placeholder="등록일" style="padding:6px;border:1px solid var(--border);border-radius:6px" />
+              <div class="document-item" style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px;background:rgba(44,95,46,0.05);border-radius:6px">
+                <input type="checkbox" class="document-checkbox" data-doc="원산지증명서" style="width:20px;height:20px;cursor:pointer" />
+                <span style="font-size:13px;font-weight:600">원산지증명서</span>
               </div>
 
-              <div class="document-item" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center">
-                <span style="font-size:13px;font-weight:600">원산지증명원</span>
-                <select class="document-status" data-doc="원산지증명원" style="padding:6px;border:1px solid var(--border);border-radius:6px">
-                  <option value="미등록">미등록</option><option value="등록완료">등록완료</option><option value="갱신필요">갱신필요</option>
-                </select>
-                <input type="text" class="document-date" data-doc="원산지증명원" placeholder="등록일" style="padding:6px;border:1px solid var(--border);border-radius:6px" />
+              <div class="document-item" style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px;background:rgba(44,95,46,0.05);border-radius:6px">
+                <input type="checkbox" class="document-checkbox" data-doc="수입신고필증" style="width:20px;height:20px;cursor:pointer" />
+                <span style="font-size:13px;font-weight:600">수입신고필증</span>
               </div>
 
-              <div class="document-item" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center">
-                <span style="font-size:13px;font-weight:600">영양성분표</span>
-                <select class="document-status" data-doc="영양성분표" style="padding:6px;border:1px solid var(--border);border-radius:6px">
-                  <option value="미등록">미등록</option><option value="등록완료">등록완료</option><option value="갱신필요">갱신필요</option>
-                </select>
-                <input type="text" class="document-date" data-doc="영양성분표" placeholder="등록일" style="padding:6px;border:1px solid var(--border);border-radius:6px" />
+              <div class="document-item" style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px;background:rgba(44,95,46,0.05);border-radius:6px">
+                <input type="checkbox" class="document-checkbox" data-doc="거래명세서" style="width:20px;height:20px;cursor:pointer" />
+                <span style="font-size:13px;font-weight:600">거래명세서</span>
+              </div>
+
+              <div class="document-item" style="display:grid;grid-template-columns:auto 1fr 1fr;gap:12px;align-items:center;padding:10px;background:rgba(44,95,46,0.05);border-radius:6px">
+                <input type="checkbox" class="document-checkbox" data-doc="기타" style="width:20px;height:20px;cursor:pointer" />
+                <span style="font-size:13px;font-weight:600">기타</span>
+                <input type="text" class="document-remarks" data-doc="기타" placeholder="기재 내용" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px" />
               </div>
 
             </div>
