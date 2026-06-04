@@ -177,12 +177,19 @@ function renderTable() {
   if (!pageData.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#999"><i class="fas fa-inbox" style="font-size:32px;margin-bottom:12px;display:block"></i>제품 정보가 없습니다.</td></tr>`;
   } else {
-    const typeColors = { '자체생산': 'badge-success', 'OEM생산': 'badge-info', '수입제품': 'badge-warning', '기타': 'badge-secondary' };
+    const typeColors = { '자체생산': 'badge-success', 'OEM': 'badge-info', '수입제품': 'badge-warning', '농산물': 'badge-primary', '기타': 'badge-secondary' };
     tbody.innerHTML = pageData.map(p => {
       const typeCls = typeColors[p.product_type] || 'badge-secondary';
-      const margin = (p.sale_price && p.cost_price)
-        ? (((p.sale_price - p.cost_price) / p.sale_price) * 100).toFixed(1) + '%'
-        : '-';
+      
+      // 소비기한 날짜 형식 변경 (YYYY-MM-DD -> YYYY년 MM월 DD일까지)
+      let shelfLifeText = '-';
+      if (p.shelf_life_date) {
+        const d = new Date(p.shelf_life_date);
+        if (!isNaN(d.getTime())) {
+          shelfLifeText = `${d.getFullYear()}년 ${(d.getMonth()+1).toString().padStart(2, '0')}월 ${d.getDate().toString().padStart(2, '0')}일까지`;
+        }
+      }
+
       return `<tr>
         <td><strong>${p.product_code || '-'}</strong></td>
         <td>
@@ -191,8 +198,8 @@ function renderTable() {
         </td>
         <td><span class="badge ${typeCls}">${p.product_type || '-'}</span></td>
         <td>${p.category || '-'}</td>
-        <td>${p.sale_price ? numFormat(p.sale_price, 0) + '원' : '-'}</td>
-        <td>${p.cost_price ? numFormat(p.cost_price, 0) + '원' : '-'} ${margin !== '-' ? `<small style="color:#888">(${margin})</small>` : ''}</td>
+        <td><span style="font-size:12px">${shelfLifeText}</span></td>
+        <td>${p.storage_condition || '-'}</td>
         <td>${docStatusBadge(p.documents)}</td>
         <td>
           <button class="btn btn-secondary btn-sm" onclick="openEditModal('${p.id}')"><i class="fas fa-edit"></i></button>
@@ -210,16 +217,33 @@ function renderPagination() {
 }
 
 // ===========================
-// 제품 코드 자동 생성
+// 제품 코드 자동 생성 (구분별)
 // ===========================
-async function generateProductCode() {
+async function handleProductTypeChange(type) {
+  if (!type) {
+    document.getElementById('productCode').value = '';
+    return;
+  }
+  
+  const prefixMap = {
+    '자체생산': 'LC-PRD',
+    'OEM': 'LC-OEM',
+    '수입제품': 'LC-IMT',
+    '농산물': 'LC-ACT',
+    '기타': 'LC-ETC'
+  };
+  
+  const prefix = prefixMap[type] || 'LC-PRD';
+  
   try {
     const data = await apiGetAll('products');
-    const seq = String(data.length + 1).padStart(3, '0');
-    return `PRD-${seq}`;
+    // 해당 타입의 기존 코드 개수 확인
+    const count = data.filter(p => p.product_type === type).length + 1;
+    const seq = String(count).padStart(3, '0');
+    document.getElementById('productCode').value = `${prefix}-${seq}`;
   } catch (e) {
     const rand = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-    return `PRD-${rand}`;
+    document.getElementById('productCode').value = `${prefix}-${rand}`;
   }
 }
 
@@ -241,10 +265,9 @@ async function openNewModal() {
   const titleEl = document.getElementById('modalTitle');
   if (titleEl) titleEl.textContent = '신규 제품 등록';
 
-  // 코드 자동생성
-  const code = await generateProductCode();
+  // 코드 자동생성은 구분을 선택할 때 이루어지도록 변경
   const codeEl = document.getElementById('productCode');
-  if (codeEl) codeEl.value = code;
+  if (codeEl) codeEl.value = '';
 
   const modal = document.getElementById('productModal');
   if (modal) modal.classList.add('show');
@@ -269,13 +292,17 @@ function openEditModal(id) {
     category: p.category,
     specification: p.specification,
     unit: p.unit,
-    salePrice: p.sale_price,
-    costPrice: p.cost_price,
     barcode: p.barcode,
-    shelfLife: p.shelf_life,
+    shelfLifeDate: p.shelf_life_date,
     storageCondition: p.storage_condition,
     manufacturer: p.manufacturer,
     remarks: p.remarks,
+    bizRegNo: p.biz_reg_no,
+    bankAccount: p.bank_account,
+    contactPerson: p.contact_person,
+    contactPhone: p.contact_phone,
+    personalEmail: p.personal_email,
+    taxEmail: p.tax_email,
   };
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
@@ -342,21 +369,28 @@ function collectDocuments() {
 // ===========================
 async function handleSubmit(e) {
   e.preventDefault();
+  
+  const docsJson = collectDocuments();
   const data = {
-    product_code: document.getElementById('productCode')?.value || '',
-    product_name: document.getElementById('productName')?.value || '',
-    product_type: document.getElementById('productType')?.value || '',
-    category: document.getElementById('category')?.value || '',
-    specification: document.getElementById('specification')?.value || '',
-    unit: document.getElementById('unit')?.value || '',
-    sale_price: parseFloat(document.getElementById('salePrice')?.value) || 0,
-    cost_price: parseFloat(document.getElementById('costPrice')?.value) || 0,
-    barcode: document.getElementById('barcode')?.value || '',
-    shelf_life: parseInt(document.getElementById('shelfLife')?.value) || 0,
-    storage_condition: document.getElementById('storageCondition')?.value || '',
-    manufacturer: document.getElementById('manufacturer')?.value || '',
-    remarks: document.getElementById('remarks')?.value || '',
-    documents: collectDocuments(),
+    product_code: document.getElementById('productCode').value,
+    product_name: document.getElementById('productName').value,
+    product_type: document.getElementById('productType').value,
+    category: document.getElementById('category').value,
+    specification: document.getElementById('specification').value,
+    unit: document.getElementById('unit').value,
+    barcode: document.getElementById('barcode').value,
+    shelf_life_date: document.getElementById('shelfLifeDate').value,
+    storage_condition: document.getElementById('storageCondition').value,
+    manufacturer: document.getElementById('manufacturer').value,
+    remarks: document.getElementById('remarks').value,
+    biz_reg_no: document.getElementById('bizRegNo').value,
+    bank_account: document.getElementById('bankAccount').value,
+    contact_person: document.getElementById('contactPerson').value,
+    contact_phone: document.getElementById('contactPhone').value,
+    personal_email: document.getElementById('personalEmail').value,
+    tax_email: document.getElementById('taxEmail').value,
+    documents: docsJson,
+    updated_at: Date.now()
   };
 
   if (!data.product_name) { showToast('제품명을 입력하세요.', 'warning'); return; }
