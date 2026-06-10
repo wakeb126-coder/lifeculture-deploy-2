@@ -7,7 +7,7 @@ redirects = []
 [functions."*"]
 
 [build]
-publish = "/home/ubuntu/lifeculture_v2"
+publish = "."
 publishOrigin = "default"
 
 [build.environment]
