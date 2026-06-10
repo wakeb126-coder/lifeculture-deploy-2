@@ -53,7 +53,7 @@ html, body {
   background: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
-  z-index: 1000;
+  z-index: 2100;
   transition: var(--transition);
   overflow-y: auto;
   overflow-x: hidden;
