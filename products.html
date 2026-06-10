@@ -370,6 +370,14 @@
     document.getElementById('teamMenuOverlay').classList.remove('show');
     document.getElementById('teamMenuSheet').style.display = 'none';
   }
+  document.addEventListener('DOMContentLoaded', function() {
+    var user = requireAuth('products');
+    if (!user) return;
+    document.getElementById('sidebarNav').innerHTML = getSidebarHTML('products.html');
+    renderUserHeader();
+    setupSidebar();
+    initDateDisplay();
+  });
   </script>
 
   <!-- Scripts -->
