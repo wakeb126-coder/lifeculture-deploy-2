@@ -208,6 +208,18 @@
                     style="width:100%;box-sizing:border-box" />
                   <div id="specDropdown" style="display:none;position:absolute;top:100%;left:0;min-width:280px;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 6px 6px;max-height:220px;overflow-y:auto;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.12);white-space:nowrap"></div>
                 </div>
+                <!-- 신규 규격코드 등록 영역 -->
+                <div id="specNewArea" style="display:none;margin-top:6px;padding:8px;background:#f8fff8;border:1px solid #c8e6c9;border-radius:6px">
+                  <div style="font-size:12px;color:#555;margin-bottom:4px">신규 규격코드 등록 — 코드는 위 입력란에 입력, 아래에 설명을 입력하세요.</div>
+                  <input type="text" id="specNewLabel" placeholder="규격 설명 입력 (예: 250ml)" maxlength="40"
+                    style="width:100%;box-sizing:border-box;margin-bottom:4px" />
+                  <div style="display:flex;gap:6px">
+                    <button type="button" onclick="skuSpecAddNew()" style="flex:1;padding:5px;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">등록</button>
+                    <button type="button" onclick="skuSpecCancelNew()" style="flex:1;padding:5px;background:#e0e0e0;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+                  </div>
+                </div>
+                <!-- 신규 등록 항목 목록 -->
+                <div id="specCustomList" style="display:none;margin-top:4px"></div>
               </div>
             </div>
             <div class="form-grid form-grid-4">
@@ -522,6 +534,10 @@
         + ' onmouseover="this.style.background=\'#f0f8f1\'" onmouseout="this.style.background=\'\'">'
         + item.label + '</div>';
     }).join('');
+    // 신규 등록 버튼
+    html += '<div onmousedown="event.preventDefault()" onclick="skuSpecShowNew()"'
+      + ' style="padding:7px 14px;cursor:pointer;font-size:12px;color:#2e7d32;border-top:2px solid #c8e6c9;font-weight:600"'
+      + ' onmouseover="this.style.background=\'#f0f8f1\'" onmouseout="this.style.background=\'\'">+ 신규 규격코드 등록</div>';
     dd.innerHTML = html;
     dd.style.display = 'block';
   }
@@ -622,12 +638,59 @@
     setTimeout(function() {
       var dd = document.getElementById('specDropdown');
       if (dd) dd.style.display = 'none';
-      // 직접입력한 신규 규격을 목록에 자동 추가 (중복 방지)
-      var val = (document.getElementById('specCode')?.value || '').trim().toUpperCase();
-      if (val && !SKU_SPEC_LIST.find(function(i){ return i.code === val; })) {
-        SKU_SPEC_LIST.push({code: val, label: val + ' (신규)'});
-      }
     }, 200);
+  }
+
+  function skuSpecShowNew() {
+    var dd = document.getElementById('specDropdown');
+    if (dd) dd.style.display = 'none';
+    var area = document.getElementById('specNewArea');
+    if (area) { area.style.display = 'block'; }
+    var labelInput = document.getElementById('specNewLabel');
+    if (labelInput) { labelInput.value = ''; labelInput.focus(); }
+  }
+
+  function skuSpecAddNew() {
+    var code = (document.getElementById('specCode')?.value || '').trim().toUpperCase();
+    var label = (document.getElementById('specNewLabel')?.value || '').trim();
+    if (!code) { alert('코드를 입력해주세요.'); return; }
+    if (!label) { alert('규격 설명을 입력해주세요.'); return; }
+    // 중복 제거 후 재등록
+    SKU_SPEC_LIST = SKU_SPEC_LIST.filter(function(i){ return i.code !== code; });
+    SKU_SPEC_LIST.push({code: code, label: code + ' (' + label + ')', custom: true});
+    skuRenderSpecCustomList();
+    document.getElementById('specNewArea').style.display = 'none';
+    if (typeof generateSkuCode === 'function') generateSkuCode();
+  }
+
+  function skuSpecCancelNew() {
+    document.getElementById('specNewArea').style.display = 'none';
+    document.getElementById('specNewLabel').value = '';
+  }
+
+  function skuSpecDeleteCustom(code) {
+    SKU_SPEC_LIST = SKU_SPEC_LIST.filter(function(i){ return i.code !== code; });
+    var specEl = document.getElementById('specCode');
+    if (specEl && specEl.value === code) { specEl.value = ''; }
+    skuRenderSpecCustomList();
+    if (typeof generateSkuCode === 'function') generateSkuCode();
+  }
+
+  function skuRenderSpecCustomList() {
+    var customs = SKU_SPEC_LIST.filter(function(i){ return i.custom; });
+    var listEl = document.getElementById('specCustomList');
+    if (!listEl) return;
+    if (!customs.length) { listEl.style.display = 'none'; listEl.innerHTML = ''; return; }
+    listEl.style.display = 'block';
+    listEl.innerHTML = '<div style="font-size:11px;color:#888;margin-bottom:2px">등록된 신규 규격:</div>'
+      + customs.map(function(i) {
+        return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0">'
+          + '<span style="color:#2e7d32;font-weight:600">' + i.code + '</span>'
+          + '<span style="color:#555">' + i.label.replace(i.code, '').replace(/^\s*\(|\)\s*$/g,'') + '</span>'
+          + '<button type="button" onclick="skuSpecDeleteCustom(\'' + i.code + '\')" '
+          + 'style="margin-left:auto;padding:1px 7px;font-size:11px;background:#ffebee;color:#c62828;border:1px solid #ef9a9a;border-radius:3px;cursor:pointer">삭제</button>'
+          + '</div>';
+      }).join('');
   }
   </script>
 
