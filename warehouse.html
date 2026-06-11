@@ -52,17 +52,17 @@
     .wh-floor-wrap { border: 2px solid #cde8cd; border-radius: 12px; padding: 16px; background: #f8fff8; overflow-x: auto; }
     .wh-floor-title { font-size: 14px; font-weight: 700; color: #2C5F2E; margin-bottom: 14px; }
     .wh-floor { position: relative; min-width: 700px; }
-    /* 일반창고 그리드 레이아웃 */
+    /* 일반창고 그리드 레이아웃 (엑셀 배치도 기준: 19열 × 8행) */
     .normal-floor-grid { display: grid; grid-template-areas:
-      ". . . . . e1 e2 e3 e4 . . . . b1"
-      ". . . . . .  .  .  .  . . . . b2"
-      ". . . . . .  .  .  .  . . . . b3"
-      ". . d1 d2 d3 d4 d5 d6 d7 . . . . b4"
-      ". . c1 c2 c3 c4 c5 c6 c7 . . . . ."
-      "a1 . .  .  .  .  .  .  .  . . . . b5"
-      "a2 . .  .  .  .  .  .  .  . . . . b6"
-      ". a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 . . .";
-      grid-template-columns: 56px 56px 64px 64px 56px 52px 64px 64px 64px 64px 52px 56px 56px 56px;
+      ". . . . . . . e1 . e2 . e3 . e4 . . b1 . ."
+      ". . . . . . . .  . .  . .  . .  . . .  . b2"
+      ". . . . . . . .  . .  . .  . .  . . .  . b3"
+      ". . . d1 . d2 . d3 . d4 d5 . d6 . d7 . . . b4"
+      ". . . c1 . c2 . c3 . c4 c5 . c6 . c7 . . . ."
+      "a1 . . .  . .  . .  . .  .  . .  . .  . . . b5"
+      "a2 . . .  . .  . .  . .  .  . .  . .  . . . b6"
+      ". a3 a4 . a5 . a6 . a7 . a8 . a9 . a10 a11 . a12 .";
+      grid-template-columns: 52px 52px 52px 52px 8px 52px 8px 52px 8px 52px 52px 8px 52px 8px 52px 52px 8px 52px 52px;
       grid-template-rows: repeat(8, 52px);
       gap: 4px;
       padding: 8px;
@@ -70,15 +70,15 @@
       border-radius: 8px;
       border: 1px solid #c8e6c9;
     }
-    /* 냉장창고 그리드 레이아웃 */
+    /* 냉장창고 그리드 레이아웃 (엑셀 배치도 기준 + E구역 중앙: 7열 × 6행) */
     .cold-floor-grid { display: grid; grid-template-areas:
-      ". . d1 d2 d3 d4 . c4"
-      "a1 . .  .  .  .  . c3"
-      "a2 . .  .  .  .  . c3"
-      "a3 . .  .  .  .  . c2"
-      "a4 . .  .  .  .  . c1"
-      ". b1 b2 b3 b4 b5 . .";
-      grid-template-columns: 60px 64px 64px 64px 64px 60px 20px 60px;
+      ". d1 d2 d3 d4 . c4"
+      "a1 . . . . . ."
+      "a2 . e1 e2 e3 e4 c3"
+      "a3 . . . . . c2"
+      "a4 . . . . . c1"
+      ". b1 b2 b3 b4 b5 .";
+      grid-template-columns: 60px 64px 64px 64px 64px 64px 60px;
       grid-template-rows: 52px 52px 52px 52px 52px 52px;
       gap: 4px;
       padding: 8px;
@@ -100,15 +100,6 @@
     .wh-legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
     .wh-legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
     .wh-legend-dot { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
-    /* A1/A2 구역은 세로로 2칸 차지 */
-    .wh-zone[data-zone="A1"].normal, .wh-zone[data-zone="A2"].normal { grid-row: span 1; }
-    /* B구역 세로 배치 */
-    .wh-zone[data-zone="B1"].normal { grid-area: b1; }
-    .wh-zone[data-zone="B2"].normal { grid-area: b2; }
-    .wh-zone[data-zone="B3"].normal { grid-area: b3; }
-    .wh-zone[data-zone="B4"].normal { grid-area: b4; }
-    .wh-zone[data-zone="B5"].normal { grid-area: b5; }
-    .wh-zone[data-zone="B6"].normal { grid-area: b6; }
   </style>
 </head>
 <body>

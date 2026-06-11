@@ -868,11 +868,11 @@ const NORMAL_ZONES = [
   { code: 'D5',  area: 'd5',  cap: 6 },
   { code: 'D6',  area: 'd6',  cap: 6 },
   { code: 'D7',  area: 'd7',  cap: 6 },
-  // E구역 (상단)
+  // E구역 (상단 가로)
   { code: 'E1',  area: 'e1',  cap: 6 },
   { code: 'E2',  area: 'e2',  cap: 6 },
   { code: 'E3',  area: 'e3',  cap: 6 },
-  { code: 'E4',  area: 'e4',  cap: 6 },
+  { code: 'E4',  area: 'e4',  cap: 3 }, // 1단 1PT
 ];
 
 // 냉장창고 구역 정의 (엑셀 배치도 기준)
@@ -898,6 +898,11 @@ const COLD_ZONES = [
   { code: 'D2', area: 'd2', cap: 6 },
   { code: 'D3', area: 'd3', cap: 6 },
   { code: 'D4', area: 'd4', cap: 6 },
+  // E구역 (중앙)
+  { code: 'E1', area: 'e1', cap: 6 },
+  { code: 'E2', area: 'e2', cap: 6 },
+  { code: 'E3', area: 'e3', cap: 6 },
+  { code: 'E4', area: 'e4', cap: 6 },
 ];
 
 // 뷰 전환 (배치도 ↔ 목록)
