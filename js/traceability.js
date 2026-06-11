@@ -18,16 +18,17 @@ async function startTrace() {
   try {
     const prefix = lotNo.split('-')[0].toUpperCase();
     let traceData = {};
-
-    if (prefix === 'BOX') {
+    // 엑셀 규칙 3자리 + 기존 접두어 모두 지원
+    // CTN(완제품박스포장) = BOX, RST(로스팅) = ROAST, GRD(분쇄) = GRIND
+    if (prefix === 'CTN' || prefix === 'BOX') {
       traceData = await traceFromBox(lotNo);
     } else if (prefix === 'BTL') {
       traceData = await traceFromBottle(lotNo);
     } else if (prefix === 'EXT') {
       traceData = await traceFromExtraction(lotNo);
-    } else if (prefix === 'GRIND') {
+    } else if (prefix === 'GRD' || prefix === 'GRIND') {
       traceData = await traceFromGrinding(lotNo);
-    } else if (prefix === 'ROAST') {
+    } else if (prefix === 'RST' || prefix === 'ROAST') {
       traceData = await traceFromRoasting(lotNo);
     } else if (prefix === 'RM') {
       traceData = await traceFromRaw(lotNo);

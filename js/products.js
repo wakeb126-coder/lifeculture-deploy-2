@@ -192,33 +192,81 @@ function renderTable() {
 }
 
 // ===========================
-// 제품 코드 자동 생성 (구분별)
+// SKU 제품코드 자동생성 (엑셀 규칙 기반)
+// 구조: [생산코드]-[창고코드]-[제품약어]-[규격코드]-[연번3자리]
 // ===========================
-async function handleProductTypeChange(type) {
-  if (!type) {
-    document.getElementById('productCode').value = '';
+function handleProductTypeChange(type) {
+  generateSkuCode();
+}
+
+function onAbbrevSelect(val) {
+  const input = document.getElementById('productAbbrev');
+  if (val === '__NEW__') {
+    input.style.display = 'block';
+    input.focus();
+  } else {
+    input.style.display = 'none';
+    input.value = '';
+  }
+  generateSkuCode();
+}
+
+function onSpecCodeSelect(val) {
+  const input = document.getElementById('specCode');
+  if (val === '__NEW__') {
+    input.style.display = 'block';
+    input.focus();
+  } else {
+    input.style.display = 'none';
+    input.value = '';
+  }
+  generateSkuCode();
+}
+
+async function generateSkuCode() {
+  const typeMap = {
+    '자체생산': 'OWN',
+    'OEM': 'OEM',
+    '수입제품': 'IMP',
+    '농산물': 'IMP',
+    '기타': 'ETC'
+  };
+  const type = (document.getElementById('productType')?.value || '');
+  const prodCode = typeMap[type] || '';
+  const warehouseCode = document.getElementById('warehouseCode')?.value || 'RM';
+
+  // 제품약어: 드롭다운 선택 또는 직접입력
+  const abbrevSelect = document.getElementById('productAbbrevSelect')?.value || '';
+  const abbrevInput = document.getElementById('productAbbrev')?.value || '';
+  const abbrev = (abbrevSelect === '__NEW__' || abbrevSelect === '') ? abbrevInput.trim().toUpperCase() : abbrevSelect;
+
+  // 규격코드: 드롭다운 선택 또는 직접입력
+  const specSelect = document.getElementById('specCodeSelect')?.value || '';
+  const specInput = document.getElementById('specCode')?.value || '';
+  const spec = (specSelect === '__NEW__' || specSelect === '') ? specInput.trim().toUpperCase() : specSelect;
+
+  if (!prodCode || !abbrev || !spec) {
+    // 필수값 미입력 시 코드 비움 (수동입력 가능하도록 유지)
     return;
   }
-  
-  const prefixMap = {
-    '자체생산': 'LC-PRD',
-    'OEM': 'LC-OEM',
-    '수입제품': 'LC-IMT',
-    '농산물': 'LC-ACT',
-    '기타': 'LC-ETC'
-  };
-  
-  const prefix = prefixMap[type] || 'LC-PRD';
-  
+
+  // 연번: 같은 제품약어로 등록된 제품 수 + 1
+  let seq = '001';
   try {
     const data = await apiGetAll('products');
-    const count = data.filter(p => p.product_type === type).length + 1;
-    const seq = String(count).padStart(3, '0');
-    document.getElementById('productCode').value = `${prefix}-${seq}`;
+    const sameAbbrev = data.filter(p => {
+      const code = p.product_code || '';
+      const parts = code.split('-');
+      return parts.length >= 3 && parts[2] === abbrev;
+    });
+    seq = String(sameAbbrev.length + 1).padStart(3, '0');
   } catch (e) {
-    const rand = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
-    document.getElementById('productCode').value = `${prefix}-${rand}`;
+    seq = '001';
   }
+
+  const generated = `${prodCode}-${warehouseCode}-${abbrev}-${spec}-${seq}`;
+  const codeEl = document.getElementById('productCode');
+  if (codeEl) codeEl.value = generated;
 }
 
 // ===========================
@@ -240,6 +288,18 @@ async function openNewModal() {
 
   const codeEl = document.getElementById('productCode');
   if (codeEl) codeEl.value = '';
+
+  // SKU 필드 초기화
+  const abbrevSel = document.getElementById('productAbbrevSelect');
+  if (abbrevSel) abbrevSel.value = '';
+  const abbrevIn = document.getElementById('productAbbrev');
+  if (abbrevIn) { abbrevIn.value = ''; abbrevIn.style.display = 'none'; }
+  const specSel = document.getElementById('specCodeSelect');
+  if (specSel) specSel.value = '';
+  const specIn = document.getElementById('specCode');
+  if (specIn) { specIn.value = ''; specIn.style.display = 'none'; }
+  const whCode = document.getElementById('warehouseCode');
+  if (whCode) whCode.value = 'RM';
 
   const modal = document.getElementById('productModal');
   if (modal) modal.classList.add('show');
@@ -274,6 +334,7 @@ function openEditModal(id) {
     contactPhone: p.contact_phone,
     personalEmail: p.personal_email,
     taxEmail: p.tax_email,
+    lotAbbrev: p.lot_abbrev,
   };
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
@@ -349,6 +410,7 @@ async function handleSubmit(e) {
     contact_phone: document.getElementById('contact_phone')?.value || document.getElementById('contactPhone')?.value || '',
     personal_email: document.getElementById('personal_email')?.value || document.getElementById('personalEmail')?.value || '',
     tax_email: document.getElementById('tax_email')?.value || document.getElementById('taxEmail')?.value || '',
+    lot_abbrev: document.getElementById('lotAbbrev')?.value || '',
     documents: docsJson,
     updated_at: Date.now()
   };

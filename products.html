@@ -150,25 +150,121 @@
       </div>
       <div class="modal-body">
         <form id="productForm">
-          <div class="form-grid form-grid-4">
-            <div class="form-group">
-              <label>제품코드</label>
-              <input type="text" id="productCode" placeholder="제품코드 입력 (예: LC-PRD-001)" />
+          <!-- SKU 제품코드 자동생성 섹션 -->
+          <div style="background:#f0f8f1;border:1px solid #c8e6c9;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:700;color:#2C5F2E;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px">🏷️ SKU 제품코드 자동생성</div>
+            <div class="form-grid form-grid-4" style="margin-bottom:10px">
+              <div class="form-group">
+                <label>제품구분 <span class="required">*</span></label>
+                <select id="productType" required onchange="handleProductTypeChange(this.value)">
+                  <option value="">선택</option>
+                  <option value="자체생산">자체생산 (OWN)</option>
+                  <option value="OEM">OEM</option>
+                  <option value="수입제품">수입제품 (IMP)</option>
+                  <option value="농산물">농산물 (IMP)</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>창고코드</label>
+                <select id="warehouseCode" onchange="generateSkuCode()">
+                  <option value="RM">RM (일반물류창고)</option>
+                  <option value="RF">RF (냉장창고)</option>
+                  <option value="FZ">FZ (냉동창고)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>제품약어 <small style="color:#888;font-weight:400">(3~4자리)</small></label>
+                <div style="display:flex;gap:4px">
+                  <select id="productAbbrevSelect" onchange="onAbbrevSelect(this.value)" style="flex:1">
+                    <option value="">-- 선택 또는 직접입력 --</option>
+                    <option value="WSP">WSP - 웨이크비 스페셜 콜드브루</option>
+                    <option value="WBR">WBR - 웨이크비 콜드브루 브라질</option>
+                    <option value="WDC">WDC - 웨이크비 콜드브루 디카페인</option>
+                    <option value="GDL">GDL - 감동식탁 들기름</option>
+                    <option value="GSM">GSM - 감동식탁 참기름</option>
+                    <option value="GYK">GYK - 궁중약과</option>
+                    <option value="KCC">KCC - 꿀이구마 스위트 초코칩쿠키</option>
+                    <option value="KHK">KHK - 꿀이구마 찹쌀한과</option>
+                    <option value="KDL">KDL - 꿀이구마 들기름</option>
+                    <option value="KSM">KSM - 꿀이구마 참기름</option>
+                    <option value="STJ">STJ - 딸기젤리</option>
+                    <option value="LMN">LMN - 레몬진액</option>
+                    <option value="BRY">BRY - 보리차진액</option>
+                    <option value="SCD">SCD - 사이다사탕</option>
+                    <option value="SHS">SHS - 새우소금</option>
+                    <option value="AMG">AMG - 애플망고젤리</option>
+                    <option value="HNY">HNY - 야생화꿀</option>
+                    <option value="YMT">YMT - 율무차</option>
+                    <option value="MYK">MYK - 한입 미니약과</option>
+                    <option value="HTK">HTK - 헛개차</option>
+                    <option value="RMK">RMK - 로마 말키스트 크래커</option>
+                    <option value="XK1">XK1 - 샤오커오라 Season1</option>
+                    <option value="XK2">XK2 - 샤오커오라 Season2</option>
+                    <option value="SKS">SKS - 스킨리스솔티드</option>
+                    <option value="HKC">HKC - 오이시 하쿠 쌀과자</option>
+                    <option value="YDD">YDD - 유도케이크 두리안</option>
+                    <option value="YDB">YDB - 유도케이크 바나나</option>
+                    <option value="YDC">YDC - 유도케이크 커스타드</option>
+                    <option value="YDP">YDP - 유도케이크 판단</option>
+                    <option value="YDX">YDX - 유도케이크 초코</option>
+                    <option value="CSN">CSN - 캐슈넛 오리지널</option>
+                    <option value="TMT">TMT - 타미앤팀 커피콩 캔디</option>
+                    <option value="VTP">VTP - 베트남 고춧가루</option>
+                    <option value="VTC">VTC - 베트남 건고추</option>
+                    <option value="MCD">MCD - 마카다미아</option>
+                    <option value="NRG">NRG - 찹쌀누룽지스낵</option>
+                    <option value="__NEW__">+ 신규 약어 직접입력</option>
+                  </select>
+                </div>
+                <input type="text" id="productAbbrev" placeholder="예: WSP" maxlength="4" oninput="this.value=this.value.toUpperCase();generateSkuCode()" style="margin-top:4px;display:none" />
+              </div>
+              <div class="form-group">
+                <label>규격코드 <small style="color:#888;font-weight:400">(중량/용량)</small></label>
+                <div style="display:flex;gap:4px">
+                  <select id="specCodeSelect" onchange="onSpecCodeSelect(this.value)" style="flex:1">
+                    <option value="">-- 선택 또는 직접입력 --</option>
+                    <option value="G100">G100 (100g)</option>
+                    <option value="G120">G120 (120g)</option>
+                    <option value="G144">G144 (144g)</option>
+                    <option value="G160">G160 (160g)</option>
+                    <option value="G300">G300 (300g)</option>
+                    <option value="G350">G350 (350g)</option>
+                    <option value="G500">G500 (500g)</option>
+                    <option value="K001">K001 (1kg)</option>
+                    <option value="M350">M350 (350ml)</option>
+                    <option value="M500">M500 (500ml)</option>
+                    <option value="E030">E030 (30개)</option>
+                    <option value="E040">E040 (40개)</option>
+                    <option value="P004">P004 (4입)</option>
+                    <option value="G023X18">G023X18 (23g×18봉)</option>
+                    <option value="G100X2">G100X2 (100g×2봉)</option>
+                    <option value="G100X5">G100X5 (100g×5봉)</option>
+                    <option value="STD">STD (규격 미확인)</option>
+                    <option value="__NEW__">+ 규격 직접입력</option>
+                  </select>
+                </div>
+                <input type="text" id="specCode" placeholder="예: G100X2" maxlength="10" oninput="this.value=this.value.toUpperCase();generateSkuCode()" style="margin-top:4px;display:none" />
+              </div>
             </div>
+            <div class="form-grid form-grid-4">
+              <div class="form-group span-3">
+                <label>생성된 제품코드 <small style="color:#888;font-weight:400">(수동 수정 가능)</small></label>
+                <input type="text" id="productCode" placeholder="제품구분·약어·규격 선택 시 자동생성" style="font-weight:700;font-family:monospace;font-size:14px;background:#fff" />
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button type="button" onclick="generateSkuCode()" style="width:100%;padding:8px;background:#2C5F2E;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px"><i class="fas fa-sync-alt"></i> 코드 재생성</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-grid form-grid-4">
             <div class="form-group span-2">
               <label>제품명 <span class="required">*</span></label>
               <input type="text" id="productName" required placeholder="제품명 입력" />
             </div>
-            <div class="form-group">
-              <label>제품구분 <span class="required">*</span></label>
-              <select id="productType" required onchange="handleProductTypeChange(this.value)">
-                <option value="">선택</option>
-                <option value="자체생산">자체생산</option>
-                <option value="OEM">OEM</option>
-                <option value="수입제품">수입제품</option>
-                <option value="농산물">농산물</option>
-                <option value="기타">기타</option>
-              </select>
+            <div class="form-group span-2">
+              <label>LOT 제품약어 <small style="color:#888;font-weight:400">(자체생산 전용, 예: WSP)</small></label>
+              <input type="text" id="lotAbbrev" placeholder="예: WSP (자체생산 LOT 발행 시 사용)" maxlength="4" oninput="this.value=this.value.toUpperCase()" />
             </div>
           </div>
           <div class="form-grid form-grid-4">

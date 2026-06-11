@@ -580,3 +580,96 @@ async function lgDeleteRecord(id) {
     }
   });
 }
+
+// ===========================
+// 제품 자동검색 (제품마스터 연동)
+// ===========================
+let _lgProductCache = null;
+
+async function lgGetProductCache() {
+  if (_lgProductCache) return _lgProductCache;
+  try {
+    _lgProductCache = await apiGetAll('products');
+  } catch(e) {
+    _lgProductCache = [];
+  }
+  return _lgProductCache;
+}
+
+async function lgProductSearch(keyword) {
+  const dropdown = document.getElementById('lgProductDropdown');
+  if (!dropdown) return;
+  const q = (keyword || '').trim().toLowerCase();
+  if (q.length < 1) {
+    dropdown.style.display = 'none';
+    return;
+  }
+  const products = await lgGetProductCache();
+  const matched = products.filter(p => {
+    const name = (p.product_name || '').toLowerCase();
+    const code = (p.product_code || '').toLowerCase();
+    return name.includes(q) || code.includes(q);
+  }).slice(0, 15);
+
+  if (matched.length === 0) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  dropdown.innerHTML = matched.map(p => {
+    const typeLabel = p.product_type === '자체생산'
+      ? '<span style="color:#1e8449;font-size:10px;font-weight:700">[OWN]</span>'
+      : p.product_type === 'OEM'
+      ? '<span style="color:#d68910;font-size:10px;font-weight:700">[OEM]</span>'
+      : '<span style="color:#2980b9;font-size:10px;font-weight:700">[IMP]</span>';
+    const safeP = JSON.stringify(p).replace(/"/g, '&quot;');
+    return `<div onclick="lgSelectProduct(JSON.parse(this.dataset.p))" data-p="${safeP}"
+      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px"
+      onmouseover="this.style.background='#f0f8f1'" onmouseout="this.style.background=''"
+    >
+      ${typeLabel} <strong>${p.product_name}</strong>
+      <span style="color:#888;font-size:11px;margin-left:6px">${p.product_code || ''}</span>
+      ${p.specification ? `<span style="color:#aaa;font-size:11px"> · ${p.specification}</span>` : ''}
+    </div>`;
+  }).join('');
+  dropdown.style.display = 'block';
+}
+
+function lgSelectProduct(p) {
+  const nameEl = document.getElementById('lg_product_name');
+  const codeEl = document.getElementById('lg_product_code');
+  const unitEl = document.getElementById('lg_unit');
+  const expiryEl = document.getElementById('lg_expiry_date');
+  const dropdown = document.getElementById('lgProductDropdown');
+
+  if (nameEl) nameEl.value = p.product_name || '';
+  if (codeEl) codeEl.value = p.product_code || '';
+  if (unitEl && p.unit) {
+    const opt = Array.from(unitEl.options).find(o => o.value === p.unit);
+    if (opt) unitEl.value = p.unit;
+  }
+  if (expiryEl && p.shelf_life_date) expiryEl.value = p.shelf_life_date;
+
+  // 제품유형 자동 설정
+  const typeEl = document.getElementById('lg_product_type');
+  if (typeEl && p.product_type) {
+    const map = { '자체생산': '자체생산', 'OEM': 'OEM제품', '수입제품': '수입제품', '농산물': '수입제품' };
+    const mapped = map[p.product_type];
+    if (mapped) {
+      typeEl.value = mapped;
+      if (typeof lgRefreshLotNo === 'function') lgRefreshLotNo();
+      if (typeof lgShowProductSections === 'function') lgShowProductSections();
+    }
+  }
+
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+// 드롭다운 외부 클릭 시 닫기
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('lgProductDropdown');
+  const input = document.getElementById('lg_product_name');
+  if (dropdown && input && !input.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.style.display = 'none';
+  }
+});
