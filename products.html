@@ -176,14 +176,26 @@
               <div class="form-group">
                 <label>제품약어 <small style="color:#888;font-weight:400">(3~4자리 · 입력 시 자동완성)</small></label>
                 <div style="position:relative">
-                  <input type="text" id="productAbbrev" placeholder="입력하거나 선택 (예: WSP)" maxlength="6"
+                  <input type="text" id="productAbbrev" placeholder="코드 입력/선택 (예: KYK)" maxlength="6"
                     autocomplete="off"
                     oninput="this.value=this.value.toUpperCase();skuAbbrevFilter(this.value);generateSkuCode()"
                     onblur="skuAbbrevBlur()"
                     onfocus="skuAbbrevFilter(this.value)"
                     style="width:100%;box-sizing:border-box" />
-                  <div id="abbrevDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 6px 6px;max-height:180px;overflow-y:auto;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
+                  <div id="abbrevDropdown" style="display:none;position:absolute;top:100%;left:0;min-width:320px;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 6px 6px;max-height:220px;overflow-y:auto;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.12);white-space:nowrap"></div>
                 </div>
+                <!-- 신규 약어 등록 영역 -->
+                <div id="abbrevNewArea" style="display:none;margin-top:6px;padding:8px;background:#f8fff8;border:1px solid #c8e6c9;border-radius:6px">
+                  <div style="font-size:12px;color:#555;margin-bottom:4px">신규 약어 등록 — 코드는 위 입력란에 입력, 아래에 제품명을 입력하세요.</div>
+                  <input type="text" id="abbrevNewLabel" placeholder="제품명 입력 (예: 꿀이구마 호박 찹쌀약과)" maxlength="40"
+                    style="width:100%;box-sizing:border-box;margin-bottom:4px" />
+                  <div style="display:flex;gap:6px">
+                    <button type="button" onclick="skuAbbrevAddNew()" style="flex:1;padding:5px;background:#2e7d32;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">등록</button>
+                    <button type="button" onclick="skuAbbrevCancelNew()" style="flex:1;padding:5px;background:#e0e0e0;color:#333;border:none;border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+                  </div>
+                </div>
+                <!-- 신규 등록 항목 목록 -->
+                <div id="abbrevCustomList" style="display:none;margin-top:4px"></div>
               </div>
               <div class="form-group">
                 <label>규격코드 <small style="color:#888;font-weight:400">(중량/용량 · 입력 시 자동완성)</small></label>
@@ -194,7 +206,7 @@
                     onblur="skuSpecBlur()"
                     onfocus="skuSpecFilter(this.value)"
                     style="width:100%;box-sizing:border-box" />
-                  <div id="specDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 6px 6px;max-height:180px;overflow-y:auto;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
+                  <div id="specDropdown" style="display:none;position:absolute;top:100%;left:0;min-width:280px;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 6px 6px;max-height:220px;overflow-y:auto;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.12);white-space:nowrap"></div>
                 </div>
               </div>
             </div>
@@ -483,60 +495,137 @@
     {code:'STD', label:'STD (규격 미확인)'}
   ];
 
-  function skuRenderDropdown(dropdownId, items, onSelect) {
-    var dd = document.getElementById(dropdownId);
+  // 드롭다운 렌더링 (신규 등록 버튼 포함)
+  function skuRenderAbbrevDropdown(items) {
+    var dd = document.getElementById('abbrevDropdown');
     if (!dd) return;
-    if (!items.length) { dd.style.display = 'none'; return; }
-    dd.innerHTML = items.map(function(item) {
-      return '<div onmousedown="event.preventDefault()" onclick="(' + onSelect.toString() + ')(\'' + item.code + '\',\'' + item.label.replace(/'/g,"\\'")
-        + '\')" style="padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0" '
-        + 'onmouseover="this.style.background=\'#f0f8f1\'" onmouseout="this.style.background=\'\'">' + item.label + '</div>';
+    var html = items.map(function(item) {
+      return '<div onmousedown="event.preventDefault()" onclick="skuAbbrevSelect(\'' + item.code + '\')"'
+        + ' style="padding:7px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0"'
+        + ' onmouseover="this.style.background=\'#f0f8f1\'" onmouseout="this.style.background=\'\'">'
+        + item.label + '</div>';
     }).join('');
+    // 신규 등록 버튼
+    html += '<div onmousedown="event.preventDefault()" onclick="skuAbbrevShowNew()"'
+      + ' style="padding:7px 14px;cursor:pointer;font-size:12px;color:#2e7d32;border-top:2px solid #c8e6c9;font-weight:600"'
+      + ' onmouseover="this.style.background=\'#f0f8f1\'" onmouseout="this.style.background=\'\'">+ 신규 약어 등록</div>';
+    dd.innerHTML = html;
     dd.style.display = 'block';
+  }
+
+  function skuRenderSpecDropdown(items) {
+    var dd = document.getElementById('specDropdown');
+    if (!dd) return;
+    var html = items.map(function(item) {
+      return '<div onmousedown="event.preventDefault()" onclick="skuSpecSelect(\'' + item.code + '\')"'
+        + ' style="padding:7px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0"'
+        + ' onmouseover="this.style.background=\'#f0f8f1\'" onmouseout="this.style.background=\'\'">'
+        + item.label + '</div>';
+    }).join('');
+    dd.innerHTML = html;
+    dd.style.display = 'block';
+  }
+
+  function skuAbbrevSelect(code) {
+    document.getElementById('productAbbrev').value = code;
+    document.getElementById('abbrevDropdown').style.display = 'none';
+    document.getElementById('abbrevNewArea').style.display = 'none';
+    if (typeof generateSkuCode === 'function') generateSkuCode();
+  }
+
+  function skuSpecSelect(code) {
+    document.getElementById('specCode').value = code;
+    document.getElementById('specDropdown').style.display = 'none';
+    if (typeof generateSkuCode === 'function') generateSkuCode();
   }
 
   function skuAbbrevFilter(val) {
     var q = val.trim().toUpperCase();
-    var all = SKU_ABBREV_LIST;
-    var filtered = q ? all.filter(function(i){ return i.code.indexOf(q) === 0 || i.label.toUpperCase().indexOf(q) >= 0; }) : all;
-    skuRenderDropdown('abbrevDropdown', filtered, function(code, label) {
-      document.getElementById('productAbbrev').value = code;
-      document.getElementById('abbrevDropdown').style.display = 'none';
-      if (typeof generateSkuCode === 'function') generateSkuCode();
-    });
+    var filtered = q ? SKU_ABBREV_LIST.filter(function(i){
+      return i.code.indexOf(q) === 0 || i.label.toUpperCase().indexOf(q) >= 0;
+    }) : SKU_ABBREV_LIST;
+    skuRenderAbbrevDropdown(filtered);
   }
 
   function skuAbbrevBlur() {
     setTimeout(function() {
       var dd = document.getElementById('abbrevDropdown');
       if (dd) dd.style.display = 'none';
-      // 직접입력한 신규 약어를 목록에 추가
-      var val = (document.getElementById('productAbbrev')?.value || '').trim().toUpperCase();
-      if (val && !SKU_ABBREV_LIST.find(function(i){ return i.code === val; })) {
-        SKU_ABBREV_LIST.push({code: val, label: val + ' - (신규)'});
-      }
     }, 200);
+  }
+
+  function skuAbbrevShowNew() {
+    // 드롭다운 닫고 신규 등록 영역 표시
+    var dd = document.getElementById('abbrevDropdown');
+    if (dd) dd.style.display = 'none';
+    var area = document.getElementById('abbrevNewArea');
+    if (area) { area.style.display = 'block'; }
+    var labelInput = document.getElementById('abbrevNewLabel');
+    if (labelInput) { labelInput.value = ''; labelInput.focus(); }
+  }
+
+  function skuAbbrevAddNew() {
+    var code = (document.getElementById('productAbbrev')?.value || '').trim().toUpperCase();
+    var label = (document.getElementById('abbrevNewLabel')?.value || '').trim();
+    if (!code) { alert('코드를 입력해주세요.'); return; }
+    if (!label) { alert('제품명을 입력해주세요.'); return; }
+    // 중복 제거: 이미 있는 코드면 삭제 후 재등록
+    SKU_ABBREV_LIST = SKU_ABBREV_LIST.filter(function(i){ return i.code !== code; });
+    SKU_ABBREV_LIST.push({code: code, label: code + ' - ' + label, custom: true});
+    // 신규 등록 항목 목록 갱신
+    skuRenderCustomList();
+    // 입력란 유지, 영역 숨기기
+    document.getElementById('abbrevNewArea').style.display = 'none';
+    if (typeof generateSkuCode === 'function') generateSkuCode();
+  }
+
+  function skuAbbrevCancelNew() {
+    document.getElementById('abbrevNewArea').style.display = 'none';
+    document.getElementById('abbrevNewLabel').value = '';
+  }
+
+  function skuAbbrevDeleteCustom(code) {
+    SKU_ABBREV_LIST = SKU_ABBREV_LIST.filter(function(i){ return i.code !== code; });
+    // 입력란이 삭제된 코드이면 비움
+    var abbrevEl = document.getElementById('productAbbrev');
+    if (abbrevEl && abbrevEl.value === code) { abbrevEl.value = ''; }
+    skuRenderCustomList();
+    if (typeof generateSkuCode === 'function') generateSkuCode();
+  }
+
+  function skuRenderCustomList() {
+    var customs = SKU_ABBREV_LIST.filter(function(i){ return i.custom; });
+    var listEl = document.getElementById('abbrevCustomList');
+    if (!listEl) return;
+    if (!customs.length) { listEl.style.display = 'none'; listEl.innerHTML = ''; return; }
+    listEl.style.display = 'block';
+    listEl.innerHTML = '<div style="font-size:11px;color:#888;margin-bottom:2px">등록된 신규 약어:</div>'
+      + customs.map(function(i) {
+        return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0">'
+          + '<span style="color:#2e7d32;font-weight:600">' + i.code + '</span>'
+          + '<span style="color:#555">' + i.label.replace(i.code + ' - ', '') + '</span>'
+          + '<button type="button" onclick="skuAbbrevDeleteCustom(\'' + i.code + '\')" '
+          + 'style="margin-left:auto;padding:1px 7px;font-size:11px;background:#ffebee;color:#c62828;border:1px solid #ef9a9a;border-radius:3px;cursor:pointer">삭제</button>'
+          + '</div>';
+      }).join('');
   }
 
   function skuSpecFilter(val) {
     var q = val.trim().toUpperCase();
-    var all = SKU_SPEC_LIST;
-    var filtered = q ? all.filter(function(i){ return i.code.indexOf(q) === 0 || i.label.toUpperCase().indexOf(q) >= 0; }) : all;
-    skuRenderDropdown('specDropdown', filtered, function(code, label) {
-      document.getElementById('specCode').value = code;
-      document.getElementById('specDropdown').style.display = 'none';
-      if (typeof generateSkuCode === 'function') generateSkuCode();
-    });
+    var filtered = q ? SKU_SPEC_LIST.filter(function(i){
+      return i.code.indexOf(q) === 0 || i.label.toUpperCase().indexOf(q) >= 0;
+    }) : SKU_SPEC_LIST;
+    skuRenderSpecDropdown(filtered);
   }
 
   function skuSpecBlur() {
     setTimeout(function() {
       var dd = document.getElementById('specDropdown');
       if (dd) dd.style.display = 'none';
-      // 직접입력한 신규 규격을 목록에 추가
+      // 직접입력한 신규 규격을 목록에 자동 추가 (중복 방지)
       var val = (document.getElementById('specCode')?.value || '').trim().toUpperCase();
       if (val && !SKU_SPEC_LIST.find(function(i){ return i.code === val; })) {
-        SKU_SPEC_LIST.push({code: val, label: val + ' (신규규격)'});
+        SKU_SPEC_LIST.push({code: val, label: val + ' (신규)'});
       }
     }, 200);
   }
