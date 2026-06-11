@@ -48,6 +48,67 @@
       .sidebar, .topbar, .bottom-nav, .pwa-install-banner, .wh-tabs, .action-bar, .btn, .fab-btn { display: none !important; }
       @page { size: A4; margin: 15mm; }
     }
+    /* ===== 창고 배치도 스타일 ===== */
+    .wh-floor-wrap { border: 2px solid #cde8cd; border-radius: 12px; padding: 16px; background: #f8fff8; overflow-x: auto; }
+    .wh-floor-title { font-size: 14px; font-weight: 700; color: #2C5F2E; margin-bottom: 14px; }
+    .wh-floor { position: relative; min-width: 700px; }
+    /* 일반창고 그리드 레이아웃 */
+    .normal-floor-grid { display: grid; grid-template-areas:
+      ". . . . . e1 e2 e3 e4 . . . . b1"
+      ". . . . . .  .  .  .  . . . . b2"
+      ". . . . . .  .  .  .  . . . . b3"
+      ". . d1 d2 d3 d4 d5 d6 d7 . . . . b4"
+      ". . c1 c2 c3 c4 c5 c6 c7 . . . . ."
+      "a1 . .  .  .  .  .  .  .  . . . . b5"
+      "a2 . .  .  .  .  .  .  .  . . . . b6"
+      ". a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 . . .";
+      grid-template-columns: 56px 56px 64px 64px 56px 52px 64px 64px 64px 64px 52px 56px 56px 56px;
+      grid-template-rows: repeat(8, 52px);
+      gap: 4px;
+      padding: 8px;
+      background: #f0f8f0;
+      border-radius: 8px;
+      border: 1px solid #c8e6c9;
+    }
+    /* 냉장창고 그리드 레이아웃 */
+    .cold-floor-grid { display: grid; grid-template-areas:
+      ". . d1 d2 d3 d4 . c4"
+      "a1 . .  .  .  .  . c3"
+      "a2 . .  .  .  .  . c3"
+      "a3 . .  .  .  .  . c2"
+      "a4 . .  .  .  .  . c1"
+      ". b1 b2 b3 b4 b5 . .";
+      grid-template-columns: 60px 64px 64px 64px 64px 60px 20px 60px;
+      grid-template-rows: 52px 52px 52px 52px 52px 52px;
+      gap: 4px;
+      padding: 8px;
+      background: #f0f6ff;
+      border-radius: 8px;
+      border: 1px solid #bbdefb;
+    }
+    .wh-zone { border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; border: 2px solid transparent; font-size: 11px; font-weight: 700; padding: 2px; min-width: 0; }
+    .wh-zone:hover { transform: scale(1.07); box-shadow: 0 2px 8px rgba(0,0,0,0.18); z-index: 2; position: relative; }
+    .wh-zone.empty { background: #e8e8e8; color: #999; border-color: #ccc; }
+    .wh-zone.low { background: #a9dfbf; color: #1a6b3a; border-color: #27ae60; }
+    .wh-zone.mid { background: #f9ca24; color: #7d5a00; border-color: #e0a800; }
+    .wh-zone.full { background: #e74c3c; color: #fff; border-color: #c0392b; }
+    .wh-zone .zone-code { font-size: 12px; font-weight: 800; line-height: 1.2; }
+    .wh-zone .zone-pt { font-size: 10px; font-weight: 500; opacity: 0.8; }
+    .wh-zone .zone-pct { font-size: 10px; font-weight: 700; }
+    .wh-zone-empty-cell { background: transparent; }
+    .wh-floor-label { display: flex; align-items: center; justify-content: center; font-size: 11px; color: #888; font-weight: 500; }
+    .wh-legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+    .wh-legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
+    .wh-legend-dot { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+    /* A1/A2 구역은 세로로 2칸 차지 */
+    .wh-zone[data-zone="A1"].normal, .wh-zone[data-zone="A2"].normal { grid-row: span 1; }
+    /* B구역 세로 배치 */
+    .wh-zone[data-zone="B1"].normal { grid-area: b1; }
+    .wh-zone[data-zone="B2"].normal { grid-area: b2; }
+    .wh-zone[data-zone="B3"].normal { grid-area: b3; }
+    .wh-zone[data-zone="B4"].normal { grid-area: b4; }
+    .wh-zone[data-zone="B5"].normal { grid-area: b5; }
+    .wh-zone[data-zone="B6"].normal { grid-area: b6; }
   </style>
 </head>
 <body>
@@ -200,19 +261,51 @@
         </div>
 
         <!-- 로케이션 현황 -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
           <div style="font-size:14px;font-weight:700"><i class="fas fa-th" style="color:#2C5F2E"></i> 로케이션 현황</div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select id="locWarehouseFilter" onchange="renderLocations()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px">
               <option value="">전체 창고</option>
               <option value="일반">일반창고</option>
               <option value="냉장">냉장창고</option>
               <option value="냉동">냉동창고</option>
             </select>
+            <div style="display:flex;border:1px solid #ddd;border-radius:6px;overflow:hidden">
+              <button id="btnViewMap" onclick="switchLocView('map')" style="padding:6px 12px;border:none;background:#2C5F2E;color:#fff;font-size:12px;font-weight:600;cursor:pointer"><i class="fas fa-map"></i> 배치도</button>
+              <button id="btnViewList" onclick="switchLocView('list')" style="padding:6px 12px;border:none;background:#f5f5f5;color:#666;font-size:12px;font-weight:600;cursor:pointer"><i class="fas fa-list"></i> 목록</button>
+            </div>
           </div>
         </div>
-        <div class="location-grid" id="locationGrid">
-          <div class="empty-msg">로케이션을 등록하세요.</div>
+        <!-- 배치도 뷰 -->
+        <div id="locationMapView">
+          <!-- 일반창고 배치도 -->
+          <div class="wh-floor-wrap" id="normalFloorWrap">
+            <div class="wh-floor-title"><i class="fas fa-warehouse" style="color:#2C5F2E"></i> 일반창고 배치도</div>
+            <div class="wh-floor" id="normalFloor"></div>
+            <div class="wh-legend">
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#e8e8e8"></span>공실</span>
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#a9dfbf"></span>적재(50%미만)</span>
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#f9ca24"></span>여유(50~99%)</span>
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#e74c3c"></span>만재</span>
+            </div>
+          </div>
+          <!-- 냉장창고 배치도 -->
+          <div class="wh-floor-wrap" id="coldFloorWrap" style="margin-top:24px">
+            <div class="wh-floor-title"><i class="fas fa-snowflake" style="color:#3498db"></i> 냉장창고 배치도</div>
+            <div class="wh-floor" id="coldFloor"></div>
+            <div class="wh-legend">
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#e8e8e8"></span>공실</span>
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#a9dfbf"></span>적재(50%미만)</span>
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#f9ca24"></span>여유(50~99%)</span>
+              <span class="wh-legend-item"><span class="wh-legend-dot" style="background:#e74c3c"></span>만재</span>
+            </div>
+          </div>
+        </div>
+        <!-- 목록 뷰 -->
+        <div id="locationListView" style="display:none">
+          <div class="location-grid" id="locationGrid">
+            <div class="empty-msg">로케이션을 등록하세요.</div>
+          </div>
         </div>
       </div>
 

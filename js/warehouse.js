@@ -46,6 +46,7 @@ async function loadAll() {
 
     renderDashboard();
     renderLocations();
+    renderFloorMaps();
     renderInbound();
     renderOutbound();
     renderLedger();
@@ -822,4 +823,139 @@ function numFormat(v, d = 0) {
   const n = parseFloat(v);
   if (isNaN(n)) return '-';
   return n.toLocaleString('ko-KR', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+// =====================================================
+// 창고 배치도 렌더링
+// =====================================================
+
+// 일반창고 구역 정의 (엑셀 배치도 기준)
+// capacity: 최대 PT 수 (3단 × 2PT = 6PT, 예외는 3PT)
+const NORMAL_ZONES = [
+  // A구역 (왼쪽 세로 + 하단 가로)
+  { code: 'A1',  area: 'a1',  cap: 6 },
+  { code: 'A2',  area: 'a2',  cap: 6 },
+  { code: 'A3',  area: 'a3',  cap: 6 },
+  { code: 'A4',  area: 'a4',  cap: 6 },
+  { code: 'A5',  area: 'a5',  cap: 6 },
+  { code: 'A6',  area: 'a6',  cap: 6 },
+  { code: 'A7',  area: 'a7',  cap: 6 },
+  { code: 'A8',  area: 'a8',  cap: 6 },
+  { code: 'A9',  area: 'a9',  cap: 6 },
+  { code: 'A10', area: 'a10', cap: 6 },
+  { code: 'A11', area: 'a11', cap: 6 },
+  { code: 'A12', area: 'a12', cap: 3 }, // 1단 1PT
+  // B구역 (오른쪽 세로)
+  { code: 'B1',  area: 'b1',  cap: 6 },
+  { code: 'B2',  area: 'b2',  cap: 6 },
+  { code: 'B3',  area: 'b3',  cap: 6 },
+  { code: 'B4',  area: 'b4',  cap: 6 },
+  { code: 'B5',  area: 'b5',  cap: 6 },
+  { code: 'B6',  area: 'b6',  cap: 6 },
+  // C구역 (중앙 하단 행)
+  { code: 'C1',  area: 'c1',  cap: 6 },
+  { code: 'C2',  area: 'c2',  cap: 6 },
+  { code: 'C3',  area: 'c3',  cap: 6 },
+  { code: 'C4',  area: 'c4',  cap: 3 }, // 1단 1PT
+  { code: 'C5',  area: 'c5',  cap: 6 },
+  { code: 'C6',  area: 'c6',  cap: 6 },
+  { code: 'C7',  area: 'c7',  cap: 6 },
+  // D구역 (중앙 상단 행)
+  { code: 'D1',  area: 'd1',  cap: 6 },
+  { code: 'D2',  area: 'd2',  cap: 6 },
+  { code: 'D3',  area: 'd3',  cap: 6 },
+  { code: 'D4',  area: 'd4',  cap: 3 }, // 1단 1PT
+  { code: 'D5',  area: 'd5',  cap: 6 },
+  { code: 'D6',  area: 'd6',  cap: 6 },
+  { code: 'D7',  area: 'd7',  cap: 6 },
+  // E구역 (상단)
+  { code: 'E1',  area: 'e1',  cap: 6 },
+  { code: 'E2',  area: 'e2',  cap: 6 },
+  { code: 'E3',  area: 'e3',  cap: 6 },
+  { code: 'E4',  area: 'e4',  cap: 6 },
+];
+
+// 냉장창고 구역 정의 (엑셀 배치도 기준)
+const COLD_ZONES = [
+  // A구역 (왼쪽 세로)
+  { code: 'A1', area: 'a1', cap: 3 }, // 1단 1PT
+  { code: 'A2', area: 'a2', cap: 6 },
+  { code: 'A3', area: 'a3', cap: 6 },
+  { code: 'A4', area: 'a4', cap: 6 },
+  // B구역 (하단 가로)
+  { code: 'B1', area: 'b1', cap: 6 },
+  { code: 'B2', area: 'b2', cap: 6 },
+  { code: 'B3', area: 'b3', cap: 6 },
+  { code: 'B4', area: 'b4', cap: 6 },
+  { code: 'B5', area: 'b5', cap: 3 }, // 1단 1PT
+  // C구역 (오른쪽 세로)
+  { code: 'C1', area: 'c1', cap: 6 },
+  { code: 'C2', area: 'c2', cap: 6 },
+  { code: 'C3', area: 'c3', cap: 6 },
+  { code: 'C4', area: 'c4', cap: 6 },
+  // D구역 (상단 가로)
+  { code: 'D1', area: 'd1', cap: 6 },
+  { code: 'D2', area: 'd2', cap: 6 },
+  { code: 'D3', area: 'd3', cap: 6 },
+  { code: 'D4', area: 'd4', cap: 6 },
+];
+
+// 뷰 전환 (배치도 ↔ 목록)
+function switchLocView(mode) {
+  const mapView = document.getElementById('locationMapView');
+  const listView = document.getElementById('locationListView');
+  const btnMap = document.getElementById('btnViewMap');
+  const btnList = document.getElementById('btnViewList');
+  if (mode === 'map') {
+    if (mapView) mapView.style.display = '';
+    if (listView) listView.style.display = 'none';
+    if (btnMap) { btnMap.style.background = '#2C5F2E'; btnMap.style.color = '#fff'; }
+    if (btnList) { btnList.style.background = '#f5f5f5'; btnList.style.color = '#666'; }
+    renderFloorMaps();
+  } else {
+    if (mapView) mapView.style.display = 'none';
+    if (listView) listView.style.display = '';
+    if (btnMap) { btnMap.style.background = '#f5f5f5'; btnMap.style.color = '#666'; }
+    if (btnList) { btnList.style.background = '#2C5F2E'; btnList.style.color = '#fff'; }
+    renderLocations();
+  }
+}
+
+// 배치도 렌더링 (일반창고 + 냉장창고)
+function renderFloorMaps() {
+  renderFloor('normalFloor', 'normal-floor-grid', NORMAL_ZONES, '일반', 'normal');
+  renderFloor('coldFloor', 'cold-floor-grid', COLD_ZONES, '냉장', 'cold');
+}
+
+function renderFloor(containerId, gridClass, zones, whType, suffix) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // DB에서 해당 창고 로케이션 데이터 매핑 (loc_code 기준)
+  const locMap = {};
+  allLocations.filter(l => l.warehouse_type === whType).forEach(l => {
+    // loc_code에서 구역코드 추출: "W-A1", "A1", "일반-A1" 등 다양한 형식 대응
+    const raw = (l.loc_code || '').toUpperCase();
+    const match = raw.match(/([A-Z]\d{1,2})$/);
+    if (match) locMap[match[1]] = l;
+  });
+
+  const cells = zones.map(z => {
+    const loc = locMap[z.code];
+    const used = loc ? (parseFloat(loc.current_qty) || 0) : 0;
+    const cap = loc ? (parseFloat(loc.capacity) || z.cap) : z.cap;
+    const pct = cap > 0 ? Math.round((used / cap) * 100) : 0;
+    const cls = used === 0 ? 'empty' : pct >= 100 ? 'full' : pct >= 50 ? 'mid' : 'low';
+    const ptText = `${used}/${cap}PT`;
+    const pctText = used > 0 ? `${pct}%` : '';
+    const locId = loc ? loc.id : '';
+    const onclick = locId ? `showLocationDetail('${locId}')` : `showToast('${z.code} 구역: 로케이션 미등록', 'info')`;
+    return `<div class="wh-zone ${cls} ${suffix}" data-zone="${z.code}" style="grid-area:${z.area}" onclick="${onclick}" title="${z.code} (${ptText})">
+      <span class="zone-code">${z.code}</span>
+      <span class="zone-pt">${ptText}</span>
+      ${pctText ? `<span class="zone-pct">${pctText}</span>` : ''}
+    </div>`;
+  });
+
+  container.innerHTML = `<div class="${gridClass}">${cells.join('')}</div>`;
 }
