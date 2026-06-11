@@ -400,7 +400,7 @@ async function handleSubmit(e) {
     specification: document.getElementById('specification').value,
     unit: document.getElementById('unit').value,
     barcode: document.getElementById('barcode').value,
-    shelf_life_date: document.getElementById('shelfLifeDate').value,
+    shelf_life_date: document.getElementById('shelfLifeDate')?.value || '',
     storage_condition: document.getElementById('storageCondition').value,
     manufacturer: document.getElementById('manufacturer').value,
     remarks: document.getElementById('remarks').value,
