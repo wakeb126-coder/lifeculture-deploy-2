@@ -199,29 +199,6 @@ function handleProductTypeChange(type) {
   generateSkuCode();
 }
 
-function onAbbrevSelect(val) {
-  const input = document.getElementById('productAbbrev');
-  if (val === '__NEW__') {
-    input.style.display = 'block';
-    input.focus();
-  } else {
-    input.style.display = 'none';
-    input.value = '';
-  }
-  generateSkuCode();
-}
-
-function onSpecCodeSelect(val) {
-  const input = document.getElementById('specCode');
-  if (val === '__NEW__') {
-    input.style.display = 'block';
-    input.focus();
-  } else {
-    input.style.display = 'none';
-    input.value = '';
-  }
-  generateSkuCode();
-}
 
 async function generateSkuCode() {
   const typeMap = {
@@ -235,15 +212,11 @@ async function generateSkuCode() {
   const prodCode = typeMap[type] || '';
   const warehouseCode = document.getElementById('warehouseCode')?.value || 'RM';
 
-  // 제품약어: 드롭다운 선택 또는 직접입력
-  const abbrevSelect = document.getElementById('productAbbrevSelect')?.value || '';
-  const abbrevInput = document.getElementById('productAbbrev')?.value || '';
-  const abbrev = (abbrevSelect === '__NEW__' || abbrevSelect === '') ? abbrevInput.trim().toUpperCase() : abbrevSelect;
+  // 제품약어: 콤보박스 직접입력 값 사용
+  const abbrev = (document.getElementById('productAbbrev')?.value || '').trim().toUpperCase();
 
-  // 규격코드: 드롭다운 선택 또는 직접입력
-  const specSelect = document.getElementById('specCodeSelect')?.value || '';
-  const specInput = document.getElementById('specCode')?.value || '';
-  const spec = (specSelect === '__NEW__' || specSelect === '') ? specInput.trim().toUpperCase() : specSelect;
+  // 규격코드: 콤보박스 직접입력 값 사용
+  const spec = (document.getElementById('specCode')?.value || '').trim().toUpperCase();
 
   if (!prodCode || !abbrev || !spec) {
     // 필수값 미입력 시 코드 비움 (수동입력 가능하도록 유지)
@@ -290,14 +263,10 @@ async function openNewModal() {
   if (codeEl) codeEl.value = '';
 
   // SKU 필드 초기화
-  const abbrevSel = document.getElementById('productAbbrevSelect');
-  if (abbrevSel) abbrevSel.value = '';
   const abbrevIn = document.getElementById('productAbbrev');
-  if (abbrevIn) { abbrevIn.value = ''; abbrevIn.style.display = 'none'; }
-  const specSel = document.getElementById('specCodeSelect');
-  if (specSel) specSel.value = '';
+  if (abbrevIn) abbrevIn.value = '';
   const specIn = document.getElementById('specCode');
-  if (specIn) { specIn.value = ''; specIn.style.display = 'none'; }
+  if (specIn) specIn.value = '';
   const whCode = document.getElementById('warehouseCode');
   if (whCode) whCode.value = 'RM';
 
@@ -340,6 +309,20 @@ function openEditModal(id) {
     const el = document.getElementById(id);
     if (el && val !== undefined && val !== null) el.value = val;
   });
+
+  // SKU 콤보박스 값 복원 (제품코드에서 약어/규격 파싱)
+  if (p.product_code) {
+    const parts = p.product_code.split('-');
+    // 구조: [OWN/OEM/IMP]-[RM/RF/FZ]-[abbrev]-[spec]-[seq]
+    if (parts.length >= 4) {
+      const abbrevEl = document.getElementById('productAbbrev');
+      const specEl = document.getElementById('specCode');
+      const whEl = document.getElementById('warehouseCode');
+      if (abbrevEl) abbrevEl.value = parts[2] || '';
+      if (specEl) specEl.value = parts[3] || '';
+      if (whEl) whEl.value = parts[1] || 'RM';
+    }
+  }
 
   if (p.documents) {
     try {
