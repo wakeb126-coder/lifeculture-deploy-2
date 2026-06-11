@@ -444,6 +444,9 @@
     renderUserHeader();
     setupSidebar();
     initDateDisplay();
+    // 저장된 신규 항목 목록 화면에 초기 렌더링
+    if (typeof skuRenderCustomList === 'function') skuRenderCustomList();
+    if (typeof skuRenderSpecCustomList === 'function') skuRenderSpecCustomList();
   });
 
   // ===========================
@@ -507,6 +510,60 @@
     {code:'STD', label:'STD (규격 미확인)'}
   ];
 
+  // ===========================
+  // localStorage 영속성 (신규 등록 항목 저장/복원)
+  // ===========================
+  var SKU_ABBREV_STORAGE_KEY = 'lc_sku_abbrev_custom';
+  var SKU_SPEC_STORAGE_KEY   = 'lc_sku_spec_custom';
+
+  function skuLoadCustom() {
+    try {
+      var abbrevCustom = JSON.parse(localStorage.getItem(SKU_ABBREV_STORAGE_KEY) || '[]');
+      abbrevCustom.forEach(function(item) {
+        if (!SKU_ABBREV_LIST.find(function(i){ return i.code === item.code; })) {
+          SKU_ABBREV_LIST.push(item);
+        }
+      });
+      var specCustom = JSON.parse(localStorage.getItem(SKU_SPEC_STORAGE_KEY) || '[]');
+      specCustom.forEach(function(item) {
+        if (!SKU_SPEC_LIST.find(function(i){ return i.code === item.code; })) {
+          SKU_SPEC_LIST.push(item);
+        }
+      });
+    } catch(e) {}
+  }
+
+  function skuSaveAbbrevCustom() {
+    try {
+      var customs = SKU_ABBREV_LIST.filter(function(i){ return i.custom; });
+      localStorage.setItem(SKU_ABBREV_STORAGE_KEY, JSON.stringify(customs));
+    } catch(e) {}
+  }
+
+  function skuSaveSpecCustom() {
+    try {
+      var customs = SKU_SPEC_LIST.filter(function(i){ return i.custom; });
+      localStorage.setItem(SKU_SPEC_STORAGE_KEY, JSON.stringify(customs));
+    } catch(e) {}
+  }
+
+  // 페이지 로드 시 저장된 신규 항목 복원
+  skuLoadCustom();
+
+  // 외부 클릭 시 드롭다운 닫기 (blur 대신 사용)
+  document.addEventListener('click', function(e) {
+    var abbrevWrap = document.getElementById('productAbbrev');
+    var abbrevDD   = document.getElementById('abbrevDropdown');
+    var specWrap   = document.getElementById('specCode');
+    var specDD     = document.getElementById('specDropdown');
+    if (abbrevDD && abbrevWrap && !abbrevWrap.contains(e.target) && !abbrevDD.contains(e.target)) {
+      abbrevDD.style.display = 'none';
+    }
+    if (specDD && specWrap && !specWrap.contains(e.target) && !specDD.contains(e.target)) {
+      specDD.style.display = 'none';
+    }
+  });
+
   // 드롭다운 렌더링 (신규 등록 버튼 포함)
   function skuRenderAbbrevDropdown(items) {
     var dd = document.getElementById('abbrevDropdown');
@@ -564,10 +621,7 @@
   }
 
   function skuAbbrevBlur() {
-    setTimeout(function() {
-      var dd = document.getElementById('abbrevDropdown');
-      if (dd) dd.style.display = 'none';
-    }, 200);
+    // 외부 클릭 이벤트로 처리하므로 blur 시 아무것도 하지 않음
   }
 
   function skuAbbrevShowNew() {
@@ -588,8 +642,9 @@
     // 중복 제거: 이미 있는 코드면 삭제 후 재등록
     SKU_ABBREV_LIST = SKU_ABBREV_LIST.filter(function(i){ return i.code !== code; });
     SKU_ABBREV_LIST.push({code: code, label: code + ' - ' + label, custom: true});
-    // 신규 등록 항목 목록 갱신
+    // 신규 등록 항목 목록 갱신 및 localStorage 저장
     skuRenderCustomList();
+    skuSaveAbbrevCustom();
     // 입력란 유지, 영역 숨기기
     document.getElementById('abbrevNewArea').style.display = 'none';
     if (typeof generateSkuCode === 'function') generateSkuCode();
@@ -606,6 +661,7 @@
     var abbrevEl = document.getElementById('productAbbrev');
     if (abbrevEl && abbrevEl.value === code) { abbrevEl.value = ''; }
     skuRenderCustomList();
+    skuSaveAbbrevCustom();
     if (typeof generateSkuCode === 'function') generateSkuCode();
   }
 
@@ -635,10 +691,7 @@
   }
 
   function skuSpecBlur() {
-    setTimeout(function() {
-      var dd = document.getElementById('specDropdown');
-      if (dd) dd.style.display = 'none';
-    }, 200);
+    // 외부 클릭 이벤트로 처리하므로 blur 시 아무것도 하지 않음
   }
 
   function skuSpecShowNew() {
@@ -659,6 +712,7 @@
     SKU_SPEC_LIST = SKU_SPEC_LIST.filter(function(i){ return i.code !== code; });
     SKU_SPEC_LIST.push({code: code, label: code + ' (' + label + ')', custom: true});
     skuRenderSpecCustomList();
+    skuSaveSpecCustom();
     document.getElementById('specNewArea').style.display = 'none';
     if (typeof generateSkuCode === 'function') generateSkuCode();
   }
@@ -673,6 +727,7 @@
     var specEl = document.getElementById('specCode');
     if (specEl && specEl.value === code) { specEl.value = ''; }
     skuRenderSpecCustomList();
+    skuSaveSpecCustom();
     if (typeof generateSkuCode === 'function') generateSkuCode();
   }
 
