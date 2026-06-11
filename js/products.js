@@ -405,7 +405,7 @@ async function handleSubmit(e) {
 
   try {
     if (editingId) {
-      await apiUpdate('products', editingId, data);
+      await apiPut('products', editingId, data);
       showToast('제품 정보가 수정되었습니다.');
     } else {
       data.created_at = Date.now();
