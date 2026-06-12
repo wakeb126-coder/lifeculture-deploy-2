@@ -798,8 +798,11 @@
         <div class="table-section" style="margin-top:20px">
           <div class="table-header">
             <div class="table-title"><i class="fas fa-history" style="color:#27ae60"></i> 최근 창고 입고 이력</div>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <input type="text" id="whInSearch" placeholder="품목명 검색..." oninput="whRenderInTable()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+              <button class="btn" onclick="whInToggleSelectAll()" style="background:#f0f4ff;color:#2563eb;border:1px solid #2563eb;font-size:12px;padding:5px 10px"><i class="fas fa-check-square"></i> 전체선택</button>
+              <button class="btn" id="whInDeleteSelectedBtn" onclick="whInDeleteSelected()" style="background:#fff5f5;color:#e74c3c;border:1px solid #e74c3c;font-size:12px;padding:5px 10px;display:none"><i class="fas fa-trash"></i> 선택 삭제 (<span id="whInSelectedCount">0</span>건)</button>
+              <button class="btn" onclick="whInDeleteAll()" style="background:#fdedec;color:#c0392b;border:1px solid #c0392b;font-size:12px;padding:5px 10px"><i class="fas fa-trash-alt"></i> 전체 삭제</button>
               <button class="btn btn-secondary" onclick="whExport('in')"><i class="fas fa-file-excel"></i> 엑셀</button>
             </div>
           </div>
@@ -807,12 +810,13 @@
             <table>
               <thead>
                 <tr>
+                  <th style="width:36px"><input type="checkbox" id="whInCheckAll" onchange="whInCheckAllChange(this)" title="전체선택" /></th>
                   <th>Lot No</th><th>창고</th><th>위치코드</th><th>입고일</th><th>품목명</th>
                   <th>수량</th><th>단위</th><th>소비기한</th><th>공급업체</th><th>담당자</th><th>관리</th>
                 </tr>
               </thead>
               <tbody id="whInTableBody">
-                <tr><td colspan="11" class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</td></tr>
+                <tr><td colspan="12" class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</td></tr>
               </tbody>
             </table>
           </div>

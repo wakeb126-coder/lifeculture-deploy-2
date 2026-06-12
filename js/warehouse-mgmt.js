@@ -571,13 +571,14 @@ function whRenderInTable() {
   if (!tbody) return;
   var data = whInboundData.slice().sort(function(a,b){ return (b.inbound_date||'').localeCompare(a.inbound_date||''); });
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>등록된 입고 내역이 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>등록된 입고 내역이 없습니다.</td></tr>';
     return;
   }
   tbody.innerHTML = data.map(function(r) {
     var rid = (r.id||'').replace(/'/g,"\\'");
     var rlot = (r.lot_no||'').replace(/'/g,"\\'");
-    return '<tr>' +
+    return '<tr data-id="' + (r.id||'') + '">' +
+      '<td style="text-align:center"><input type="checkbox" class="whInRowCheck" data-id="' + (r.id||'') + '" onchange="whInCheckChange()" /></td>' +
       '<td>' + (r.lot_no||'-') + '</td>' +
       '<td><span style="background:#e8f4fd;color:#2980b9;padding:2px 8px;border-radius:12px;font-size:11px">' + (r.warehouse==='C'?'저온':'일반') + '</span></td>' +
       '<td><code style="font-size:11px">' + (r.location||'-') + '</code></td>' +
@@ -608,6 +609,79 @@ async function whDeleteInbound(id) {
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
   }
+}
+
+// ── 체크박스 선택 삭제 관련 함수 ──────────────────────
+// 체크박스 변경 시 선택된 건수 업데이트
+function whInCheckChange() {
+  var checked = document.querySelectorAll('.whInRowCheck:checked');
+  var total = document.querySelectorAll('.whInRowCheck');
+  var count = checked.length;
+  var countEl = document.getElementById('whInSelectedCount');
+  var btn = document.getElementById('whInDeleteSelectedBtn');
+  var allChk = document.getElementById('whInCheckAll');
+  if (countEl) countEl.textContent = count;
+  if (btn) btn.style.display = count > 0 ? '' : 'none';
+  if (allChk) {
+    allChk.checked = count > 0 && count === total.length;
+    allChk.indeterminate = count > 0 && count < total.length;
+  }
+}
+// 헤더 체크박스 변경 시 전체 선택/해제
+function whInCheckAllChange(el) {
+  var boxes = document.querySelectorAll('.whInRowCheck');
+  boxes.forEach(function(b){ b.checked = el.checked; });
+  whInCheckChange();
+}
+// 전체선택 토글 버튼
+function whInToggleSelectAll() {
+  var boxes = document.querySelectorAll('.whInRowCheck');
+  var allChecked = Array.from(boxes).every(function(b){ return b.checked; });
+  boxes.forEach(function(b){ b.checked = !allChecked; });
+  var allChk = document.getElementById('whInCheckAll');
+  if (allChk) allChk.checked = !allChecked;
+  whInCheckChange();
+}
+// 선택 삭제
+async function whInDeleteSelected() {
+  var checked = document.querySelectorAll('.whInRowCheck:checked');
+  if (checked.length === 0) { showToast('삭제할 항목을 선택해주세요.', 'warning'); return; }
+  if (!confirm(checked.length + '건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+  var ids = Array.from(checked).map(function(b){ return b.dataset.id; });
+  var successCount = 0;
+  var failCount = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      await apiDelete('wh_inbound', ids[i]);
+      successCount++;
+    } catch(e) {
+      failCount++;
+    }
+  }
+  showToast(successCount + '건 삭제 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
+  whInvalidateMapCache();
+  await whLoadAll();
+  whRenderInTable();
+}
+// 전체 삭제
+async function whInDeleteAll() {
+  if (whInboundData.length === 0) { showToast('삭제할 입고 이력이 없습니다.', 'warning'); return; }
+  if (!confirm('입고 이력 전체 ' + whInboundData.length + '건을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+  var ids = whInboundData.map(function(r){ return r.id; });
+  var successCount = 0;
+  var failCount = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      await apiDelete('wh_inbound', ids[i]);
+      successCount++;
+    } catch(e) {
+      failCount++;
+    }
+  }
+  showToast(successCount + '건 전체 삭제 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
+  whInvalidateMapCache();
+  await whLoadAll();
+  whRenderInTable();
 }
 
 // 입고 수정 모달 열기
