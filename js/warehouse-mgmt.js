@@ -16,11 +16,11 @@ let whCurrentMap = 'cold';
 let _whMapCache = { cold: null, warm: null, stockHash: null };
 function whInvalidateMapCache() { _whMapCache.stockHash = null; }
 
-// ── 저온창고 위치 정의 ─────────────────────────────
-// 구역 A~F, 각 구역번호 A1~A6, B1~B4, C1~C6, D1~D4, E1~E6, F1~F6
-// 구역당 파렛트 2개 (예외: A1, F1 → 1개), 4단 적재
-const COLD_ZONE_COUNTS = { A:6, B:4, C:6, D:4, E:6, F:6 };
-const COLD_SINGLE_PALLET = ['A1','F1'];
+// ── 저온창고(냉장창고) 위치 정의 ─────────────────────────────
+// A구역: A1~A4, B구역: B1~B5, C구역: C1~C4, D구역: D1~D4, E구역: E1~E4
+// 구역당 파렛트 2개 (예외: A1, B5 → 1개), 3단 적재 → 총 120PT
+const COLD_ZONE_COUNTS = { A:4, B:5, C:4, D:4, E:4 };
+const COLD_SINGLE_PALLET = ['A1','B5'];
 const COLD_LOCATIONS = (function() {
   const locs = [];
   Object.entries(COLD_ZONE_COUNTS).forEach(function(entry) {
@@ -28,7 +28,7 @@ const COLD_LOCATIONS = (function() {
     for (var n = 1; n <= count; n++) {
       var zoneKey = zone + n;
       var pallets = COLD_SINGLE_PALLET.indexOf(zoneKey) >= 0 ? 1 : 2;
-      for (var d = 1; d <= 4; d++) {
+      for (var d = 1; d <= 3; d++) {
         for (var p = 1; p <= pallets; p++) {
           locs.push({
             code: 'C-' + zoneKey + '-' + d + '-' + p,
@@ -43,10 +43,10 @@ const COLD_LOCATIONS = (function() {
 })();
 
 // ── 일반창고 위치 정의 ─────────────────────────────
-// A:1~6, B:1~4, C:1~10, D:1~4, E:1~7, F:1~7
-// 구역당 파렛트 2개, 예외(1개): A5, C10, E4, F4, 3단 적재
-const WARM_ZONE_COUNTS = { A:6, B:4, C:10, D:4, E:7, F:7 };
-const WARM_SINGLE_PALLET = ['A5','C10','E4','F4'];
+// A구역: A1~A12, B구역: B1~B6, C구역: C1~C7, D구역: D1~D7, E구역: E1~E4
+// 구역당 파렛트 2개, 예외(1개): A12, C4, D4, E4, 3단 적재 → 총 204PT
+const WARM_ZONE_COUNTS = { A:12, B:6, C:7, D:7, E:4 };
+const WARM_SINGLE_PALLET = ['A12','C4','D4','E4'];
 const WARM_LOCATIONS = (function() {
   const locs = [];
   Object.entries(WARM_ZONE_COUNTS).forEach(function(entry) {
@@ -379,26 +379,23 @@ function whBuildColdMap(stockMap) {
 
   return '<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">' +
     '<div style="font-size:14px;font-weight:700;color:#2980b9;margin-bottom:12px;display:flex;align-items:center;gap:8px">' +
-    '<i class="fas fa-snowflake"></i> 저온창고 (C) — 4단 적재 · 총 ' + totalSlots + '슬롯 · 사용 ' + usedSlots + '슬롯</div>' +
+    '<i class="fas fa-snowflake"></i> 저온창고(냉장창고) (C) — 3단 적재 · 총 ' + totalSlots + '슬롯 · 사용 ' + usedSlots + '슬롯</div>' +
     '<div style="background:#f0f7ff;border:2px solid #2980b9;border-radius:10px;padding:14px;position:relative">' +
     '<div style="margin-bottom:12px;background:#e3f2fd;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#1565c0;margin-bottom:6px">A구역 (1~6)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('A', 6) + '</div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:#1565c0;margin-bottom:6px">A구역 (1~4)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('A', 4) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#e8f4fd;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#2980b9;margin-bottom:6px">B구역 (1~4)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('B', 4) + '</div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:#2980b9;margin-bottom:6px">B구역 (1~5)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('B', 5) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#e0f0ff;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#0e6da8;margin-bottom:6px">C구역 (1~6)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('C', 6) + '</div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:#0e6da8;margin-bottom:6px">C구역 (1~4)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('C', 4) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#d6eaf8;border-radius:8px;padding:10px">' +
     '<div style="font-size:11px;font-weight:700;color:#1a5276;margin-bottom:6px">D구역 (1~4)</div>' +
     '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('D', 4) + '</div></div>' +
-    '<div style="margin-bottom:12px;background:#cce5f6;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#154360;margin-bottom:6px">E구역 (1~6)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('E', 6) + '</div></div>' +
-    '<div style="margin-bottom:4px;background:#bee3f8;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#1b4f72;margin-bottom:6px">F구역 (1~6)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('F', 6) + '</div></div>' +
+    '<div style="margin-bottom:4px;background:#cce5f6;border-radius:8px;padding:10px">' +
+    '<div style="font-size:11px;font-weight:700;color:#154360;margin-bottom:6px">E구역 (1~4)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('E', 4) + '</div></div>' +
     '<div style="position:absolute;bottom:-13px;left:50%;transform:translateX(-50%);background:#2C5F2E;color:#fff;font-size:11px;font-weight:700;padding:2px 14px;border-radius:20px">🚪 입구</div>' +
     '</div>' +
     '<div style="display:flex;gap:14px;margin-top:18px;flex-wrap:wrap;font-size:12px">' +
@@ -461,23 +458,20 @@ function whBuildWarmMap(stockMap) {
     '<i class="fas fa-warehouse"></i> 일반창고 (W) — 3단 적재 · 총 ' + totalSlots + '슬롯 · 사용 ' + usedSlots + '슬롯</div>' +
     '<div style="background:#f0fff4;border:2px solid #27ae60;border-radius:10px;padding:14px;position:relative">' +
     '<div style="margin-bottom:12px;background:#e8f5e9;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#1b5e20;margin-bottom:6px">A구역 (1~6)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('A', 6) + '</div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:#1b5e20;margin-bottom:6px">A구역 (1~12)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('A', 12) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#e3f2fd;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#0d47a1;margin-bottom:6px">B구역 (1~4)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('B', 4) + '</div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:#0d47a1;margin-bottom:6px">B구역 (1~6)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('B', 6) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#fff3e0;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#e65100;margin-bottom:6px">C구역 (1~10)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('C', 10) + '</div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:#e65100;margin-bottom:6px">C구역 (1~7)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('C', 7) + '</div></div>' +
     '<div style="margin-bottom:12px;background:#f3e5f5;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#4a148c;margin-bottom:6px">D구역 (1~4)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('D', 4) + '</div></div>' +
-    '<div style="margin-bottom:12px;background:#e0f7fa;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#006064;margin-bottom:6px">E구역 (1~7)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('E', 7) + '</div></div>' +
-    '<div style="margin-bottom:4px;background:#fce4ec;border-radius:8px;padding:10px">' +
-    '<div style="font-size:11px;font-weight:700;color:#880e4f;margin-bottom:6px">F구역 (1~7)</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('F', 7) + '</div></div>' +
+    '<div style="font-size:11px;font-weight:700;color:#4a148c;margin-bottom:6px">D구역 (1~7)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('D', 7) + '</div></div>' +
+    '<div style="margin-bottom:4px;background:#e0f7fa;border-radius:8px;padding:10px">' +
+    '<div style="font-size:11px;font-weight:700;color:#006064;margin-bottom:6px">E구역 (1~4)</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:4px">' + zoneBlock('E', 4) + '</div></div>' +
     '<div style="position:absolute;bottom:-13px;left:50%;transform:translateX(-50%);background:#2C5F2E;color:#fff;font-size:11px;font-weight:700;padding:2px 14px;border-radius:20px">🚪 입구</div>' +
     '</div>' +
     '<div style="display:flex;gap:14px;margin-top:18px;flex-wrap:wrap;font-size:12px">' +
@@ -505,10 +499,10 @@ function whShowLocDetail(locCode) {
   if (!modal || !title || !body) return;
   var whName = wh === 'C' ? '저온창고' : '일반창고';
   title.innerHTML = '<i class="fas fa-map-marker-alt"></i> ' + whName + ' ' + zoneKey + '구역 상세';
-  var levels = wh === 'C' ? 4 : 3;
+  var levels = 3; // 저온창고/일반창고 모두 3단 적재
   // 최적화: today를 루프 밖에서 1회 생성
   var today = new Date();
-  var bodyHtml = '<div style="font-size:12px;color:#555;margin-bottom:12px"><b>' + whName + '</b> · <b>' + zoneKey + '구역</b> · ' + (wh==='C'?'4단':'3단') + ' 적재</div>';
+  var bodyHtml = '<div style="font-size:12px;color:#555;margin-bottom:12px"><b>' + whName + '</b> · <b>' + zoneKey + '구역</b> · ' + '3단' + ' 적재</div>';
   for (var d = 1; d <= levels; d++) {
     var lvLocs = zoneLocs.filter(function(l){ return l.level === d; });
     bodyHtml += '<div style="background:#f8f9fa;border-radius:8px;padding:10px;margin-bottom:8px">';
