@@ -579,13 +579,13 @@ function whRenderInTable() {
     var rlot = (r.lot_no||'').replace(/'/g,"\\'");
     return '<tr>' +
       '<td>' + (r.lot_no||'-') + '</td>' +
-      '<td>' + (r.inbound_date||'-') + '</td>' +
       '<td><span style="background:#e8f4fd;color:#2980b9;padding:2px 8px;border-radius:12px;font-size:11px">' + (r.warehouse==='C'?'저온':'일반') + '</span></td>' +
       '<td><code style="font-size:11px">' + (r.location||'-') + '</code></td>' +
+      '<td>' + (r.inbound_date||'-') + '</td>' +
       '<td><b>' + (r.item_name||'-') + '</b></td>' +
-      '<td>' + (r.qty||0) + ' ' + (r.unit||'') + '</td>' +
+      '<td style="text-align:right">' + (r.qty||0) + '</td>' +
+      '<td>' + (r.unit||'-') + '</td>' +
       '<td>' + (r.expiry_date||'-') + '</td>' +
-      '<td>' + (r.lot_no_product||'-') + '</td>' +
       '<td>' + (r.supplier||'-') + '</td>' +
       '<td>' + (r.manager||'-') + '</td>' +
       '<td>' +
@@ -1926,9 +1926,15 @@ function whBulkHandleFile(file) {
       var added = 0;
       dataRows.forEach(function(r) {
         // 날짜 처리 (Date 객체 또는 문자열)
+        // 로컈 날짜 기준으로 포맷 (한국 UTC+9에서 toISOString 사용 시 하루 줄어드는 문제 해결)
         function fmtDate(v) {
           if (!v) return '';
-          if (v instanceof Date) return v.toISOString().split('T')[0];
+          if (v instanceof Date) {
+            var y = v.getFullYear();
+            var m = String(v.getMonth() + 1).padStart(2, '0');
+            var d2 = String(v.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + d2;
+          }
           var s = String(v).trim();
           // YYYYMMDD 형식 처리
           if (/^\d{8}$/.test(s)) return s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8);
