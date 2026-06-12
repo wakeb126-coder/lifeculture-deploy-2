@@ -168,9 +168,32 @@
       gap: 8px;
     }
     /* ===== 모달 ===== */
-    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; }
-    .modal.show { display:flex; }
-    .modal-box { background:#fff; border-radius:12px; padding:24px; width:min(560px,95vw); max-height:90vh; overflow-y:auto; }
+    .modal {
+      display: none;
+      position: fixed !important;
+      top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+      width: 100vw !important; height: 100vh !important;
+      max-width: none !important; max-height: none !important;
+      background: rgba(0,0,0,0.5);
+      z-index: 3000 !important;
+      align-items: center !important; justify-content: center !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      animation: none !important;
+      overflow-y: visible !important;
+      flex-direction: row !important;
+    }
+    .modal.show { display: flex !important; }
+    .modal-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      width: min(560px, 95vw);
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
     .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
     .modal-header h3 { font-size:16px; font-weight:700; }
     .modal-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
