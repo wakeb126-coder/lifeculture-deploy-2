@@ -1044,6 +1044,100 @@
     </div>
   </div>
 
+  <!-- 창고 입고 수정 모달 -->
+  <div class="modal-overlay" id="whInEditModal">
+    <div class="modal-dialog" style="max-width:680px">
+      <div class="modal-header">
+        <h3><i class="fas fa-edit" style="color:#27ae60"></i> 창고 입고 수정</h3>
+        <button class="modal-close" onclick="whCloseInEditModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="whInEditId" />
+        <div class="form-grid form-grid-4">
+          <div class="form-group">
+            <label>창고구분 <span class="required">*</span></label>
+            <select id="whInEdit_warehouse" onchange="whBuildLocationSelect('whInEdit')">
+              <option value="C">❄️ 저온창고 (C)</option>
+              <option value="W">🏭 일반창고 (W)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>보관위치 <span class="required">*</span></label>
+            <select id="whInEdit_location"><option value="">창고 먼저 선택</option></select>
+          </div>
+          <div class="form-group">
+            <label>입고일자 <span class="required">*</span></label>
+            <input type="date" id="whInEdit_date" />
+          </div>
+          <div class="form-group">
+            <label>입고유형</label>
+            <select id="whInEdit_type">
+              <option value="수입제품">수입제품</option>
+              <option value="OEM제품">OEM제품</option>
+              <option value="자체생산">자체생산</option>
+              <option value="기타">기타</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid form-grid-4">
+          <div class="form-group span-2">
+            <label>품목명 <span class="required">*</span></label>
+            <input type="text" id="whInEdit_item_name" placeholder="품목명" />
+          </div>
+          <div class="form-group">
+            <label>수량 <span class="required">*</span></label>
+            <input type="number" id="whInEdit_qty" min="1" step="1" placeholder="0" />
+          </div>
+          <div class="form-group">
+            <label>단위</label>
+            <select id="whInEdit_unit">
+              <option value="pallet">pallet</option>
+              <option value="box">box</option>
+              <option value="ea">ea</option>
+              <option value="kg">kg</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid form-grid-4">
+          <div class="form-group">
+            <label>제조일자</label>
+            <input type="date" id="whInEdit_mfg_date" />
+          </div>
+          <div class="form-group">
+            <label>소비기한 <span class="required">*</span></label>
+            <input type="date" id="whInEdit_expiry_date" />
+          </div>
+          <div class="form-group">
+            <label>제조번호 (Lot No.)</label>
+            <input type="text" id="whInEdit_ref_lot" placeholder="연동 Lot No." />
+          </div>
+          <div class="form-group">
+            <label>공급업체</label>
+            <input type="text" id="whInEdit_supplier" placeholder="공급업체명" />
+          </div>
+        </div>
+        <div class="form-grid form-grid-4">
+          <div class="form-group">
+            <label>보관온도</label>
+            <input type="text" id="whInEdit_temp" placeholder="예) 0~5°C" />
+          </div>
+          <div class="form-group">
+            <label>담당자 <span class="required">*</span></label>
+            <input type="text" id="whInEdit_manager" placeholder="담당자명" />
+          </div>
+          <div class="form-group span-2">
+            <label>비고</label>
+            <input type="text" id="whInEdit_memo" placeholder="특이사항" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="whCloseInEditModal()">취소</button>
+        <button class="btn btn-primary" onclick="whSaveInEdit()"><i class="fas fa-save"></i> 저장</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 바텀 내비게이션 -->
   <nav class="bottom-nav" id="bottomNav" style="background:#1e2329;">
     <a href="index.html" class="bottom-nav-item"><i class="fas fa-home"></i><span>홈</span></a>

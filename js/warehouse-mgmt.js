@@ -575,6 +575,8 @@ function whRenderInTable() {
     return;
   }
   tbody.innerHTML = data.map(function(r) {
+    var rid = (r.id||'').replace(/'/g,"\\'");
+    var rlot = (r.lot_no||'').replace(/'/g,"\\'");
     return '<tr>' +
       '<td>' + (r.lot_no||'-') + '</td>' +
       '<td>' + (r.inbound_date||'-') + '</td>' +
@@ -585,8 +587,12 @@ function whRenderInTable() {
       '<td>' + (r.expiry_date||'-') + '</td>' +
       '<td>' + (r.lot_no_product||'-') + '</td>' +
       '<td>' + (r.supplier||'-') + '</td>' +
-      '<td><button class="btn btn-sm" onclick="whPrintLabel(\'' + (r.lot_no||'') + '\')" style="background:#f8f9fa;color:#555;border:1px solid #ddd;padding:3px 8px;font-size:11px"><i class="fas fa-print"></i></button>' +
-      '<button class="btn btn-sm" onclick="whDeleteInbound(\'' + (r.id||'') + '\')" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;padding:3px 8px;font-size:11px;margin-left:4px"><i class="fas fa-trash"></i></button></td>' +
+      '<td>' + (r.manager||'-') + '</td>' +
+      '<td>' +
+        '<button class="btn btn-sm" onclick="whOpenInEditModal(\'' + rid + '\')" style="background:#eafaf1;color:#27ae60;border:1px solid #27ae60;padding:3px 8px;font-size:11px"><i class="fas fa-edit"></i></button>' +
+        '<button class="btn btn-sm" onclick="whPrintLabel(\'' + rlot + '\')" style="background:#f8f9fa;color:#555;border:1px solid #ddd;padding:3px 8px;font-size:11px;margin-left:4px"><i class="fas fa-print"></i></button>' +
+        '<button class="btn btn-sm" onclick="whDeleteInbound(\'' + rid + '\')" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;padding:3px 8px;font-size:11px;margin-left:4px"><i class="fas fa-trash"></i></button>' +
+      '</td>' +
       '</tr>';
   }).join('');
 }
@@ -596,10 +602,126 @@ async function whDeleteInbound(id) {
   try {
     await apiDelete('wh_inbound', id);
     showToast('삭제 완료', 'success');
-    whInvalidateMapCache(); // 캐시 무효화
+    whInvalidateMapCache();
     await whLoadAll();
+    whRenderInTable();
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
+  }
+}
+
+// 입고 수정 모달 열기
+function whOpenInEditModal(id) {
+  var record = whInboundData.find(function(r){ return r.id === id; });
+  if (!record) { showToast('해당 입고 기록을 찾을 수 없습니다.', 'warning'); return; }
+
+  var sv = function(eid, v) {
+    var el = document.getElementById(eid);
+    if (el) el.value = v !== undefined && v !== null ? v : '';
+  };
+
+  sv('whInEditId', record.id);
+  sv('whInEdit_date', record.inbound_date || '');
+  sv('whInEdit_item_name', record.item_name || '');
+  sv('whInEdit_qty', record.qty || '');
+  sv('whInEdit_mfg_date', record.mfg_date || '');
+  sv('whInEdit_expiry_date', record.expiry_date || '');
+  sv('whInEdit_ref_lot', record.lot_no_product || '');
+  sv('whInEdit_supplier', record.supplier || '');
+  sv('whInEdit_temp', record.temp || '');
+  sv('whInEdit_manager', record.manager || '');
+  sv('whInEdit_memo', record.memo || '');
+
+  // 창고구분 설정
+  var whEl = document.getElementById('whInEdit_warehouse');
+  if (whEl) {
+    whEl.value = record.warehouse || 'C';
+    whBuildLocationSelect('whInEdit');
+  }
+  // 위치 선택 (setTimeout으로 드롭다운 렌더링 후 설정)
+  setTimeout(function() {
+    sv('whInEdit_location', record.location || '');
+  }, 150);
+
+  // 입고유형 설정
+  var typeEl = document.getElementById('whInEdit_type');
+  if (typeEl) {
+    var tv = record.inbound_type || record.type || '';
+    for (var i = 0; i < typeEl.options.length; i++) {
+      if (typeEl.options[i].value === tv) { typeEl.selectedIndex = i; break; }
+    }
+  }
+
+  // 단위 설정
+  var unitEl = document.getElementById('whInEdit_unit');
+  if (unitEl) {
+    for (var j = 0; j < unitEl.options.length; j++) {
+      if (unitEl.options[j].value === (record.unit||'pallet')) { unitEl.selectedIndex = j; break; }
+    }
+  }
+
+  var modal = document.getElementById('whInEditModal');
+  if (modal) modal.classList.add('show');
+}
+
+function whCloseInEditModal() {
+  var modal = document.getElementById('whInEditModal');
+  if (modal) modal.classList.remove('show');
+}
+
+async function whSaveInEdit() {
+  var id = (document.getElementById('whInEditId') || {}).value;
+  if (!id) { showToast('수정할 기록을 찾을 수 없습니다.', 'warning'); return; }
+
+  var required = [
+    { id: 'whInEdit_warehouse', label: '창고구분' },
+    { id: 'whInEdit_location', label: '보관위치' },
+    { id: 'whInEdit_item_name', label: '품목명' },
+    { id: 'whInEdit_qty', label: '수량' },
+    { id: 'whInEdit_date', label: '입고일자' },
+    { id: 'whInEdit_expiry_date', label: '소비기한' },
+    { id: 'whInEdit_manager', label: '담당자' }
+  ];
+  for (var i = 0; i < required.length; i++) {
+    var el = document.getElementById(required[i].id);
+    if (!el || !el.value.trim()) {
+      showToast(required[i].label + '을(를) 입력해주세요.', 'warning');
+      if (el) el.focus();
+      return;
+    }
+  }
+
+  var data = {
+    warehouse: document.getElementById('whInEdit_warehouse').value,
+    location: document.getElementById('whInEdit_location').value,
+    inbound_date: document.getElementById('whInEdit_date').value,
+    inbound_type: document.getElementById('whInEdit_type').value,
+    item_name: document.getElementById('whInEdit_item_name').value.trim(),
+    qty: Number(document.getElementById('whInEdit_qty').value),
+    unit: document.getElementById('whInEdit_unit').value,
+    mfg_date: (document.getElementById('whInEdit_mfg_date') || {}).value || '',
+    expiry_date: document.getElementById('whInEdit_expiry_date').value,
+    lot_no_product: (document.getElementById('whInEdit_ref_lot') || {}).value || '',
+    supplier: (document.getElementById('whInEdit_supplier') || {}).value || '',
+    temp: (document.getElementById('whInEdit_temp') || {}).value || '',
+    manager: document.getElementById('whInEdit_manager').value.trim(),
+    memo: (document.getElementById('whInEdit_memo') || {}).value || '',
+    updated_at: Date.now()
+  };
+
+  var saveBtn = document.querySelector('#whInEditModal .btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...'; }
+  try {
+    await apiPut('wh_inbound', id, data);
+    showToast('입고 정보가 수정되었습니다.', 'success');
+    whCloseInEditModal();
+    whInvalidateMapCache();
+    await whLoadAll();
+    whRenderInTable();
+  } catch(err) {
+    showToast('수정 실패: ' + err.message, 'error');
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="fas fa-save"></i> 저장'; }
   }
 }
 
