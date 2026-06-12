@@ -43,6 +43,7 @@
     .filter-bar { background:#f8f9fa; border-radius:12px; padding:14px 16px; margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
     .filter-bar .form-group { margin-bottom:0; }
     .section-divider { font-size:12px; font-weight:700; color:var(--primary); margin:16px 0 10px; padding-bottom:6px; border-bottom:1.5px solid #e8e8e8; }
+    #whBulkDropZone.dragover { border-color:#27ae60; background:#e8fff2; transform:scale(1.01); }
   </style>
 </head>
 <body>
@@ -734,6 +735,64 @@
           </form>
         </div>
 
+        <!-- ===== 일괄 입고 등록 (인라인 테이블 + 엑셀 업로드) ===== -->
+        <div class="form-container" style="margin-top:20px">
+          <div class="form-header" style="margin-bottom:12px">
+            <div class="form-header-left">
+              <div class="form-header-icon" style="background:#f0f4ff;color:#3498db"><i class="fas fa-table"></i></div>
+              <div>
+                <div class="form-title">일괄 입고 등록</div>
+                <div class="form-subtitle">여러 건을 한 번에 등록합니다. 행 추가/복사 또는 엑셀 파일 업로드를 이용하세요.</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" onclick="whBulkDownloadTemplate()" style="background:#eafaf1;color:#27ae60;border:1px solid #27ae60;font-size:12px"><i class="fas fa-file-excel"></i> 양식 다운로드</button>
+              <button class="btn btn-primary" onclick="whBulkSubmitAll()" style="font-size:12px"><i class="fas fa-save"></i> 전체 등록</button>
+            </div>
+          </div>
+
+          <!-- 엑셀 드래그앤드롭 업로드 영역 -->
+          <div id="whBulkDropZone"
+            ondragover="event.preventDefault();this.classList.add('dragover')"
+            ondragleave="this.classList.remove('dragover')"
+            ondrop="whBulkHandleDrop(event)"
+            style="border:2px dashed #a8d5b5;border-radius:12px;padding:18px 20px;text-align:center;background:#f8fff9;margin-bottom:16px;cursor:pointer;transition:all 0.2s"
+            onclick="document.getElementById('whBulkFileInput').click()">
+            <input type="file" id="whBulkFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="whBulkHandleFile(this.files[0])" />
+            <i class="fas fa-cloud-upload-alt" style="font-size:28px;color:#27ae60;display:block;margin-bottom:6px"></i>
+            <div style="font-size:13px;font-weight:700;color:#27ae60">엑셀 파일을 드래그하거나 클릭하여 업로드</div>
+            <div style="font-size:11px;color:#888;margin-top:4px">.xlsx / .xls / .csv 지원 &nbsp;|&nbsp; <span style="color:#27ae60;text-decoration:underline;cursor:pointer" onclick="event.stopPropagation();whBulkDownloadTemplate()">양식 다운로드</span></div>
+          </div>
+
+          <!-- 인라인 입력 테이블 -->
+          <div style="overflow-x:auto">
+            <table id="whBulkTable" style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="background:#f0f9f4">
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:36px">#</th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:80px">창고 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:110px">위치코드 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:110px">입고일 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:160px">품목명 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:70px">수량 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:80px">단위</th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:110px">소비기한 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:110px">공급업체</th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:90px">담당자 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:80px">입고유형</th>
+                  <th style="padding:8px 6px;border:1px solid #ddd;white-space:nowrap;min-width:70px">관리</th>
+                </tr>
+              </thead>
+              <tbody id="whBulkBody"></tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn" onclick="whBulkAddRow()" style="background:#f0f9f4;color:#27ae60;border:1px solid #27ae60;font-size:12px"><i class="fas fa-plus"></i> 행 추가</button>
+            <button class="btn" onclick="whBulkClearAll()" style="background:#fff5f5;color:#e74c3c;border:1px solid #e74c3c;font-size:12px"><i class="fas fa-trash"></i> 전체 초기화</button>
+            <span style="font-size:11px;color:#888;align-self:center">행 우측 <i class="fas fa-copy" style="color:#3498db"></i> 버튼으로 행 복사 가능</span>
+          </div>
+        </div>
+
         <!-- 입고 이력 -->
         <div class="table-section" style="margin-top:20px">
           <div class="table-header">
@@ -1181,6 +1240,7 @@
   <script src="js/common.js"></script>
   <script src="js/pwa.js"></script>
   <script src="js/logistics.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="js/warehouse-mgmt.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -1208,7 +1268,7 @@ function switchTab(tab) {
       if (['import','oem','own','all'].includes(tab)) lgFilterTable(tab);
       if (tab === 'all') { whUpdateDashKpi(); } // 대시보드 창고 KPI 업데이트
       if (tab === 'wh_map') { whUpdateMapKpi(); whShowMap(whCurrentMap || 'cold'); }
-      if (tab === 'wh_in') { whRenderInTable(); }
+      if (tab === 'wh_in') { whRenderInTable(); whInitBulkTable(); }
       if (tab === 'wh_out') { whRenderOutTable(); whRenderFifo(); }
       if (tab === 'wh_stocktake') { whRenderLedger(); whRenderStocktakeTable(); }
     }

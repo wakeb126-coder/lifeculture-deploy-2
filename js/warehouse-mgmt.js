@@ -1518,3 +1518,382 @@ function whResetInForm() {
   // 제품마스터 캐시 무효화 (최신 데이터 반영)
   _whProductMasterCache = null;
 }
+
+// ══════════════════════════════════════════════════
+// 일괄 입고 등록 (인라인 테이블 + 엑셀 업로드)
+// ══════════════════════════════════════════════════
+
+var _whBulkRowCount = 0;
+
+// 위치코드 목록 (창고 선택에 따라 동적 생성)
+function _whGetLocOptions(wh) {
+  var locs = wh === 'C' ? COLD_LOCATIONS : (wh === 'W' ? WARM_LOCATIONS : []);
+  if (!locs || locs.length === 0) return '<option value="">위치 선택</option>';
+  var html = '<option value="">위치 선택</option>';
+  var zoneKeys = [];
+  locs.forEach(function(l) { if (zoneKeys.indexOf(l.zoneKey) < 0) zoneKeys.push(l.zoneKey); });
+  zoneKeys.forEach(function(zk) {
+    html += '<optgroup label="' + (wh === 'C' ? '저온' : '일반') + ' ' + zk + '구역">';
+    locs.filter(function(l){ return l.zoneKey === zk; }).forEach(function(l) {
+      html += '<option value="' + l.code + '">' + l.code + '</option>';
+    });
+    html += '</optgroup>';
+  });
+  return html;
+}
+
+// 행 HTML 생성
+function _whBulkRowHtml(idx, data) {
+  data = data || {};
+  var wh = data.warehouse || '';
+  var locOpts = _whGetLocOptions(wh);
+  var today = new Date().toISOString().split('T')[0];
+  var typeOpts = ['수입제품','OEM제품','자체생산','기타'].map(function(t) {
+    return '<option value="' + t + '"' + (data.inbound_type === t ? ' selected' : '') + '>' + t + '</option>';
+  }).join('');
+  var unitOpts = ['pallet','box','ea','kg'].map(function(u) {
+    return '<option value="' + u + '"' + ((data.unit||'pallet') === u ? ' selected' : '') + '>' + u + '</option>';
+  }).join('');
+
+  return '<tr id="whBulkRow_' + idx + '" style="vertical-align:middle">' +
+    '<td style="padding:4px 6px;border:1px solid #ddd;text-align:center;color:#aaa;font-size:11px">' + (idx + 1) + '</td>' +
+    // 창고
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<select onchange="whBulkWarehouseChange(this,' + idx + ')" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">' +
+        '<option value=""' + (!wh ? ' selected' : '') + '>선택</option>' +
+        '<option value="C"' + (wh === 'C' ? ' selected' : '') + '>❄️ 저온(C)</option>' +
+        '<option value="W"' + (wh === 'W' ? ' selected' : '') + '>🏭 일반(W)</option>' +
+      '</select>' +
+    '</td>' +
+    // 위치코드
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<select id="whBulkLoc_' + idx + '" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">' + locOpts + '</select>' +
+    '</td>' +
+    // 입고일
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<input type="date" value="' + (data.inbound_date || today) + '" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
+    '</td>' +
+    // 품목명
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<input type="text" value="' + (data.item_name || '') + '" placeholder="품목명" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
+    '</td>' +
+    // 수량
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<input type="number" value="' + (data.qty || '') + '" min="1" placeholder="0" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
+    '</td>' +
+    // 단위
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<select style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">' + unitOpts + '</select>' +
+    '</td>' +
+    // 소비기한
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<input type="date" value="' + (data.expiry_date || '') + '" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
+    '</td>' +
+    // 공급업체
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<input type="text" value="' + (data.supplier || '') + '" placeholder="공급업체" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
+    '</td>' +
+    // 담당자
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<input type="text" value="' + (data.manager || '') + '" placeholder="담당자" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
+    '</td>' +
+    // 입고유형
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<select style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">' + typeOpts + '</select>' +
+    '</td>' +
+    // 관리 (복사 + 삭제)
+    '<td style="padding:3px 6px;border:1px solid #ddd;text-align:center;white-space:nowrap">' +
+      '<button onclick="whBulkCopyRow(' + idx + ')" title="이 행 복사" style="background:#e8f4fd;color:#2980b9;border:1px solid #2980b9;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px"><i class="fas fa-copy"></i></button>' +
+      '<button onclick="whBulkDeleteRow(' + idx + ')" title="행 삭제" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px;margin-left:3px"><i class="fas fa-times"></i></button>' +
+    '</td>' +
+    '</tr>';
+}
+
+// 행 추가
+function whBulkAddRow(data) {
+  var tbody = document.getElementById('whBulkBody');
+  if (!tbody) return;
+  var idx = _whBulkRowCount++;
+  var div = document.createElement('tbody');
+  div.innerHTML = _whBulkRowHtml(idx, data || {});
+  var tr = div.firstChild;
+  tbody.appendChild(tr);
+  // 위치코드 선택 복원 (데이터 있을 때)
+  if (data && data.location) {
+    setTimeout(function() {
+      var locEl = document.getElementById('whBulkLoc_' + idx);
+      if (locEl) locEl.value = data.location;
+    }, 50);
+  }
+}
+
+// 창고 변경 시 위치코드 드롭다운 재빌드
+function whBulkWarehouseChange(sel, idx) {
+  var wh = sel.value;
+  var locEl = document.getElementById('whBulkLoc_' + idx);
+  if (locEl) locEl.innerHTML = _whGetLocOptions(wh);
+}
+
+// 행 복사
+function whBulkCopyRow(idx) {
+  var tr = document.getElementById('whBulkRow_' + idx);
+  if (!tr) return;
+  var inputs = tr.querySelectorAll('input, select');
+  var data = {
+    warehouse: inputs[0].value,
+    location: inputs[1].value,
+    inbound_date: inputs[2].value,
+    item_name: inputs[3].value,
+    qty: inputs[4].value,
+    unit: inputs[5].value,
+    expiry_date: inputs[6].value,
+    supplier: inputs[7].value,
+    manager: inputs[8].value,
+    inbound_type: inputs[9].value
+  };
+  whBulkAddRow(data);
+  showToast('행이 복사되었습니다.', 'success');
+}
+
+// 행 삭제
+function whBulkDeleteRow(idx) {
+  var tr = document.getElementById('whBulkRow_' + idx);
+  if (tr) tr.remove();
+}
+
+// 전체 초기화
+function whBulkClearAll() {
+  if (!confirm('일괄 입력 내용을 모두 초기화하시겠습니까?')) return;
+  var tbody = document.getElementById('whBulkBody');
+  if (tbody) tbody.innerHTML = '';
+  _whBulkRowCount = 0;
+  whBulkAddRow();
+}
+
+// 행에서 데이터 읽기
+function _whBulkReadRow(tr) {
+  var inputs = tr.querySelectorAll('input, select');
+  return {
+    warehouse: inputs[0] ? inputs[0].value : '',
+    location: inputs[1] ? inputs[1].value : '',
+    inbound_date: inputs[2] ? inputs[2].value : '',
+    item_name: inputs[3] ? inputs[3].value.trim() : '',
+    qty: inputs[4] ? Number(inputs[4].value) : 0,
+    unit: inputs[5] ? inputs[5].value : 'pallet',
+    expiry_date: inputs[6] ? inputs[6].value : '',
+    supplier: inputs[7] ? inputs[7].value.trim() : '',
+    manager: inputs[8] ? inputs[8].value.trim() : '',
+    inbound_type: inputs[9] ? inputs[9].value : '기타'
+  };
+}
+
+// 전체 등록
+async function whBulkSubmitAll() {
+  var tbody = document.getElementById('whBulkBody');
+  if (!tbody) return;
+  var rows = tbody.querySelectorAll('tr');
+  if (rows.length === 0) { showToast('등록할 행이 없습니다.', 'warning'); return; }
+
+  var records = [];
+  var errors = [];
+  rows.forEach(function(tr, i) {
+    var d = _whBulkReadRow(tr);
+    if (!d.warehouse) { errors.push((i+1) + '행: 창고구분 필수'); return; }
+    if (!d.location) { errors.push((i+1) + '행: 위치코드 필수'); return; }
+    if (!d.inbound_date) { errors.push((i+1) + '행: 입고일 필수'); return; }
+    if (!d.item_name) { errors.push((i+1) + '행: 품목명 필수'); return; }
+    if (!d.qty || d.qty < 1) { errors.push((i+1) + '행: 수량 필수(1 이상)'); return; }
+    if (!d.expiry_date) { errors.push((i+1) + '행: 소비기한 필수'); return; }
+    if (!d.manager) { errors.push((i+1) + '행: 담당자 필수'); return; }
+    records.push(d);
+  });
+
+  if (errors.length > 0) {
+    showToast('입력 오류:\n' + errors.slice(0,3).join('\n') + (errors.length > 3 ? '\n...외 ' + (errors.length-3) + '건' : ''), 'warning');
+    return;
+  }
+
+  if (!confirm(records.length + '건을 일괄 등록하시겠습니까?')) return;
+
+  var btn = document.querySelector('[onclick="whBulkSubmitAll()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 등록 중...'; }
+
+  // Lot No 시작 번호 계산
+  var today = new Date().toISOString().split('T')[0].replace(/-/g,'').slice(2);
+  var prefix = 'WH-IN-' + today;
+  var fresh = await apiGetAll('wh_inbound');
+  var seq = (fresh.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length) + 1;
+
+  var successCount = 0;
+  var failCount = 0;
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    var lotNo = prefix + '-' + String(seq + i).padStart(3, '0');
+    var payload = {
+      lot_no: lotNo,
+      warehouse: r.warehouse,
+      location: r.location,
+      inbound_date: r.inbound_date,
+      inbound_type: r.inbound_type,
+      item_name: r.item_name,
+      qty: r.qty,
+      unit: r.unit,
+      expiry_date: r.expiry_date,
+      supplier: r.supplier,
+      manager: r.manager,
+      created_at: Date.now()
+    };
+    try {
+      await apiPost('wh_inbound', payload);
+      successCount++;
+    } catch(e) {
+      failCount++;
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> 전체 등록'; }
+
+  if (successCount > 0) {
+    showToast(successCount + '건 등록 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
+    whInvalidateMapCache();
+    await whLoadAll();
+    whRenderInTable();
+    whRefreshInLot();
+    // 등록 완료 후 테이블 초기화
+    var tbody2 = document.getElementById('whBulkBody');
+    if (tbody2) tbody2.innerHTML = '';
+    _whBulkRowCount = 0;
+    whBulkAddRow();
+  } else {
+    showToast('등록에 실패했습니다.', 'error');
+  }
+}
+
+// ── 엑셀 양식 다운로드 ────────────────────────────
+function whBulkDownloadTemplate() {
+  if (typeof XLSX === 'undefined') { showToast('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warning'); return; }
+
+  var headers = ['창고(C=저온/W=일반)', '위치코드', '입고일(YYYY-MM-DD)', '품목명', '수량', '단위(pallet/box/ea/kg)', '소비기한(YYYY-MM-DD)', '공급업체', '담당자', '입고유형(수입제품/OEM제품/자체생산/기타)'];
+  var examples = [
+    ['C', 'C-A1-1-1', '2026-06-12', '제품명 예시', 10, 'pallet', '2027-06-12', '공급업체명', '홍길동', '수입제품'],
+    ['W', 'W-A1-1-1', '2026-06-12', '제품명 예시2', 5, 'box', '2027-12-31', '공급업체명2', '김철수', 'OEM제품']
+  ];
+
+  var wb = XLSX.utils.book_new();
+  var wsData = [headers].concat(examples);
+  var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // 열 너비 설정
+  ws['!cols'] = [
+    {wch:16},{wch:14},{wch:18},{wch:24},{wch:8},{wch:20},{wch:18},{wch:16},{wch:12},{wch:30}
+  ];
+
+  // 헤더 스타일 (배경색)
+  var range = XLSX.utils.decode_range(ws['!ref']);
+  for (var c = range.s.c; c <= range.e.c; c++) {
+    var cellAddr = XLSX.utils.encode_cell({r: 0, c: c});
+    if (!ws[cellAddr]) continue;
+    ws[cellAddr].s = {
+      fill: { fgColor: { rgb: 'D5F5E3' } },
+      font: { bold: true },
+      alignment: { horizontal: 'center' }
+    };
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, '창고입고양식');
+
+  // 위치코드 안내 시트
+  var locHeaders = ['창고', '위치코드', '구역'];
+  var locData = [locHeaders];
+  COLD_LOCATIONS.forEach(function(l) { locData.push(['C (저온)', l.code, l.zoneKey + '구역']); });
+  WARM_LOCATIONS.forEach(function(l) { locData.push(['W (일반)', l.code, l.zoneKey + '구역']); });
+  var wsLoc = XLSX.utils.aoa_to_sheet(locData);
+  wsLoc['!cols'] = [{wch:12},{wch:16},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, wsLoc, '위치코드목록');
+
+  XLSX.writeFile(wb, '창고입고양식_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  showToast('엑셀 양식이 다운로드되었습니다.', 'success');
+}
+
+// ── 엑셀 파일 드롭/업로드 처리 ───────────────────
+function whBulkHandleDrop(event) {
+  event.preventDefault();
+  var zone = document.getElementById('whBulkDropZone');
+  if (zone) zone.classList.remove('dragover');
+  var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (file) whBulkHandleFile(file);
+}
+
+function whBulkHandleFile(file) {
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { showToast('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warning'); return; }
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb = XLSX.read(data, { type: 'array', cellDates: true });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      if (rows.length < 2) { showToast('데이터가 없습니다. 양식을 확인해주세요.', 'warning'); return; }
+
+      // 헤더 행 제거 후 데이터 파싱
+      var dataRows = rows.slice(1).filter(function(r) {
+        return r.some(function(c){ return c !== '' && c !== null && c !== undefined; });
+      });
+
+      if (dataRows.length === 0) { showToast('입력된 데이터가 없습니다.', 'warning'); return; }
+
+      // 기존 테이블 초기화
+      var tbody = document.getElementById('whBulkBody');
+      if (tbody) tbody.innerHTML = '';
+      _whBulkRowCount = 0;
+
+      var added = 0;
+      dataRows.forEach(function(r) {
+        // 날짜 처리 (Date 객체 또는 문자열)
+        function fmtDate(v) {
+          if (!v) return '';
+          if (v instanceof Date) return v.toISOString().split('T')[0];
+          var s = String(v).trim();
+          // YYYYMMDD 형식 처리
+          if (/^\d{8}$/.test(s)) return s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8);
+          return s;
+        }
+        var d = {
+          warehouse: String(r[0] || '').trim().toUpperCase(),
+          location: String(r[1] || '').trim().toUpperCase(),
+          inbound_date: fmtDate(r[2]),
+          item_name: String(r[3] || '').trim(),
+          qty: Number(r[4]) || '',
+          unit: String(r[5] || 'pallet').trim(),
+          expiry_date: fmtDate(r[6]),
+          supplier: String(r[7] || '').trim(),
+          manager: String(r[8] || '').trim(),
+          inbound_type: String(r[9] || '수입제품').trim()
+        };
+        whBulkAddRow(d);
+        added++;
+      });
+
+      showToast(added + '건의 데이터를 불러왔습니다. 확인 후 [전체 등록]을 눌러주세요.', 'success');
+    } catch(err) {
+      showToast('파일 읽기 오류: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+
+  // input 초기화 (같은 파일 재업로드 가능하도록)
+  var fi = document.getElementById('whBulkFileInput');
+  if (fi) fi.value = '';
+}
+
+// 탭 전환 시 일괄 입력 테이블 초기화 (첫 진입 시 빈 행 1개 추가)
+function whInitBulkTable() {
+  var tbody = document.getElementById('whBulkBody');
+  if (tbody && tbody.children.length === 0) {
+    _whBulkRowCount = 0;
+    whBulkAddRow();
+  }
+}
