@@ -86,6 +86,11 @@ async function loadProducts() {
     const data = await apiGetAll('products');
     allProducts = data.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
     filteredProducts = [...allProducts];
+    // 브라우저 자동완성 등으로 값이 남아있을 경우 초기화
+    const si = document.getElementById('searchInput');
+    if (si) si.value = '';
+    const fc = document.getElementById('filterCategory');
+    if (fc) fc.value = '';
     renderTable();
     renderKpi();
   } catch (e) {

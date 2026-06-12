@@ -539,9 +539,38 @@
           </div>
           <button class="btn btn-secondary" onclick="lgExport('all')"><i class="fas fa-file-excel"></i> 엑셀</button>
         </div>
+        <!-- 재고 현황 테이블 -->
+        <div class="table-section" style="margin-bottom:20px">
+          <div class="table-header">
+            <div class="table-title"><i class="fas fa-boxes" style="color:#27ae60"></i> 현재 재고 현황 <small style="font-size:11px;color:#888;font-weight:400;margin-left:8px">입고-출고 합산 | 같은 품목이라도 소비기한이 다르면 별도 표시</small></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="text" id="stockSearch" placeholder="품목명 검색..." oninput="lgRenderStockTable()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+              <span style="font-size:13px;color:#888" id="stockResultCount">0품목</span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="stockTable">
+              <thead>
+                <tr>
+                  <th>제품명</th><th>제품유형</th><th>소비기한</th>
+                  <th style="text-align:right">입고 수량</th><th style="text-align:right">출고 수량</th><th style="text-align:right">현재고</th>
+                  <th>단위</th><th>상태</th>
+                </tr>
+              </thead>
+              <tbody id="stockTableBody">
+                <tr><td colspan="8" class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span id="stockCount">0품목</span>
+          </div>
+        </div>
+
+        <!-- 거래 이력 테이블 -->
         <div class="table-section">
           <div class="table-header">
-            <div class="table-title"><i class="fas fa-list" style="color:var(--primary)"></i> 전체 물류현황</div>
+            <div class="table-title"><i class="fas fa-list" style="color:var(--primary)"></i> 거래 이력 상세</div>
             <div style="font-size:13px;color:#888" id="allResultCount">0건</div>
           </div>
           <div id="allCardView" style="display:none"></div>

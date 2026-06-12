@@ -105,6 +105,7 @@ async function loadLogisticsData() {
     lgFilterTable('oem');
     lgFilterTable('own');
     lgFilterTable('all');
+    if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
   } catch(e) {
     console.error('[logistics] 데이터 로드 실패:', e);
   }
@@ -673,3 +674,94 @@ document.addEventListener('click', function(e) {
     dropdown.style.display = 'none';
   }
 });
+
+// ===========================
+// 재고 현황 집계 및 렌더링
+// 같은 품목명 + 소비기한 기준으로 입고/출고 합산
+// ===========================
+function lgRenderStockTable() {
+  var tbody = document.getElementById('stockTableBody');
+  if (!tbody) return;
+
+  var q = (document.getElementById('stockSearch') ? document.getElementById('stockSearch').value : '').toLowerCase();
+  var typeF = document.getElementById('allTypeFilter') ? document.getElementById('allTypeFilter').value : '';
+
+  var stockMap = {};
+  allLogisticsData.forEach(function(r) {
+    var name = (r.product_name || r.item_name || '').trim();
+    var expiry = (r.expiry_date || r.expiry || '').trim();
+    var unit = (r.unit || 'ea').trim();
+    var ptype = (r.product_type || '').trim();
+    var qty = Number(r.quantity || r.qty || 0);
+    var tx = (r.transaction_type || '입고').trim();
+    if (!name) return;
+    var key = name + '||' + expiry;
+    if (!stockMap[key]) {
+      stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
+    }
+    if (tx === '입고' || tx === '반품') {
+      stockMap[key].inQty += qty;
+    } else if (tx === '출고') {
+      stockMap[key].outQty += qty;
+    }
+  });
+
+  var rows = Object.values(stockMap);
+  if (q) rows = rows.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; });
+  if (typeF) rows = rows.filter(function(r) { return r.ptype === typeF; });
+  rows.sort(function(a, b) {
+    if (a.name !== b.name) return a.name.localeCompare(b.name);
+    return (a.expiry || '').localeCompare(b.expiry || '');
+  });
+
+  var countEl = document.getElementById('stockResultCount');
+  var countEl2 = document.getElementById('stockCount');
+  if (countEl) countEl.textContent = rows.length + '품목';
+  if (countEl2) countEl2.textContent = rows.length + '품목';
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>재고 데이터가 없습니다.</td></tr>';
+    return;
+  }
+
+  var typeColors = { '수입제품': '#2980b9', 'OEM제품': '#d68910', '자체생산': '#1e8449', '기타': '#888' };
+  var typeBg = { '수입제품': '#e8f4fd', 'OEM제품': '#fef9e7', '자체생산': '#eafaf1', '기타': '#f0f0f0' };
+
+  tbody.innerHTML = rows.map(function(r) {
+    var stock = r.inQty - r.outQty;
+    var color = typeColors[r.ptype] || '#888';
+    var bg = typeBg[r.ptype] || '#f0f0f0';
+    var expiryStatus = '';
+    var expiryStyle = '';
+    if (r.expiry) {
+      var today = new Date();
+      var exp = new Date(r.expiry);
+      var diff = Math.floor((exp - today) / (1000 * 60 * 60 * 24));
+      if (diff < 0) {
+        expiryStatus = '<span style="background:#fdedec;color:#e74c3c;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;margin-left:4px">기한만료</span>';
+        expiryStyle = 'color:#e74c3c;font-weight:700';
+      } else if (diff <= 30) {
+        expiryStatus = '<span style="background:#fff3cd;color:#d68910;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;margin-left:4px">임박(' + diff + '일)</span>';
+        expiryStyle = 'color:#d68910;font-weight:600';
+      }
+    }
+    var stockBadge = '';
+    if (stock <= 0) {
+      stockBadge = '<span style="background:#fdedec;color:#e74c3c;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">재고없음</span>';
+    } else if (stock <= 10) {
+      stockBadge = '<span style="background:#fff3cd;color:#d68910;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">부족</span>';
+    } else {
+      stockBadge = '<span style="background:#eafaf1;color:#27ae60;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">정상</span>';
+    }
+    return '<tr>' +
+      '<td><b>' + r.name + '</b></td>' +
+      '<td><span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">' + (r.ptype || '-') + '</span></td>' +
+      '<td style="' + expiryStyle + '">' + (r.expiry || '-') + expiryStatus + '</td>' +
+      '<td style="text-align:right;color:#27ae60;font-weight:600">' + r.inQty.toLocaleString() + '</td>' +
+      '<td style="text-align:right;color:#e74c3c;font-weight:600">' + r.outQty.toLocaleString() + '</td>' +
+      '<td style="text-align:right;font-weight:700;font-size:15px">' + stock.toLocaleString() + '</td>' +
+      '<td>' + r.unit + '</td>' +
+      '<td>' + stockBadge + '</td>' +
+      '</tr>';
+  }).join('');
+}
