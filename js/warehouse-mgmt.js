@@ -920,34 +920,61 @@ function whRenderLedger(stockMap) {
   var tbody = document.getElementById('whLedgerBody');
   if (!tbody) return;
   stockMap = stockMap || whCalcStock();
+  // 필터 값 읽기
+  var whFilter = document.getElementById('whLedgerWarehouse') ? document.getElementById('whLedgerWarehouse').value : '';
+  var qFilter = document.getElementById('whLedgerSearch') ? document.getElementById('whLedgerSearch').value.toLowerCase() : '';
+
   var rows = [];
   Object.entries(stockMap).forEach(function(entry) {
     var locCode = entry[0], items = entry[1];
+    // 창고 필터
+    if (whFilter && !locCode.startsWith(whFilter)) return;
     Object.entries(items).forEach(function(e) {
       var itemName = e[0], info = e[1];
+      // 품목명 검색 필터
+      if (qFilter && itemName.toLowerCase().indexOf(qFilter) === -1) return;
       var inQty = 0, outQty = 0;
       whInboundData.filter(function(r){ return r.location === locCode && (r.item_name||'미상') === itemName; }).forEach(function(r){ inQty += Number(r.qty)||0; });
       whOutboundData.filter(function(r){ return r.location === locCode && (r.item_name||'미상') === itemName; }).forEach(function(r){ outQty += Number(r.qty)||0; });
-      rows.push({ locCode: locCode, itemName: itemName, inQty: inQty, outQty: outQty, currentQty: info.qty, unit: info.unit, expiry: info.expiry, lot: info.lot });
+      var warehouseLabel = locCode.startsWith('C') ? '❄️ 저온' : '🏭 일반';
+      rows.push({ locCode: locCode, warehouseLabel: warehouseLabel, itemName: itemName, inQty: inQty, outQty: outQty, currentQty: info.qty, unit: info.unit, expiry: info.expiry });
     });
   });
+
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:30px">등록된 재고가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:30px">등록된 재고가 없습니다.</td></tr>';
     return;
   }
-  // 최적화: today를 루프 밖에서 1회 생성
+
+  // 위치코드 오름차순 정렬
+  rows.sort(function(a, b) { return a.locCode.localeCompare(b.locCode); });
+
   var today = new Date();
   tbody.innerHTML = rows.map(function(r) {
     var diff = r.expiry ? Math.ceil((new Date(r.expiry) - today) / 86400000) : null;
-    var expiryColor = diff !== null && diff <= 30 ? '#e74c3c' : '#555';
+    var expiryColor = diff !== null && diff < 0 ? '#e74c3c' : (diff !== null && diff <= 30 ? '#e67e22' : '#555');
+    var expiryText = r.expiry ? (r.expiry + (diff !== null ? ' (D-' + diff + ')' : '')) : '-';
+    // 상태 배지
+    var statusBadge = '';
+    if (r.currentQty <= 0) {
+      statusBadge = '<span style="background:#fdedec;color:#e74c3c;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">재고없음</span>';
+    } else if (diff !== null && diff < 0) {
+      statusBadge = '<span style="background:#fdedec;color:#e74c3c;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">기한만료</span>';
+    } else if (diff !== null && diff <= 30) {
+      statusBadge = '<span style="background:#fff3cd;color:#d68910;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">임박</span>';
+    } else {
+      statusBadge = '<span style="background:#eafaf1;color:#27ae60;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">정상</span>';
+    }
     return '<tr>' +
+      '<td><span style="font-size:12px">' + r.warehouseLabel + '</span></td>' +
       '<td><code style="font-size:11px">' + r.locCode + '</code></td>' +
       '<td><b>' + r.itemName + '</b></td>' +
-      '<td style="color:#27ae60">' + r.inQty + ' ' + (r.unit||'') + '</td>' +
-      '<td style="color:#e74c3c">' + r.outQty + ' ' + (r.unit||'') + '</td>' +
-      '<td style="font-weight:700">' + r.currentQty + ' ' + (r.unit||'') + '</td>' +
-      '<td style="color:' + expiryColor + '">' + (r.expiry||'-') + (diff!==null?' (D-'+diff+')':'') + '</td>' +
-      '<td>' + (r.lot||'-') + '</td>' +
+      '<td style="text-align:right;color:#27ae60;font-weight:600">' + r.inQty.toLocaleString() + '</td>' +
+      '<td style="text-align:right;color:#e74c3c;font-weight:600">' + r.outQty.toLocaleString() + '</td>' +
+      '<td style="text-align:right;font-weight:700;font-size:14px">' + r.currentQty.toLocaleString() + '</td>' +
+      '<td>' + (r.unit||'-') + '</td>' +
+      '<td style="color:' + expiryColor + '">' + expiryText + '</td>' +
+      '<td>' + statusBadge + '</td>' +
       '</tr>';
   }).join('');
 }
