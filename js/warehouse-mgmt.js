@@ -1630,12 +1630,19 @@ function whBulkAddRow(data) {
   div.innerHTML = _whBulkRowHtml(idx, data || {});
   var tr = div.firstChild;
   tbody.appendChild(tr);
-  // 위치코드 선택 복원 (데이터 있을 때)
+  // 위치코드 선택 복원 (데이터 있을 때 - setTimeout 없이 즉시 설정)
   if (data && data.location) {
-    setTimeout(function() {
-      var locEl = document.getElementById('whBulkLoc_' + idx);
-      if (locEl) locEl.value = data.location;
-    }, 50);
+    var locEl = document.getElementById('whBulkLoc_' + idx);
+    if (locEl) {
+      locEl.value = data.location;
+      // 구역도 즉시 업데이트
+      var zoneEl = document.getElementById('whBulkZone_' + idx);
+      if (zoneEl) {
+        var allLocs = COLD_LOCATIONS.concat(WARM_LOCATIONS);
+        var found = allLocs.find(function(l){ return l.code === data.location; });
+        zoneEl.value = found ? found.zoneKey + '구역' : '';
+      }
+    }
   }
 }
 
@@ -1664,22 +1671,9 @@ function whBulkUpdateZone(locSel, idx) {
 function whBulkCopyRow(idx) {
   var tr = document.getElementById('whBulkRow_' + idx);
   if (!tr) return;
-  var inputs = tr.querySelectorAll('input, select');
-  // 콜럼 순서: 창고(sel0), 위치코드(sel1), 구역(input2-readonly), 입고일(input3), 품목명(input4), 수량(input5), 단위(sel6), 소비기한(input7), 공급업체(input8), 담당자(input9), 입고유형(sel10)
-  var data = {
-    warehouse: inputs[0] ? inputs[0].value : '',
-    location: inputs[1] ? inputs[1].value : '',
-    // inputs[2] = 구역 (readonly, 자동생성)
-    inbound_date: inputs[3] ? inputs[3].value : '',
-    item_name: inputs[4] ? inputs[4].value : '',
-    qty: inputs[5] ? inputs[5].value : '',
-    unit: inputs[6] ? inputs[6].value : 'pallet',
-    expiry_date: inputs[7] ? inputs[7].value : '',
-    supplier: inputs[8] ? inputs[8].value : '',
-    manager: inputs[9] ? inputs[9].value : '',
-    inbound_type: inputs[10] ? inputs[10].value : '수입제품'
-  };
-  whBulkAddRow(data);
+  // td 인덱스 기반으로 읽기
+  var d = _whBulkReadRow(tr);
+  whBulkAddRow(d);
   showToast('행이 복사되었습니다.', 'success');
 }
 
@@ -1698,22 +1692,30 @@ function whBulkClearAll() {
   whBulkAddRow();
 }
 
-// 행에서 데이터 읽기
-// 콜럼 순서: 창고(0), 위치코드(1), 구역-readonly(2), 입고일(3), 품목명(4), 수량(5), 단위(6), 소비기한(7), 공급업체(8), 담당자(9), 입고유형(10)
+// 행에서 데이터 읽기 - td 인덱스 기반 (가장 안전한 방식)
+// TD 순서: 0=#, 1=창고, 2=위치코드, 3=구역, 4=입고일, 5=품목명, 6=수량, 7=단위, 8=소비기한, 9=공급업체, 10=담당자, 11=입고유형, 12=관리
 function _whBulkReadRow(tr) {
-  var inputs = tr.querySelectorAll('input, select');
+  var tds = tr.querySelectorAll('td');
+  function getVal(tdIdx) {
+    if (!tds[tdIdx]) return '';
+    var el = tds[tdIdx].querySelector('input, select');
+    return el ? el.value : '';
+  }
+  function getValTrim(tdIdx) {
+    return getVal(tdIdx).trim();
+  }
   return {
-    warehouse: inputs[0] ? inputs[0].value : '',
-    location: inputs[1] ? inputs[1].value : '',
-    // inputs[2] = 구역 (readonly 무시)
-    inbound_date: inputs[3] ? inputs[3].value : '',
-    item_name: inputs[4] ? inputs[4].value.trim() : '',
-    qty: inputs[5] ? Number(inputs[5].value) : 0,
-    unit: inputs[6] ? inputs[6].value : 'pallet',
-    expiry_date: inputs[7] ? inputs[7].value : '',
-    supplier: inputs[8] ? inputs[8].value.trim() : '',
-    manager: inputs[9] ? inputs[9].value.trim() : '',
-    inbound_type: inputs[10] ? inputs[10].value : '기타'
+    warehouse:    getVal(1),
+    location:     getVal(2),
+    // td[3] = 구역 (readonly, 저장 불필요)
+    inbound_date: getVal(4),
+    item_name:    getValTrim(5),
+    qty:          Number(getVal(6)) || 0,
+    unit:         getVal(7) || 'pallet',
+    expiry_date:  getVal(8),
+    supplier:     getValTrim(9),
+    manager:      getValTrim(10),
+    inbound_type: getVal(11) || '수입제품'
   };
 }
 
