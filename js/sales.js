@@ -511,8 +511,8 @@ function renderTable() {
       <td class="center"><input type="checkbox" class="row-chk" data-id="${s.id}" style="cursor:pointer;width:15px;height:15px"></td>
       <td>${s.company || '-'}</td>
       <td>${s.product_name || '-'}</td>
-      <td class="center">${s.qty || s.quantity || '-'}</td>
       <td><span style="background:#e8f5e9;color:#1e8449;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${s.channel || '-'}</span></td>
+      <td class="center">${s.qty || s.quantity || '-'}</td>
       <td class="num">${numFmt(s.payment)}</td>
       <td class="num">${numFmt(s.settlement)}</td>
       <td class="num">${numFmt(s.supply_price)}</td>
@@ -775,7 +775,7 @@ function exportToExcel() {
   if (!filteredSales.length) { showToast('다운로드할 데이터가 없습니다.', 'warning'); return; }
   if (typeof XLSX === 'undefined') { showToast('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warning'); return; }
 
-  const headers = ['DB번호', '주문번호', '송장번호', '업체명', '제품명', '수량', '쇼핑몰', '결제금액', '정산금액', '공급가', '택배비', '작업비', '포장박스', '마진', '마진율'];
+  const headers = ['DB번호', '주문번호', '송장번호', '업체명', '제품명', '쇼핑몰', '수량', '결제금액', '정산금액', '공급가', '택배비', '작업비', '포장박스', '마진', '마진율'];
   const rows = filteredSales.map(s => {
     const marginRate = typeof s.margin_rate === 'number'
       ? parseFloat((s.margin_rate * 100).toFixed(4))
@@ -786,8 +786,8 @@ function exportToExcel() {
       s.invoice_no || '',
       s.company || '',
       s.product_name || '',
-      s.qty || s.quantity || 0,
       s.channel || '',
+      s.qty || s.quantity || 0,
       parseFloat(s.payment) || 0,
       parseFloat(s.settlement) || 0,
       parseFloat(s.supply_price) || 0,
@@ -838,14 +838,14 @@ function printData() {
 function downloadSampleExcel() {
   if (typeof XLSX === 'undefined') { showToast('라이브러리 로딩 중...', 'warning'); return; }
   const sample = [
-    ['DB번호', '주문번호', '송장번호', '업체명', '제품명', '수량', '쇼핑몰', '결제금액', '정산금액', '공급가', '택배비', '작업비', '포장박스', '마진', '마진율'],
-    [2172797636, '4432988326', '410392878700', '단하', '감동식탁 참기름 + 들기름', 1, 'ESM지마켓', 16920, 15823, 7540, 2800, 550, 0, 4933, 0.3117],
-    [2172789918, '3446224279', '410392878814', '단하', '참기름', 2, 'GS shop', 15294, 14365, 7980, 2800, 550, 0, 3035, 0.1984],
-    [2172782289, '251697828', '410392878744', '단하', '참기름', 2, '베네피아', 20900, 18180, 7980, 2800, 550, 0, 6850, 0.3278],
-    [2172809854, '20260417849443', '410392888673', '담양한과', '전통 찹쌀 약과 40개', 1, '신세계TV쇼핑', 9900, 8415, 4050, 2800, 550, 0, 1015, 0.1206],
-    [2172809918, '20260418395558', '410392877790', '담양한과', '미니 호박 약과 1kg', 1, 'CJ온스타일', 18000, 15300, 8500, 2800, 550, 0, 3450, 0.2255],
-    [2172812345, 'CUP-00001', '410392999001', '영신내추럴', '콜드브루 100팩', 2, '쿠팡', 35000, 31500, 18000, 2800, 550, 0, 10150, 0.3222],
-    [2172812346, 'NAV-00002', '410392999002', '영신내추럴', '에티오피아 2병', 1, '스마트스토어', 28000, 25200, 14000, 2800, 550, 0, 7850, 0.3115],
+    ['DB번호', '주문번호', '송장번호', '업체명', '제품명', '쇼핑몰', '수량', '결제금액', '정산금액', '공급가', '택배비', '작업비', '포장박스', '마진', '마진율'],
+    [2172797636, '4432988326', '410392878700', '단하', '감동식탁 참기름 + 들기름', 'ESM지마켓', 1, 16920, 15823, 7540, 2800, 550, 0, 4933, 0.3117],
+    [2172789918, '3446224279', '410392878814', '단하', '참기름', 'GS shop', 2, 15294, 14365, 7980, 2800, 550, 0, 3035, 0.1984],
+    [2172782289, '251697828', '410392878744', '단하', '참기름', '베네피아', 2, 20900, 18180, 7980, 2800, 550, 0, 6850, 0.3278],
+    [2172809854, '20260417849443', '410392888673', '담양한과', '전통 찹쌀 약과 40개', '신세계TV쇼핑', 1, 9900, 8415, 4050, 2800, 550, 0, 1015, 0.1206],
+    [2172809918, '20260418395558', '410392877790', '담양한과', '미니 호박 약과 1kg', 'CJ온스타일', 1, 18000, 15300, 8500, 2800, 550, 0, 3450, 0.2255],
+    [2172812345, 'CUP-00001', '410392999001', '영신내추럴', '콜드브루 100팩', '쿠팡', 2, 35000, 31500, 18000, 2800, 550, 0, 10150, 0.3222],
+    [2172812346, 'NAV-00002', '410392999002', '영신내추럴', '에티오피아 2병', '스마트스토어', 1, 28000, 25200, 14000, 2800, 550, 0, 7850, 0.3115],
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(sample);
@@ -1119,12 +1119,15 @@ function parseImportFile(file) {
           let val = row[colIdx];
           if (val === '' || val === null || val === undefined) return;
           if (field === 'db_no' || field === 'qty') {
-            val = parseInt(val) || 0;
+            // 쉼표, 공백, 비숫자 제거 후 파싱
+            val = parseInt(String(val).replace(/[,\s]/g, '').replace(/[^0-9-]/g, '')) || 0;
           } else if (['payment', 'settlement', 'supply_price', 'delivery_fee', 'work_fee', 'box_fee', 'margin'].includes(field)) {
-            val = parseFloat(val) || 0;
+            // 쉼표, 원화기호(₩/원), 공백 제거 후 파싱 (피벗 테이블 "14,928" 형식 대응)
+            val = parseFloat(String(val).replace(/[,\s₩원]/g, '').replace(/[^0-9.-]/g, '')) || 0;
           } else if (field === 'margin_rate') {
             // 마진율: 0.3117 또는 31.17% 형태 모두 처리
-            val = parseFloat(String(val).replace('%', ''));
+            val = parseFloat(String(val).replace(/[,%\s]/g, '').replace(/[^0-9.-]/g, ''));
+            if (isNaN(val)) val = 0;
             if (val > 1) val = val / 100; // 31.17 → 0.3117
           } else {
             val = String(val).trim();
