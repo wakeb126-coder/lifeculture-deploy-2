@@ -1144,38 +1144,90 @@ function whPrintStocktakeReport() {
 function whPrintLabel(lotNo) {
   var record = whInboundData.find(function(r){ return r.lot_no === lotNo; });
   if (!record) { showToast('해당 Lot No. 기록을 찾을 수 없습니다.', 'warning'); return; }
-  var modal = document.getElementById('whLabelModal');
-  if (!modal) {
-    var m = document.createElement('div');
-    m.id = 'whLabelModal';
-    m.className = 'modal-overlay show';
-    m.innerHTML = '<div class="modal-dialog" style="max-width:500px">' +
-      '<div class="modal-header"><h3><i class="fas fa-print"></i> 라벨 출력</h3>' +
-      '<button class="modal-close" onclick="document.getElementById(\'whLabelModal\').remove()"><i class="fas fa-times"></i></button></div>' +
-      '<div class="modal-body" id="whLabelModalBody"></div></div>';
-    document.body.appendChild(m);
-  } else {
-    modal.classList.add('show');
-  }
-  var body = document.getElementById('whLabelModalBody');
-  if (!body) return;
-  var qrData = encodeURIComponent(JSON.stringify({ lot: record.lot_no, loc: record.location, item: record.item_name, expiry: record.expiry_date }));
-  body.innerHTML = '<div style="background:#f8f9fa;border-radius:8px;padding:16px;margin-bottom:16px">' +
-    '<div style="font-size:13px;margin-bottom:8px"><b>Lot No:</b> ' + (record.lot_no||'-') + '</div>' +
-    '<div style="font-size:13px;margin-bottom:8px"><b>품목명:</b> ' + (record.item_name||'-') + '</div>' +
-    '<div style="font-size:13px;margin-bottom:8px"><b>위치:</b> <code>' + (record.location||'-') + '</code></div>' +
-    '<div style="font-size:13px;margin-bottom:8px"><b>수량:</b> ' + (record.qty||0) + ' ' + (record.unit||'') + '</div>' +
-    '<div style="font-size:13px;margin-bottom:8px"><b>소비기한:</b> ' + (record.expiry_date||'-') + '</div>' +
-    '<div style="font-size:13px;margin-bottom:8px"><b>공급업체:</b> ' + (record.supplier||'-') + '</div>' +
-    '<div style="text-align:center;margin:12px 0"><img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + qrData + '" alt="QR" style="border-radius:4px"></div>' +
+
+  // 기존 모달 제거
+  var old = document.getElementById('whLabelModal');
+  if (old) old.remove();
+
+  var qrData = encodeURIComponent(JSON.stringify({ lot: record.lot_no, loc: record.location, item: record.item_name, expiry: record.expiry_date, qty: record.qty, unit: record.unit }));
+  var savedIp = localStorage.getItem('whLabelPrinterIp') || '';
+
+  // 라벨 HTML (미리보기 + 실제 인쇄 공용)
+  var labelHtml = [
+    '<div id="whLabelContent" style="width:100mm;min-height:60mm;padding:8px;box-sizing:border-box;font-family:Arial,sans-serif;border:1px solid #ddd;border-radius:4px;background:#fff">',
+    '  <div style="display:flex;justify-content:space-between;align-items:flex-start">',
+    '    <div style="flex:1;padding-right:8px">',
+    '      <div style="font-size:9px;color:#888;font-weight:700;letter-spacing:1px;margin-bottom:2px">라이프켈캘 입고라벨</div>',
+    '      <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px;line-height:1.3">' + (record.item_name||'-') + '</div>',
+    '      <table style="font-size:10px;border-collapse:collapse;width:100%">',
+    '        <tr><td style="color:#888;padding:1px 4px 1px 0;white-space:nowrap">Lot No.</td><td style="font-family:monospace;font-weight:700">' + (record.lot_no||'-') + '</td></tr>',
+    '        <tr><td style="color:#888;padding:1px 4px 1px 0">위치</td><td style="font-weight:700;color:#2980b9">' + (record.location||'-') + '</td></tr>',
+    '        <tr><td style="color:#888;padding:1px 4px 1px 0">수량</td><td>' + (record.qty||0) + ' ' + (record.unit||'') + '</td></tr>',
+    '        <tr><td style="color:#888;padding:1px 4px 1px 0">소비기한</td><td style="color:#e74c3c;font-weight:700">' + (record.expiry_date||'-') + '</td></tr>',
+    '        <tr><td style="color:#888;padding:1px 4px 1px 0">공급업체</td><td style="font-size:9px">' + (record.supplier||'-') + '</td></tr>',
+    '      </table>',
+    '    </div>',
+    '    <div style="text-align:center">',
+    '      <img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=' + qrData + '" alt="QR" style="width:90px;height:90px">',
+    '      <div style="font-size:8px;color:#aaa;margin-top:2px">' + (record.lot_no||'') + '</div>',
+    '    </div>',
+    '  </div>',
+    '  <div style="border-top:1px dashed #ddd;margin-top:6px;padding-top:4px;font-size:8px;color:#aaa;text-align:right">라이프컬처 창고관리시스템</div>',
+    '</div>'
+  ].join('');
+
+  var m = document.createElement('div');
+  m.id = 'whLabelModal';
+  m.className = 'modal-overlay show';
+  m.innerHTML = '<div class="modal-dialog" style="max-width:560px">' +
+    '<div class="modal-header"><h3><i class="fas fa-print"></i> 라벨 출력</h3>' +
+    '<button class="modal-close" onclick="document.getElementById(\'whLabelModal\').remove()"><i class="fas fa-times"></i></button></div>' +
+    '<div class="modal-body" style="padding:16px">' +
+
+    // 라벨 미리보기
+    '<div style="margin-bottom:16px">' +
+    '<div style="font-size:12px;font-weight:700;color:#555;margin-bottom:8px">📄 라벨 미리보기 (100 × 60mm)</div>' +
+    '<div style="background:#f0f0f0;padding:12px;border-radius:8px;display:flex;justify-content:center">' + labelHtml + '</div>' +
     '</div>' +
-    '<div style="margin-bottom:12px">' +
-    '<label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px">프린터 선택</label>' +
-    '<div style="display:flex;gap:8px">' +
-    '<button onclick="whSendZplLabel(\'' + lotNo + '\')" style="flex:1;padding:10px;background:#1a73e8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700"><i class="fas fa-print"></i> 제브라 (ZPL)</button>' +
-    '<button onclick="whSendEscPosLabel(\'' + lotNo + '\')" style="flex:1;padding:10px;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700"><i class="fas fa-print"></i> 빅솔론 (ESC/POS)</button>' +
-    '</div></div>' +
-    '<button onclick="whPrintBrowserLabel(\'' + lotNo + '\')" style="width:100%;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer"><i class="fas fa-globe"></i> 브라우저 인쇄</button>';
+
+    // 프린터 선택 섹션
+    '<div style="background:#f8f9fa;border-radius:8px;padding:12px;margin-bottom:12px">' +
+    '<div style="font-size:12px;font-weight:700;margin-bottom:10px">프린터 선택</div>' +
+
+    // 1. 브라우저 인쇄 (가장 범용)
+    '<div style="margin-bottom:8px">' +
+    '<div style="font-size:11px;color:#888;margin-bottom:4px">① 브라우저 인쇄 (모든 프린터 호환)</div>' +
+    '<button onclick="whPrintBrowserLabel(\'' + lotNo + '\')\" style="width:100%;padding:9px;background:#2C5F2E;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px"><i class="fas fa-print"></i> 브라우저로 인쇄</button>' +
+    '</div>' +
+
+    // 2. 제브라 ZPL
+    '<div style="margin-bottom:8px">' +
+    '<div style="font-size:11px;color:#888;margin-bottom:4px">② 제브라 라벨 프린터 (ZPL)</div>' +
+    '<div style="display:flex;gap:6px">' +
+    '<button onclick="whSendZplLabel(\'' + lotNo + '\')\" style="flex:1;padding:9px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px"><i class="fas fa-download"></i> ZPL 파일 다운로드</button>' +
+    '<button onclick="whZplNetworkPrint(\'' + lotNo + '\')\" style="flex:1;padding:9px;background:#0d47a1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px"><i class="fas fa-network-wired"></i> 네트워크 전송</button>' +
+    '</div>' +
+    '</div>' +
+
+    // 3. 빅솔론 ESC/POS
+    '<div style="margin-bottom:8px">' +
+    '<div style="font-size:11px;color:#888;margin-bottom:4px">③ 빅솔론 라벨 프린터 (ESC/POS)</div>' +
+    '<button onclick="whSendEscPosLabel(\'' + lotNo + '\')\" style="width:100%;padding:9px;background:#27ae60;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px"><i class="fas fa-download"></i> ESC/POS 파일 다운로드</button>' +
+    '</div>' +
+
+    // 네트워크 프린터 IP 설정
+    '<div style="border-top:1px solid #dee2e6;padding-top:8px;margin-top:4px">' +
+    '<div style="font-size:11px;color:#888;margin-bottom:4px">프린터 IP 주소 (네트워크 연결 시 입력)</div>' +
+    '<div style="display:flex;gap:6px">' +
+    '<input id="whPrinterIpInput" type="text" placeholder="192.168.1.100" value="' + savedIp + '" style="flex:1;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:12px">' +
+    '<button onclick="whSavePrinterIp()" style="padding:7px 12px;background:#6c757d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">저장</button>' +
+    '</div>' +
+    '<div style="font-size:10px;color:#aaa;margin-top:4px">제브라 프린터는 9100포트, 빅솔론은 9100 또는 6101포트를 사용합니다.</div>' +
+    '</div>' +
+    '</div>' + // 백그라운드 닫기
+
+    '</div></div>';
+  document.body.appendChild(m);
 }
 
 function whSendZplLabel(lotNo) {
@@ -1219,56 +1271,78 @@ function whSendEscPosLabel(lotNo) {
 function whPrintBrowserLabel(lotNo) {
   var record = whInboundData.find(function(r){ return r.lot_no === lotNo; });
   if (!record) return;
-  var qrData = encodeURIComponent(JSON.stringify({ lot: record.lot_no, loc: record.location, item: record.item_name, expiry: record.expiry_date }));
-  var isMobile = window.innerWidth <= 768;
-  // 데스크탑: 기존 window.open 방식 유지
-  if (!isMobile) {
-    var win = window.open('', '_blank', 'width=400,height=500');
-    win.document.write('<html><head><title>창고 라벨</title>' +
-      '<style>body{font-family:sans-serif;padding:20px;width:300px}h3{color:#2C5F2E;margin:0 0 10px}table{width:100%;font-size:13px}td{padding:3px 0}td:first-child{font-weight:700;width:80px}.qr{text-align:center;margin:10px 0}hr{border:1px dashed #ccc}</style></head><body>' +
-      '<h3>📦 입고 라벨</h3><hr>' +
-      '<table><tr><td>품목명</td><td>' + (record.item_name||'-') + '</td></tr>' +
-      '<tr><td>Lot No.</td><td>' + (record.lot_no||'-') + '</td></tr>' +
-      '<tr><td>위치</td><td>' + (record.location||'-') + '</td></tr>' +
-      '<tr><td>수량</td><td>' + (record.qty||0) + ' ' + (record.unit||'') + '</td></tr>' +
-      '<tr><td>소비기한</td><td>' + (record.expiry_date||'-') + '</td></tr>' +
-      '<tr><td>공급업체</td><td>' + (record.supplier||'-') + '</td></tr></table>' +
-      '<div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + qrData + '" alt="QR"></div>' +
-      '<hr><div style="font-size:10px;color:#888;text-align:center">라이프컬처 창고관리시스템</div>' +
-      '</body></html>');
-    win.document.close();
-    setTimeout(function(){ win.print(); }, 500);
-    return;
-  }
-  // 모바일: 모달 내 미리보기 + 인쇄 버튼
-  var modalId = 'whBrowserLabelModal';
-  var existing = document.getElementById(modalId);
-  if (existing) existing.remove();
-  var m = document.createElement('div');
-  m.id = modalId;
-  m.className = 'modal-overlay show';
-  m.innerHTML = '<div class="modal-dialog" style="max-width:380px">' +
-    '<div class="modal-header"><h3><i class="fas fa-print"></i> 입고 라벨 미리보기</h3>' +
-    '<button class="modal-close" onclick="document.getElementById(\'' + modalId + '\').remove()"><i class="fas fa-times"></i></button></div>' +
-    '<div class="modal-body" style="padding:16px">' +
-    '<div style="border:2px dashed #2C5F2E;border-radius:8px;padding:16px;background:#fff;font-family:sans-serif">' +
-    '<div style="font-size:14px;font-weight:700;color:#2C5F2E;margin-bottom:8px">📦 입고 라벨</div>' +
-    '<table style="width:100%;font-size:13px;border-collapse:collapse">' +
-    '<tr><td style="font-weight:700;width:80px;padding:3px 0">품목명</td><td>' + (record.item_name||'-') + '</td></tr>' +
-    '<tr><td style="font-weight:700;padding:3px 0">Lot No.</td><td style="font-family:monospace">' + (record.lot_no||'-') + '</td></tr>' +
-    '<tr><td style="font-weight:700;padding:3px 0">위치</td><td>' + (record.location||'-') + '</td></tr>' +
-    '<tr><td style="font-weight:700;padding:3px 0">수량</td><td>' + (record.qty||0) + ' ' + (record.unit||'') + '</td></tr>' +
-    '<tr><td style="font-weight:700;padding:3px 0">소비기한</td><td>' + (record.expiry_date||'-') + '</td></tr>' +
-    '<tr><td style="font-weight:700;padding:3px 0">공급업체</td><td>' + (record.supplier||'-') + '</td></tr>' +
-    '</table>' +
-    '<div style="text-align:center;margin:12px 0"><img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + qrData + '" alt="QR" style="border-radius:4px"></div>' +
-    '<div style="font-size:10px;color:#888;text-align:center">라이프컬처 창고관리시스템</div>' +
+  var qrData = encodeURIComponent(JSON.stringify({ lot: record.lot_no, loc: record.location, item: record.item_name, expiry: record.expiry_date, qty: record.qty, unit: record.unit }));
+
+  // iframe 방식으로 팝업 차단 우회 + 라벨 전용 CSS
+  var printHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>입고라벨</title>' +
+    '<style>' +
+    '@page { size: 100mm 60mm; margin: 0; }' +
+    'body { margin: 0; padding: 6px; font-family: Arial, sans-serif; width: 100mm; height: 60mm; box-sizing: border-box; }' +
+    '.label-wrap { display: flex; justify-content: space-between; align-items: flex-start; height: 100%; }' +
+    '.label-info { flex: 1; padding-right: 6px; }' +
+    '.label-title { font-size: 7pt; color: #888; font-weight: 700; letter-spacing: 1px; margin-bottom: 2px; }' +
+    '.label-name { font-size: 11pt; font-weight: 700; color: #000; margin-bottom: 5px; line-height: 1.3; }' +
+    'table { font-size: 8pt; border-collapse: collapse; width: 100%; }' +
+    'td { padding: 1px 3px 1px 0; }' +
+    'td:first-child { color: #666; white-space: nowrap; width: 50px; }' +
+    '.label-qr { text-align: center; }' +
+    '.label-qr img { width: 80px; height: 80px; }' +
+    '.label-qr-text { font-size: 6pt; color: #aaa; margin-top: 2px; }' +
+    '.label-footer { border-top: 1px dashed #ccc; margin-top: 4px; padding-top: 3px; font-size: 6pt; color: #aaa; text-align: right; }' +
+    '@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }' +
+    '</style></head><body>' +
+    '<div class="label-wrap">' +
+    '  <div class="label-info">' +
+    '    <div class="label-title">라이프컬처 입고라벨</div>' +
+    '    <div class="label-name">' + (record.item_name||'-') + '</div>' +
+    '    <table>' +
+    '      <tr><td>Lot No.</td><td><b>' + (record.lot_no||'-') + '</b></td></tr>' +
+    '      <tr><td>위치</td><td style="color:#1a73e8;font-weight:700">' + (record.location||'-') + '</td></tr>' +
+    '      <tr><td>수량</td><td>' + (record.qty||0) + ' ' + (record.unit||'') + '</td></tr>' +
+    '      <tr><td>소비기한</td><td style="color:#e74c3c;font-weight:700">' + (record.expiry_date||'-') + '</td></tr>' +
+    '      <tr><td>공급업체</td><td style="font-size:7pt">' + (record.supplier||'-') + '</td></tr>' +
+    '    </table>' +
+    '  </div>' +
+    '  <div class="label-qr">' +
+    '    <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=' + qrData + '" alt="QR">' +
+    '    <div class="label-qr-text">' + (record.lot_no||'') + '</div>' +
+    '  </div>' +
     '</div>' +
-    '<div style="display:flex;gap:8px;margin-top:12px">' +
-    '<button onclick="window.print()" style="flex:1;padding:10px;background:#2C5F2E;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700"><i class="fas fa-print"></i> 인쇄</button>' +
-    '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer">닫기</button>' +
-    '</div></div></div>';
-  document.body.appendChild(m);
+    '<div class="label-footer">라이프컬처 창고관리시스템</div>' +
+    '</body></html>';
+
+  // 기존 iframe 제거
+  var oldFrame = document.getElementById('whLabelPrintFrame');
+  if (oldFrame) oldFrame.remove();
+
+  var iframe = document.createElement('iframe');
+  iframe.id = 'whLabelPrintFrame';
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:100mm;height:60mm;border:none;';
+  document.body.appendChild(iframe);
+
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(printHtml);
+  iframe.contentDocument.close();
+
+  // QR 이미지 로드 대기 후 인쇄
+  var qrImg = iframe.contentDocument.querySelector('img');
+  var printed = false;
+  function doPrint() {
+    if (printed) return;
+    printed = true;
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    // 라벨 모달 닫기
+    var lm = document.getElementById('whLabelModal');
+    if (lm) lm.remove();
+  }
+  if (qrImg) {
+    qrImg.onload = doPrint;
+    qrImg.onerror = doPrint;
+    setTimeout(doPrint, 2000); // 최대 2초 대기
+  } else {
+    setTimeout(doPrint, 300);
+  }
 }
 
 // ── 위치 라벨 출력 ────────────────────────────────
@@ -1311,6 +1385,48 @@ function whPrintLocLabel(locCode) {
     '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer">닫기</button>' +
     '</div></div></div>';
   document.body.appendChild(m);
+}
+
+// ── 프린터 IP 저장 ────────────────────────────────
+function whSavePrinterIp() {
+  var ip = (document.getElementById('whPrinterIpInput') || {}).value || '';
+  if (!ip) { showToast('IP 주소를 입력하세요.', 'warning'); return; }
+  localStorage.setItem('whLabelPrinterIp', ip.trim());
+  showToast('프린터 IP가 저장되었습니다: ' + ip.trim(), 'success');
+}
+
+// ── ZPL 네트워크 전송 (CORS 제약으로 직접 전송 불가 시 안내) ──
+function whZplNetworkPrint(lotNo) {
+  var record = whInboundData.find(function(r){ return r.lot_no === lotNo; });
+  if (!record) return;
+  var ip = localStorage.getItem('whLabelPrinterIp') || '';
+  if (!ip) {
+    showToast('먼저 프린터 IP 주소를 입력하고 저장하세요.', 'warning');
+    return;
+  }
+  var zpl = '^XA\n' +
+    '^CI28\n' +
+    '^FO20,15^A0N,22,22^FD' + (record.item_name||'').substring(0,30) + '^FS\n' +
+    '^FO20,42^A0N,18,18^FDLot: ' + (record.lot_no||'') + '^FS\n' +
+    '^FO20,64^A0N,18,18^FD위치: ' + (record.location||'') + '^FS\n' +
+    '^FO20,86^A0N,18,18^FD소비기한: ' + (record.expiry_date||'') + '^FS\n' +
+    '^FO20,108^A0N,18,18^FD수량: ' + (record.qty||0) + ' ' + (record.unit||'') + '^FS\n' +
+    '^FO220,10^BQN,2,4^FDQA,' + (record.lot_no||'') + '^FS\n' +
+    '^XZ';
+
+  // 브라우저에서 직접 TCP 소켓 연결은 불가 → fetch로 시도 후 실패 시 파일 다운로드 안내
+  fetch('http://' + ip + ':9100', {
+    method: 'POST',
+    mode: 'no-cors',
+    body: zpl,
+    headers: { 'Content-Type': 'text/plain' }
+  }).then(function() {
+    showToast('ZPL 전송 완료 (IP: ' + ip + ':9100)', 'success');
+  }).catch(function() {
+    // 직접 전송 실패 시 파일 다운로드로 폴백
+    showToast('직접 전송 실패. ZPL 파일을 다운로드하여 프린터 유틸리티로 전송하세요.', 'warning');
+    whSendZplLabel(lotNo);
+  });
 }
 
 // ── 엑셀 내보내기 ─────────────────────────────────
