@@ -1555,6 +1555,14 @@ function _whBulkRowHtml(idx, data) {
     return '<option value="' + u + '"' + ((data.unit||'pallet') === u ? ' selected' : '') + '>' + u + '</option>';
   }).join('');
 
+  // 구역 자동 계산
+  var zoneLabel = '';
+  if (data.location) {
+    var allLocs2 = (wh === 'C' ? COLD_LOCATIONS : WARM_LOCATIONS);
+    var foundLoc = allLocs2.find(function(l){ return l.code === data.location; });
+    if (foundLoc) zoneLabel = foundLoc.zoneKey + '구역';
+  }
+
   return '<tr id="whBulkRow_' + idx + '" style="vertical-align:middle">' +
     '<td style="padding:4px 6px;border:1px solid #ddd;text-align:center;color:#aaa;font-size:11px">' + (idx + 1) + '</td>' +
     // 창고
@@ -1567,7 +1575,11 @@ function _whBulkRowHtml(idx, data) {
     '</td>' +
     // 위치코드
     '<td style="padding:3px 4px;border:1px solid #ddd">' +
-      '<select id="whBulkLoc_' + idx + '" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">' + locOpts + '</select>' +
+      '<select id="whBulkLoc_' + idx + '" onchange="whBulkUpdateZone(this,' + idx + ')" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">' + locOpts + '</select>' +
+    '</td>' +
+    // 구역 (자동표시, 읽기전용)
+    '<td style="padding:3px 4px;border:1px solid #ddd">' +
+      '<input type="text" id="whBulkZone_' + idx + '" value="' + zoneLabel + '" readonly placeholder="자동" style="width:100%;padding:4px;border:1px solid #e0e0e0;border-radius:4px;font-size:12px;background:#f8f9fa;color:#555;cursor:default" />' +
     '</td>' +
     // 입고일
     '<td style="padding:3px 4px;border:1px solid #ddd">' +
@@ -1627,11 +1639,25 @@ function whBulkAddRow(data) {
   }
 }
 
-// 창고 변경 시 위치코드 드롭다운 재빌드
+// 창고 변경 시 위치코드 드롭다운 재빌드 + 구역 초기화
 function whBulkWarehouseChange(sel, idx) {
   var wh = sel.value;
   var locEl = document.getElementById('whBulkLoc_' + idx);
   if (locEl) locEl.innerHTML = _whGetLocOptions(wh);
+  var zoneEl = document.getElementById('whBulkZone_' + idx);
+  if (zoneEl) zoneEl.value = '';
+}
+
+// 위치코드 선택 시 구역 자동 표시
+function whBulkUpdateZone(locSel, idx) {
+  var code = locSel.value;
+  var zoneEl = document.getElementById('whBulkZone_' + idx);
+  if (!zoneEl) return;
+  if (!code) { zoneEl.value = ''; return; }
+  // 두 창고 모두에서 검색
+  var allLocs = COLD_LOCATIONS.concat(WARM_LOCATIONS);
+  var found = allLocs.find(function(l){ return l.code === code; });
+  zoneEl.value = found ? found.zoneKey + '구역' : '';
 }
 
 // 행 복사
@@ -1639,17 +1665,19 @@ function whBulkCopyRow(idx) {
   var tr = document.getElementById('whBulkRow_' + idx);
   if (!tr) return;
   var inputs = tr.querySelectorAll('input, select');
+  // 콜럼 순서: 창고(sel0), 위치코드(sel1), 구역(input2-readonly), 입고일(input3), 품목명(input4), 수량(input5), 단위(sel6), 소비기한(input7), 공급업체(input8), 담당자(input9), 입고유형(sel10)
   var data = {
-    warehouse: inputs[0].value,
-    location: inputs[1].value,
-    inbound_date: inputs[2].value,
-    item_name: inputs[3].value,
-    qty: inputs[4].value,
-    unit: inputs[5].value,
-    expiry_date: inputs[6].value,
-    supplier: inputs[7].value,
-    manager: inputs[8].value,
-    inbound_type: inputs[9].value
+    warehouse: inputs[0] ? inputs[0].value : '',
+    location: inputs[1] ? inputs[1].value : '',
+    // inputs[2] = 구역 (readonly, 자동생성)
+    inbound_date: inputs[3] ? inputs[3].value : '',
+    item_name: inputs[4] ? inputs[4].value : '',
+    qty: inputs[5] ? inputs[5].value : '',
+    unit: inputs[6] ? inputs[6].value : 'pallet',
+    expiry_date: inputs[7] ? inputs[7].value : '',
+    supplier: inputs[8] ? inputs[8].value : '',
+    manager: inputs[9] ? inputs[9].value : '',
+    inbound_type: inputs[10] ? inputs[10].value : '수입제품'
   };
   whBulkAddRow(data);
   showToast('행이 복사되었습니다.', 'success');
@@ -1671,19 +1699,21 @@ function whBulkClearAll() {
 }
 
 // 행에서 데이터 읽기
+// 콜럼 순서: 창고(0), 위치코드(1), 구역-readonly(2), 입고일(3), 품목명(4), 수량(5), 단위(6), 소비기한(7), 공급업체(8), 담당자(9), 입고유형(10)
 function _whBulkReadRow(tr) {
   var inputs = tr.querySelectorAll('input, select');
   return {
     warehouse: inputs[0] ? inputs[0].value : '',
     location: inputs[1] ? inputs[1].value : '',
-    inbound_date: inputs[2] ? inputs[2].value : '',
-    item_name: inputs[3] ? inputs[3].value.trim() : '',
-    qty: inputs[4] ? Number(inputs[4].value) : 0,
-    unit: inputs[5] ? inputs[5].value : 'pallet',
-    expiry_date: inputs[6] ? inputs[6].value : '',
-    supplier: inputs[7] ? inputs[7].value.trim() : '',
-    manager: inputs[8] ? inputs[8].value.trim() : '',
-    inbound_type: inputs[9] ? inputs[9].value : '기타'
+    // inputs[2] = 구역 (readonly 무시)
+    inbound_date: inputs[3] ? inputs[3].value : '',
+    item_name: inputs[4] ? inputs[4].value.trim() : '',
+    qty: inputs[5] ? Number(inputs[5].value) : 0,
+    unit: inputs[6] ? inputs[6].value : 'pallet',
+    expiry_date: inputs[7] ? inputs[7].value : '',
+    supplier: inputs[8] ? inputs[8].value.trim() : '',
+    manager: inputs[9] ? inputs[9].value.trim() : '',
+    inbound_type: inputs[10] ? inputs[10].value : '기타'
   };
 }
 
@@ -1773,19 +1803,17 @@ async function whBulkSubmitAll() {
 function whBulkDownloadTemplate() {
   if (typeof XLSX === 'undefined') { showToast('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warning'); return; }
 
-  var headers = ['창고(C=저온/W=일반)', '위치코드', '입고일(YYYY-MM-DD)', '품목명', '수량', '단위(pallet/box/ea/kg)', '소비기한(YYYY-MM-DD)', '공급업체', '담당자', '입고유형(수입제품/OEM제품/자체생산/기타)'];
+    var headers = ['창고(C=저온/W=일반)', '위치코드', '구역', '입고일(YYYY-MM-DD)', '품목명', '수량', '단위(pallet/box/ea/kg)', '소비기한(YYYY-MM-DD)', '공급업체', '담당자', '입고유형(수입제품/OEM제품/자체생산/기타)'];
   var examples = [
-    ['C', 'C-A1-1-1', '2026-06-12', '제품명 예시', 10, 'pallet', '2027-06-12', '공급업체명', '홍길동', '수입제품'],
-    ['W', 'W-A1-1-1', '2026-06-12', '제품명 예시2', 5, 'box', '2027-12-31', '공급업체명2', '김철수', 'OEM제품']
+    ['C', 'C-A1-1-1', 'A구역', '2026-06-12', '제품명 예시', 10, 'pallet', '2027-06-12', '공급업체명', '홍길동', '수입제품'],
+    ['W', 'W-A1-1-1', 'A구역', '2026-06-12', '제품명 예시2', 5, 'box', '2027-12-31', '공급업체명2', '김철수', 'OEM제품']
   ];
-
   var wb = XLSX.utils.book_new();
   var wsData = [headers].concat(examples);
   var ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  // 열 너비 설정
+  // 열 너비 설정 (11열)
   ws['!cols'] = [
-    {wch:16},{wch:14},{wch:18},{wch:24},{wch:8},{wch:20},{wch:18},{wch:16},{wch:12},{wch:30}
+    {wch:16},{wch:14},{wch:10},{wch:18},{wch:24},{wch:8},{wch:20},{wch:18},{wch:16},{wch:12},{wch:30}
   ];
 
   // 헤더 스타일 (배경색)
@@ -1861,17 +1889,19 @@ function whBulkHandleFile(file) {
           if (/^\d{8}$/.test(s)) return s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8);
           return s;
         }
+        // 콜럼 순서: A=창고(0), B=위치코드(1), C=구역(2), D=입고일(3), E=품목명(4), F=수량(5), G=단위(6), H=소비기한(7), I=공급업체(8), J=담당자(9), K=입고유형(10)
         var d = {
           warehouse: String(r[0] || '').trim().toUpperCase(),
           location: String(r[1] || '').trim().toUpperCase(),
-          inbound_date: fmtDate(r[2]),
-          item_name: String(r[3] || '').trim(),
-          qty: Number(r[4]) || '',
-          unit: String(r[5] || 'pallet').trim(),
-          expiry_date: fmtDate(r[6]),
-          supplier: String(r[7] || '').trim(),
-          manager: String(r[8] || '').trim(),
-          inbound_type: String(r[9] || '수입제품').trim()
+          // r[2] = 구역 (자동표시용, 저장에 불필요)
+          inbound_date: fmtDate(r[3]),
+          item_name: String(r[4] || '').trim(),
+          qty: Number(r[5]) || '',
+          unit: String(r[6] || 'pallet').trim(),
+          expiry_date: fmtDate(r[7]),
+          supplier: String(r[8] || '').trim(),
+          manager: String(r[9] || '').trim(),
+          inbound_type: String(r[10] || '수입제품').trim()
         };
         whBulkAddRow(d);
         added++;
