@@ -979,6 +979,16 @@ const IMPORT_COL_MAP = {
   '마진': 'margin',
   '마진율': 'margin_rate',
   '마진 율': 'margin_rate',
+  // 피벗 테이블 형식 헤더명 (합계 : 필드명)
+  '합계 : 수량': 'qty',
+  '합계 : 결제금액': 'payment',
+  '합계 : 정산금액': 'settlement',
+  '합계 : 공급가': 'supply_price',
+  '합계 : 택배비': 'delivery_fee',
+  '합계 : 작업비': 'work_fee',
+  '합계 : 포장박스': 'box_fee',
+  '합계 : 마진': 'margin',
+  '합계 : 마진율': 'margin_rate',
   '비고': 'remarks',
 };
 
