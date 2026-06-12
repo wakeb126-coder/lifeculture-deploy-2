@@ -1447,6 +1447,43 @@ function whSelectItemName(el) {
   if (dropdown) dropdown.style.display = 'none';
 }
 
+// ── wh_inbound → logistics 레코드 변환 헬퍼 ──────────
+// wh_inbound 데이터를 logistics 컬렉션 형식으로 변환
+function _whBuildLogisticsRecord(d) {
+  // inbound_type → product_type 매핑
+  var typeMap = {
+    '수입제품': '수입제품',
+    'OEM제품': 'OEM제품',
+    '자체생산': '자체생산',
+    '기타': '기타'
+  };
+  var productType = typeMap[d.inbound_type] || d.inbound_type || '기타';
+  // Lot No: wh_inbound의 lot_no를 그대로 사용
+  return {
+    lot_no: d.lot_no || '',
+    transaction_type: '입고',
+    product_type: productType,
+    date: d.inbound_date || '',
+    product_name: d.item_name || '',
+    product_code: d.lot_no_product || '',
+    quantity: Number(d.qty) || 0,
+    unit: d.unit || 'pallet',
+    unit_price: 0,
+    total_amount: 0,
+    expiry_date: d.expiry_date || '',
+    storage_location: (d.warehouse || '') + '-' + (d.location || ''),
+    manager: d.manager || '',
+    vendor: d.supplier || '',
+    destination: '',
+    status: '입고완료',
+    notes: d.memo || '',
+    // 참조용 원본 wh_inbound 정보
+    wh_lot_no: d.lot_no || '',
+    wh_warehouse: d.warehouse || '',
+    wh_location: d.location || ''
+  };
+}
+
 // ── 입고 폼 제출 핸들러 ────────────────────────────
 async function whHandleInSubmit(e) {
   if (e) e.preventDefault();
@@ -1489,6 +1526,9 @@ async function whHandleInSubmit(e) {
   if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 등록 중...'; }
   try {
     await apiPost('wh_inbound', data);
+    // 전체 물류현황(전체현황 탭))에도 반영
+    var lgRecord = _whBuildLogisticsRecord(data);
+    await apiPost('logistics', lgRecord);
     showToast('입고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache();
     await whLoadAll();
@@ -1777,6 +1817,9 @@ async function whBulkSubmitAll() {
     };
     try {
       await apiPost('wh_inbound', payload);
+      // 전체 물류현황(전체현황 탭)에도 반영
+      var lgRec = _whBuildLogisticsRecord(payload);
+      await apiPost('logistics', lgRec);
       successCount++;
     } catch(e) {
       failCount++;
