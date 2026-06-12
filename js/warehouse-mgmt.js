@@ -1221,3 +1221,178 @@ function whProcessScan(rawValue) {
     showToast('해당 Lot No. 또는 QR 코드를 찾을 수 없습니다.', 'warning');
   }
 }
+
+// ── 품목명 자동완성 (제품마스터 연동) ─────────────────
+// 제품마스터 캐시
+var _whProductMasterCache = null;
+var _whProductMasterLoading = false;
+
+async function whLoadProductMaster() {
+  if (_whProductMasterCache !== null) return _whProductMasterCache;
+  if (_whProductMasterLoading) {
+    // 로딩 중이면 잠시 대기 후 재시도
+    await new Promise(function(r){ setTimeout(r, 300); });
+    return _whProductMasterCache || [];
+  }
+  _whProductMasterLoading = true;
+  try {
+    _whProductMasterCache = await apiGetAll('products');
+  } catch(e) {
+    _whProductMasterCache = [];
+  }
+  _whProductMasterLoading = false;
+  return _whProductMasterCache || [];
+}
+
+// 입고유형 매핑: 제품마스터 product_type → whin_type 옵션값
+var _whTypeMap = {
+  '수입제품': '수입제품',
+  '수입제품 (IMP)': '수입제품',
+  'OEM': 'OEM제품',
+  'OEM제품': 'OEM제품',
+  '자체생산': '자체생산',
+  '자체생산 (OWN)': '자체생산'
+};
+
+async function whItemNameFilter(query) {
+  var dropdown = document.getElementById('whin_item_dropdown');
+  if (!dropdown) return;
+
+  var products = await whLoadProductMaster();
+  var q = (query || '').trim().toLowerCase();
+
+  // 검색어가 없으면 전체 목록 표시, 있으면 필터링
+  var filtered = q
+    ? products.filter(function(p) {
+        return (p.product_name || '').toLowerCase().includes(q) ||
+               (p.product_code || '').toLowerCase().includes(q);
+      })
+    : products;
+
+  if (filtered.length === 0) {
+    dropdown.innerHTML = '<div style="padding:12px 14px;color:#aaa;font-size:13px">검색 결과 없음</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+
+  dropdown.innerHTML = filtered.slice(0, 30).map(function(p) {
+    var typeBadge = '';
+    var pt = p.product_type || '';
+    if (pt.includes('수입')) typeBadge = '<span style="font-size:10px;background:#e8f4fd;color:#2980b9;padding:1px 6px;border-radius:8px;margin-left:6px">수입</span>';
+    else if (pt.includes('OEM')) typeBadge = '<span style="font-size:10px;background:#fef9e7;color:#d68910;padding:1px 6px;border-radius:8px;margin-left:6px">OEM</span>';
+    else if (pt.includes('자체')) typeBadge = '<span style="font-size:10px;background:#eafaf1;color:#1e8449;padding:1px 6px;border-radius:8px;margin-left:6px">자체</span>';
+
+    var codeTxt = p.product_code ? '<span style="font-size:10px;color:#aaa;margin-left:4px">[' + p.product_code + ']</span>' : '';
+
+        var nameAttr = (p.product_name || '').replace(/"/g, '&quot;');
+    var typeAttr = (p.product_type || '').replace(/"/g, '&quot;');
+    return '<div onclick="whSelectItemName(this)"' +
+      ' data-name="' + nameAttr + '"' +
+      ' data-type="' + typeAttr + '"' +
+      ' style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:4px"' +
+      ' onmouseover="this.style.background=\'#f0fff4\'" onmouseout="this.style.background=\'#fff\'">' +
+      '<span style="font-weight:600;color:#222">' + (p.product_name || '-') + '</span>' +
+      codeTxt + typeBadge +
+      '</div>';
+  }).join('');
+  dropdown.style.display = 'block';
+}
+
+function whSelectItemName(el) {
+  var productName = el ? el.getAttribute('data-name') : '';
+  var productType = el ? el.getAttribute('data-type') : '';
+
+  // 품목명 입력란에 선택한 제품명 설정
+  var nameEl = document.getElementById('whin_item_name');
+  if (nameEl) nameEl.value = productName;
+
+  // 입고유형 자동 설정
+  var typeEl = document.getElementById('whin_type');
+  if (typeEl && productType) {
+    var mapped = _whTypeMap[productType] || '';
+    if (mapped) {
+      for (var i = 0; i < typeEl.options.length; i++) {
+        if (typeEl.options[i].value === mapped) {
+          typeEl.selectedIndex = i;
+          break;
+        }
+      }
+    }
+  }
+
+  // 드롭다운 닫기
+  var dropdown = document.getElementById('whin_item_dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+}
+
+// ── 입고 폼 제출 핸들러 ────────────────────────────
+async function whHandleInSubmit(e) {
+  if (e) e.preventDefault();
+  var required = [
+    { id: 'whin_warehouse', label: '창고구분' },
+    { id: 'whin_location', label: '보관위치' },
+    { id: 'whin_item_name', label: '품목명' },
+    { id: 'whin_qty', label: '수량' },
+    { id: 'whin_date', label: '입고일자' },
+    { id: 'whin_expiry_date', label: '소비기한' },
+    { id: 'whin_manager', label: '담당자' }
+  ];
+  for (var i = 0; i < required.length; i++) {
+    var el = document.getElementById(required[i].id);
+    if (!el || !el.value.trim()) {
+      showToast(required[i].label + '을(를) 입력해주세요.', 'warning');
+      if (el) el.focus();
+      return;
+    }
+  }
+  var lotEl = document.getElementById('whInLotDisplay');
+  var data = {
+    lot_no: lotEl ? (lotEl.dataset.lot || lotEl.textContent) : '',
+    warehouse: document.getElementById('whin_warehouse').value,
+    location: document.getElementById('whin_location').value,
+    item_name: document.getElementById('whin_item_name').value.trim(),
+    qty: Number(document.getElementById('whin_qty').value),
+    unit: document.getElementById('whin_unit').value,
+    inbound_date: document.getElementById('whin_date').value,
+    inbound_type: document.getElementById('whin_type').value,
+    mfg_date: (document.getElementById('whin_mfg_date') || {}).value || '',
+    expiry_date: document.getElementById('whin_expiry_date').value,
+    lot_no_product: (document.getElementById('whin_ref_lot') || {}).value || '',
+    supplier: (document.getElementById('whin_supplier') || {}).value || '',
+    temp: (document.getElementById('whin_temp') || {}).value || '',
+    manager: document.getElementById('whin_manager').value.trim(),
+    memo: (document.getElementById('whin_notes') || {}).value || ''
+  };
+  var submitBtn = document.querySelector('#whInForm button[type="submit"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 등록 중...'; }
+  try {
+    await apiPost('wh_inbound', data);
+    showToast('입고 등록 완료: ' + data.lot_no, 'success');
+    whInvalidateMapCache();
+    await whLoadAll();
+    whRefreshInLot();
+    whResetInForm();
+  } catch(err) {
+    showToast('입고 등록 실패: ' + err.message, 'error');
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-save"></i> 입고 등록'; }
+  }
+}
+
+// ── 입고 폼 초기화 ────────────────────────────────
+function whResetInForm() {
+  var form = document.getElementById('whInForm');
+  if (form) form.reset();
+  // 날짜 기본값 복원
+  var today = new Date().toISOString().split('T')[0];
+  var dateEl = document.getElementById('whin_date');
+  if (dateEl) dateEl.value = today;
+  // 위치 드롭다운 초기화
+  var locEl = document.getElementById('whin_location');
+  if (locEl) locEl.innerHTML = '<option value="">창고 먼저 선택</option>';
+  // 드롭다운 닫기
+  var dropdown = document.getElementById('whin_item_dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+  // 제품마스터 캐시 무효화 (최신 데이터 반영)
+  _whProductMasterCache = null;
+}
