@@ -13,6 +13,10 @@ const pageSize = 50;
 let editingId = null;
 let isArchiveLoaded = false;
 
+// 기간 선택 필터 (연도/월)
+let periodYear = '';  // '' = 전체, '2026' 등
+let periodMonth = ''; // '' = 전체, '01'~'12'
+
 // ===========================
 // 초기화
 // ===========================
@@ -87,6 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 모달 배경 클릭
   const modal = document.getElementById('salesModal');
   if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  // 기간 선택 초기화 (연도 옵션 동적 생성)
+  initPeriodFilter();
 });
 
 // ===========================
@@ -143,9 +150,9 @@ async function loadSales() {
       if (info) info.style.display = 'none';
     }
 
-    applyFilter();
-    renderKpi(allSales);
-    renderSalesChart(allSales);
+    // 연도 옵션 갱신 (전체 데이터 기준)
+    buildPeriodYearOptions([...allSales, ...archiveSales]);
+    applyPeriodFilter();
   } catch (e) {
     console.error('[sales] 로드 실패:', e);
     if (tb) tb.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:60px;color:#999">
@@ -171,9 +178,8 @@ async function loadArchiveData() {
     if (info) info.style.display = 'none';
     
     buildFilterOptions();
-    applyFilter();
-    renderKpi(allSales);
-    renderSalesChart(allSales);
+    buildPeriodYearOptions(allSales);
+    applyPeriodFilter();
     showToast('과거 데이터를 성공적으로 불러왔습니다.', 'success');
   } catch (e) {
     console.error('[archive] 로드 실패:', e);
@@ -314,7 +320,9 @@ function setChartMode(mode) {
     const btn = document.getElementById('chartMode' + m.charAt(0).toUpperCase() + m.slice(1));
     if (btn) btn.classList.toggle('active', m === mode);
   });
-  renderSalesChart(allSales);
+  // 기간 필터 적용된 데이터로 차트 렌더링
+  const chartData = getPeriodFilteredData();
+  renderSalesChart(chartData);
 }
 
 function toggleChartCollapse() {
@@ -482,6 +490,129 @@ function renderKpi(data) {
 function setKpi(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
+}
+
+// ===========================
+// 기간 선택 필터 (연도/월)
+// ===========================
+
+/** 연도 옵션을 데이터에서 동적 생성 */
+function buildPeriodYearOptions(data) {
+  const yearSel = document.getElementById('periodYear');
+  if (!yearSel) return;
+  const years = [...new Set(
+    data.map(s => (s.sale_date || '').slice(0, 4)).filter(y => /^\d{4}$/.test(y))
+  )].sort((a, b) => b - a);
+  const cur = yearSel.value;
+  yearSel.innerHTML = '<option value="">전체</option>' +
+    years.map(y => `<option value="${y}"${y === cur ? ' selected' : ''}>${y}년</option>`).join('');
+}
+
+/** 초기 초기화 - 현재 연도 자동 선택 */
+function initPeriodFilter() {
+  const yearSel = document.getElementById('periodYear');
+  if (!yearSel) return;
+  const thisYear = String(new Date().getFullYear());
+  // 데이터 로드 전이라 옵션이 없으면 단순 초기화만
+  periodYear = '';
+  periodMonth = '';
+}
+
+/** 기간 필터 적용된 데이터 반환 */
+function getPeriodFilteredData() {
+  const combined = isArchiveLoaded ? allSales : [...allSales, ...archiveSales];
+  if (!periodYear) return combined;
+  return combined.filter(s => {
+    const d = s.sale_date || '';
+    if (!d.startsWith(periodYear)) return false;
+    if (periodMonth && d.slice(5, 7) !== periodMonth) return false;
+    return true;
+  });
+}
+
+/** 기간 선택 변경 시 호출 */
+function onPeriodChange() {
+  const yearSel = document.getElementById('periodYear');
+  const monthSel = document.getElementById('periodMonth');
+  periodYear = yearSel?.value || '';
+  periodMonth = monthSel?.value || '';
+
+  // 월 선택시 연도가 없으면 자동으로 현재 연도 선택
+  if (periodMonth && !periodYear) {
+    const thisYear = String(new Date().getFullYear());
+    periodYear = thisYear;
+    if (yearSel) yearSel.value = thisYear;
+  }
+
+  // 아카이브 자동 로드 (periodYear가 설정된 경우)
+  if (periodYear && !isArchiveLoaded) {
+    allSales = [...allSales, ...archiveSales];
+    allSales.sort((a, b) => (b.db_no || 0) - (a.db_no || 0));
+    isArchiveLoaded = true;
+    const info = document.getElementById('archiveInfo');
+    if (info) info.style.display = 'none';
+  }
+
+  applyPeriodFilter();
+}
+
+/** 기간 필터 적용 후 차트 + KPI + 테이블 갱신 */
+function applyPeriodFilter() {
+  const data = getPeriodFilteredData();
+
+  // 배지 텍스트 업데이트
+  const mNames = ['','1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const badge = document.getElementById('periodBadge');
+  let periodLabel = '전체 기간';
+  if (!periodYear) periodLabel = '전체 기간';
+  else if (!periodMonth) periodLabel = `${periodYear}년`;
+  else periodLabel = `${periodYear}년 ${mNames[parseInt(periodMonth)]}`;
+  if (badge) badge.textContent = periodLabel;
+
+  // 차트 제목 동적 변경
+  const chartTitle = document.querySelector('.chart-title');
+  if (chartTitle) {
+    chartTitle.innerHTML = `<i class="fas fa-chart-bar"></i> ${periodLabel} 매출액 추이`;
+  }
+
+  // 차트 렌더링
+  renderSalesChart(data);
+
+  // KPI 렌더링 (기간별 집계)
+  renderKpi(data);
+
+  // 테이블 필터: 기간 선택시 filterDateFrom/To 연동
+  if (periodYear) {
+    const dateFrom = document.getElementById('filterDateFrom');
+    const dateTo = document.getElementById('filterDateTo');
+    if (periodMonth) {
+      const lastDay = new Date(parseInt(periodYear), parseInt(periodMonth), 0).getDate();
+      if (dateFrom) dateFrom.value = `${periodYear}-${periodMonth}-01`;
+      if (dateTo) dateTo.value = `${periodYear}-${periodMonth}-${String(lastDay).padStart(2, '0')}`;
+    } else {
+      if (dateFrom) dateFrom.value = `${periodYear}-01-01`;
+      if (dateTo) dateTo.value = `${periodYear}-12-31`;
+    }
+    applyFilter();
+  } else {
+    // 전체 기간: 날짜 필터 초기화
+    const dateFrom = document.getElementById('filterDateFrom');
+    const dateTo = document.getElementById('filterDateTo');
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
+    applyFilter();
+  }
+}
+
+/** 기간 선택 전체 보기 초기화 */
+function resetPeriod() {
+  periodYear = '';
+  periodMonth = '';
+  const yearSel = document.getElementById('periodYear');
+  const monthSel = document.getElementById('periodMonth');
+  if (yearSel) yearSel.value = '';
+  if (monthSel) monthSel.value = '';
+  applyPeriodFilter();
 }
 
 // ===========================
