@@ -17,6 +17,13 @@ let isArchiveLoaded = false;
 let periodYear = '';  // '' = 전체, '2026' 등
 let periodMonth = ''; // '' = 전체, '01'~'12'
 
+// 샘플/샘플출고 판별 헬퍼
+function isSampleRow(s) {
+  const prod = String(s.product_name || '').toLowerCase();
+  const ch = String(s.channel || '').toLowerCase();
+  return prod.includes('샘플') || ch.includes('샘플');
+}
+
 // ===========================
 // 초기화
 // ===========================
@@ -251,6 +258,8 @@ function applyFilter() {
   }
 
   filteredSales = sourceData.filter(s => {
+    // 샘플/샘플출고 항목 제외 (매출 집계 제외)
+    if (isSampleRow(s)) return false;
     if (dateFrom && s.sale_date && s.sale_date < dateFrom) return false;
     if (dateTo && s.sale_date && s.sale_date > dateTo) return false;
     if (channel && s.channel !== channel) return false;
@@ -478,7 +487,11 @@ function renderKpi(data) {
   const totalMargin = data.reduce((s, r) => s + (parseFloat(r.margin) || 0), 0);
   const avgMarginRate = totalSettlement > 0 ? ((totalMargin / totalSettlement) * 100).toFixed(1) : '0.0';
 
-  const fmt = (n) => n >= 10000 ? (n / 10000).toFixed(0) + '만' : n.toLocaleString();
+  const fmt = (n) => {
+    if (n >= 100000000) return (n / 100000000).toFixed(1) + '억';
+    if (n >= 10000) return Math.round(n / 10000).toLocaleString('ko-KR') + '만';
+    return n.toLocaleString('ko-KR');
+  };
 
   setKpi('kpiCount', count.toLocaleString());
   setKpi('kpiPayment', fmt(Math.round(totalPayment)));
@@ -518,11 +531,13 @@ function initPeriodFilter() {
   periodMonth = '';
 }
 
-/** 기간 필터 적용된 데이터 반환 */
+/** 기간 필터 적용된 데이터 반환 (샘플 제외) */
 function getPeriodFilteredData() {
   const combined = isArchiveLoaded ? allSales : [...allSales, ...archiveSales];
-  if (!periodYear) return combined;
-  return combined.filter(s => {
+  // 샘플 제외
+  const nonSample = combined.filter(s => !isSampleRow(s));
+  if (!periodYear) return nonSample;
+  return nonSample.filter(s => {
     const d = s.sale_date || '';
     if (!d.startsWith(periodYear)) return false;
     if (periodMonth && d.slice(5, 7) !== periodMonth) return false;
@@ -1285,7 +1300,12 @@ function parseImportFile(file) {
         }
 
         return record;
-      }).filter(r => r.company || r.product_name); // 빈 행 제거
+      }).filter(r => {
+        if (!r.company && !r.product_name) return false; // 빈 행 제거
+        // 샘플/샘플출고 항목 제외
+        if (isSampleRow(r)) return false;
+        return true;
+      });
 
       // 미리보기 렌더링
       renderImportPreview(headers, dataRows.slice(0, 5), importParsedData.length, file.name);
@@ -1312,7 +1332,7 @@ function renderImportPreview(headers, sampleRows, totalCount, fileName) {
   if (!preview) return;
 
   if (titleEl) titleEl.textContent = `📄 ${fileName}`;
-  if (countEl) countEl.textContent = `총 ${totalCount}건 인식됨`;
+  if (countEl) countEl.textContent = `총 ${totalCount}건 인식됨 (샘플/샘플출고 제외)`;
 
   // 헤더 렌더링
   if (thead) {

@@ -154,7 +154,14 @@ async function loadMonthlySales() {
   try {
     const thisMonth = today().substring(0, 7); // YYYY-MM
     const all = await apiGetAll('sales') || [];
-    const monthData = all.filter(r => r.sale_date && r.sale_date.startsWith(thisMonth));
+    const monthData = all.filter(r => {
+      if (!r.sale_date || !r.sale_date.startsWith(thisMonth)) return false;
+      // 샘플/샘플출고 항목 제외
+      const prod = String(r.product_name || '').toLowerCase();
+      const ch = String(r.channel || '').toLowerCase();
+      if (prod.includes('샘플') || ch.includes('샘플')) return false;
+      return true;
+    });
 
     if (!monthData.length) {
       container.innerHTML = '<div class="empty-msg"><i class="fas fa-inbox"></i> 이번달 매출 데이터 없음</div>';
