@@ -927,7 +927,11 @@
             <div class="form-grid form-grid-4">
               <div class="form-group span-2">
                 <label>품목명 <span class="required">*</span></label>
-                <input type="text" id="whout_item_name" required placeholder="품목명 입력" />
+                <div style="position:relative">
+                  <input type="text" id="whout_item_name" required placeholder="품목명 입력 (자동완성)" oninput="whOutItemInput(this.value)" autocomplete="off" style="width:100%;box-sizing:border-box" />
+                  <div id="whout_item_dropdown" style="display:none;position:absolute;z-index:9999;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;width:100%;top:100%;left:0"></div>
+                </div>
+                <div id="whout_stock_info" style="display:none;margin-top:5px;padding:6px 10px;background:#f0fff4;border-radius:6px;border:1px solid #c3e6cb"></div>
               </div>
               <div class="form-group">
                 <label>수량 <span class="required">*</span></label>
@@ -986,6 +990,47 @@
               </tbody>
             </table>
           </div>
+        </div>
+
+        <!-- ===== 일괄 출고 요청서 (방안 B) ===== -->
+        <div class="form-container" style="margin-top:20px">
+          <div class="form-header" style="margin-bottom:12px">
+            <div class="form-header-left">
+              <div class="form-header-icon" style="background:#fdedec;color:#e74c3c"><i class="fas fa-list-alt"></i></div>
+              <div>
+                <div class="form-title">일괄 출고 요청서</div>
+                <div class="form-subtitle">품목명과 수량만 입력하면 소비기한 짧은 순 → 수량 적은 순으로 위치를 자동 배정합니다. 분할 출고도 자동 처리됩니다.</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" onclick="whBulkOutPreview()" style="background:#fff3cd;color:#856404;border:1px solid #ffc107;font-size:12px"><i class="fas fa-eye"></i> 미리보기 / 위치 자동배정</button>
+              <button class="btn" onclick="whBulkOutClearAll()" style="background:#fff5f5;color:#e74c3c;border:1px solid #e74c3c;font-size:12px"><i class="fas fa-trash"></i> 전체 초기화</button>
+            </div>
+          </div>
+          <!-- 입력 테이블 -->
+          <div style="overflow-x:auto">
+            <table id="whBulkOutTable" style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="background:#fdedec">
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:36px">#</th>
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:200px">품목명 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:80px">수량 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:80px">단위</th>
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:110px">출고일 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:120px">출고처</th>
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:90px">담당자 <span style="color:#e74c3c">*</span></th>
+                  <th style="padding:8px 6px;border:1px solid #f5c6cb;white-space:nowrap;min-width:70px">관리</th>
+                </tr>
+              </thead>
+              <tbody id="whBulkOutBody"></tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn" onclick="whBulkOutAddRow()" style="background:#fff5f5;color:#e74c3c;border:1px solid #e74c3c;font-size:12px"><i class="fas fa-plus"></i> 행 추가</button>
+            <span style="font-size:11px;color:#888;align-self:center">행 우측 <i class="fas fa-copy" style="color:#2980b9"></i> 버튼으로 행 복사 가능</span>
+          </div>
+          <!-- 미리보기 결과 패널 -->
+          <div id="whBulkOutPreview" style="display:none;margin-top:16px;background:#fff;border:1.5px solid #e74c3c;border-radius:10px;padding:16px"></div>
         </div>
       </div>
 
@@ -1303,7 +1348,7 @@ function switchTab(tab) {
       if (tab === 'all') { whUpdateDashKpi(); } // 대시보드 창고 KPI 업데이트
       if (tab === 'wh_map') { whUpdateMapKpi(); whShowMap(whCurrentMap || 'cold'); }
       if (tab === 'wh_in') { whRenderInTable(); whInitBulkTable(); }
-      if (tab === 'wh_out') { whRenderOutTable(); whRenderFifo(); }
+      if (tab === 'wh_out') { whRenderOutTable(); whRenderFifo(); whInitBulkOutTable(); }
       if (tab === 'wh_stocktake') { whRenderLedger(); whRenderStocktakeTable(); }
     }
   </script>
