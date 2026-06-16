@@ -2710,3 +2710,80 @@ function whInitBulkOutTable() {
     whBulkOutAddRow();
   }
 }
+
+// 일괄 출고 직접 등록 (미리보기 없이 바로 등록)
+async function whBulkOutDirectSubmit() {
+  var rows = _whBulkOutReadAll();
+  if (rows.length === 0) {
+    showToast('출고 요청 내역을 입력해주세요.', 'warning');
+    return;
+  }
+  var allAssignments = [];
+  var hasError = false;
+  for (var ri = 0; ri < rows.length; ri++) {
+    var row = rows[ri];
+    var result = whAutoAssignLocations(row.item_name, row.qty);
+    if (result.assignments.length === 0) {
+      showToast('"' + row.item_name + '" 재고가 없습니다. 미리보기로 확인해주세요.', 'warning');
+      hasError = true;
+      break;
+    }
+    if (result.remaining > 0) {
+      showToast('"' + row.item_name + '" 재고 부족 (' + result.remaining + '개 부족). 미리보기로 확인해주세요.', 'warning');
+      hasError = true;
+      break;
+    }
+    result.assignments.forEach(function(a) {
+      allAssignments.push({
+        item_name: row.item_name,
+        qty: a.qty,
+        unit: a.unit || row.unit,
+        location: a.location,
+        warehouse: a.warehouse,
+        date: row.date,
+        destination: row.destination,
+        manager: row.manager,
+        ref_lot: a.lot || ''
+      });
+    });
+  }
+  if (hasError) return;
+  if (!confirm('총 ' + allAssignments.length + '건을 출고 등록하시겠습니까?')) return;
+  var btn = document.querySelector('button[onclick="whBulkOutDirectSubmit()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 등록 중...'; }
+  var todayStr = new Date().toISOString().split('T')[0].replace(/-/g,'').slice(2);
+  var prefix = 'WH-OUT-' + todayStr;
+  var fresh = await apiGetAll('wh_outbound');
+  var seqBase = fresh.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length;
+  var success = 0, fail = 0;
+  for (var i = 0; i < allAssignments.length; i++) {
+    var a = allAssignments[i];
+    var seq = String(seqBase + i + 1).padStart(3, '0');
+    var lotNo = prefix + '-' + seq;
+    try {
+      await apiPost('wh_outbound', {
+        lot_no: lotNo,
+        warehouse: a.warehouse,
+        location: a.location,
+        item_name: a.item_name,
+        qty: a.qty,
+        unit: a.unit,
+        outbound_date: a.date,
+        destination: a.destination,
+        manager: a.manager,
+        ref_lot: a.ref_lot,
+        memo: '일괄출고요청서'
+      });
+      success++;
+    } catch(err) {
+      fail++;
+    }
+  }
+  showToast('일괄 출고 완료: ' + success + '건 성공' + (fail > 0 ? ', ' + fail + '건 실패' : ''), success > 0 ? 'success' : 'error');
+  whInvalidateMapCache();
+  await whLoadAll();
+  whRefreshOutLot();
+  whBulkOutClearAll();
+  whRenderFifo();
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> 출고 등록'; }
+}
