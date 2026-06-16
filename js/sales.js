@@ -1304,7 +1304,14 @@ function parseImportFile(file) {
         }
 
         return record;
-      }).filter(r => r.company || r.product_name); // 빈 행 제거 (샘플 항목은 포함)
+      }).filter(r => {
+        if (!r.company && !r.product_name) return false; // 빈 행 제거
+        // 합계/소계 행 제외: 업체명이 '합계', '소계', '전체', '열합계', '열소계', '열합', '열소', '행합계', '행소계', '합계열', '소계열', '열합', '열소', '열합계', '열소계', 'total' 등인 경우
+        const companyLower = String(r.company || '').trim().toLowerCase();
+        const SKIP = ['합계', '소계', '전체', '열합계', '열소계', '열합', '열소', '행합계', '행소계', '합계열', '소계열', 'total'];
+        if (SKIP.some(k => companyLower.includes(k))) return false;
+        return true;
+      }); // 빈 행 및 합계 행 제거
 
       // 미리보기 렌더링
       renderImportPreview(headers, dataRows.slice(0, 5), importParsedData.length, file.name);
