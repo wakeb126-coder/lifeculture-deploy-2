@@ -194,7 +194,34 @@ function lgFilterTable(tab) {
     const txF = document.getElementById('allTxFilter')?.value || '';
     const from = document.getElementById('allDateFrom')?.value || '';
     const to = document.getElementById('allDateTo')?.value || '';
-    const data = allLogisticsData.filter(r =>
+    // logistics 콜렉션에 동기화된 wh_outbound lot_no 목록
+    const syncedLots = new Set(
+      allLogisticsData
+        .filter(r => (r.lot_no || '').startsWith('WH-OUT-') && r.transaction_type === '출고')
+        .map(r => r.lot_no)
+    );
+    // wh_outbound 미동기화 건을 logistics 형식으로 변환
+    const whOutExtra = (allWhOutboundData || []).filter(r => {
+      const lotNo = r.lot_no || r.id || '';
+      return !syncedLots.has(lotNo);
+    }).map(r => ({
+      id: r.id,
+      lot_no: r.lot_no || r.id || '',
+      product_type: r.product_type || '수입제품',
+      transaction_type: '출고',
+      date: r.out_date || r.date || '',
+      product_name: r.item_name || '',
+      quantity: r.qty,
+      unit: r.unit || 'ea',
+      total_amount: null,
+      expiry_date: r.expiry_date || '',
+      status: '출고완료',
+      manager: r.manager || '',
+      notes: r.destination || r.notes || '',
+      _from_wh_outbound: true
+    }));
+    const combined = [...allLogisticsData, ...whOutExtra];
+    const data = combined.filter(r =>
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!typeF || r.product_type === typeF) &&
       (!txF || r.transaction_type === txF) &&
@@ -743,8 +770,34 @@ function lgRenderStockTable() {
       }
     }
   });
-  // 창고 출고(wh_outbound)는 출고 등록 시 logistics 컬렉션에 동기화 저장되므로
-  // 여기서 별도 차감하지 않음 (이중 차감 방지)
+  // 창고 출고(wh_outbound) 중 logistics 컬렉션에 동기화 안 된 건만 추가 차감
+  // (동기화된 건은 이미 위에서 allLogisticsData로 집계됨 → 이중 차감 방지)
+  var syncedWhOutLots = new Set();
+  allLogisticsData.forEach(function(r) {
+    if ((r.lot_no || '').startsWith('WH-OUT-') && r.transaction_type === '출고') {
+      syncedWhOutLots.add(r.lot_no);
+    }
+  });
+  (allWhOutboundData || []).forEach(function(r) {
+    var lotNo = r.lot_no || r.id || '';
+    if (syncedWhOutLots.has(lotNo)) return; // 이미 logistics에 동기화된 건 건너뜀
+    var name = (r.item_name || '').trim();
+    var qty = Number(r.qty || 0);
+    if (!name || !qty) return;
+    // 같은 품목명 중 소비기한 가장 짧은 행에 차감
+    var matchedKey = null;
+    Object.keys(stockMap).forEach(function(k) {
+      if (k.split('||')[0] === name) {
+        if (!matchedKey) { matchedKey = k; return; }
+        var curExp = stockMap[matchedKey].expiry || '9999';
+        var thisExp = stockMap[k].expiry || '9999';
+        if (thisExp < curExp) matchedKey = k;
+      }
+    });
+    if (matchedKey) {
+      stockMap[matchedKey].outQty += qty;
+    }
+  });
 
   var rows = Object.values(stockMap);
   if (q) rows = rows.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; });
