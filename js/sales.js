@@ -258,8 +258,6 @@ function applyFilter() {
   }
 
   filteredSales = sourceData.filter(s => {
-    // 샘플/샘플출고 항목 제외 (매출 집계 제외)
-    if (isSampleRow(s)) return false;
     if (dateFrom && s.sale_date && s.sale_date < dateFrom) return false;
     if (dateTo && s.sale_date && s.sale_date > dateTo) return false;
     if (channel && s.channel !== channel) return false;
@@ -375,9 +373,9 @@ function renderSalesChart(data) {
   const canvas = document.getElementById('salesChart');
   if (!canvas) return;
 
-  // 데이터 집계
+  // 데이터 집계 (샘플 제외 - 매출 차트에는 실제 매출만 표시)
   const grouped = {};
-  data.forEach(s => {
+  data.filter(s => !isSampleRow(s)).forEach(s => {
     const dateStr = s.sale_date || s.createdAt || '';
     if (!dateStr) return;
     const d = new Date(dateStr);
@@ -481,10 +479,13 @@ function renderSalesChart(data) {
 // KPI 렌더링
 // ===========================
 function renderKpi(data) {
-  const count = data.length;
-  const totalPayment = data.reduce((s, r) => s + (parseFloat(r.payment) || 0), 0);
-  const totalSettlement = data.reduce((s, r) => s + (parseFloat(r.settlement) || 0), 0);
-  const totalMargin = data.reduce((s, r) => s + (parseFloat(r.margin) || 0), 0);
+  // KPI 집계에서 샘플 항목 제외 (테이블에는 표시하되 매출 통계에서는 제외)
+  const salesData = data.filter(r => !isSampleRow(r));
+  const sampleCount = data.length - salesData.length;
+  const count = salesData.length;
+  const totalPayment = salesData.reduce((s, r) => s + (parseFloat(r.payment) || 0), 0);
+  const totalSettlement = salesData.reduce((s, r) => s + (parseFloat(r.settlement) || 0), 0);
+  const totalMargin = salesData.reduce((s, r) => s + (parseFloat(r.margin) || 0), 0);
   const avgMarginRate = totalSettlement > 0 ? ((totalMargin / totalSettlement) * 100).toFixed(1) : '0.0';
 
   const fmt = (n) => {
@@ -531,13 +532,11 @@ function initPeriodFilter() {
   periodMonth = '';
 }
 
-/** 기간 필터 적용된 데이터 반환 (샘플 제외) */
+/** 기간 필터 적용된 데이터 반환 (샘플 포함) */
 function getPeriodFilteredData() {
   const combined = isArchiveLoaded ? allSales : [...allSales, ...archiveSales];
-  // 샘플 제외
-  const nonSample = combined.filter(s => !isSampleRow(s));
-  if (!periodYear) return nonSample;
-  return nonSample.filter(s => {
+  if (!periodYear) return combined;
+  return combined.filter(s => {
     const d = s.sale_date || '';
     if (!d.startsWith(periodYear)) return false;
     if (periodMonth && d.slice(5, 7) !== periodMonth) return false;
@@ -647,26 +646,30 @@ function renderTable() {
   }
 
   tb.innerHTML = pageData.map((s, i) => {
+    const isSample = isSampleRow(s);
     const margin = parseFloat(s.margin) || 0;
     const marginRate = parseFloat(s.margin_rate) || 0;
     const marginClass = margin >= 0 ? 'margin-pos' : 'margin-neg';
     const marginRateStr = typeof s.margin_rate === 'string' && s.margin_rate.includes('%')
       ? s.margin_rate
       : (marginRate * 100).toFixed(1) + '%';
-    return `<tr data-id="${s.id}">
+    // 샘플 행: 연한 배경 + 제품명/수량만 표시, 금액 컴럼은 '-'
+    const rowStyle = isSample ? ' style="background:#f9f9f9;color:#999;font-style:italic"' : '';
+    const sampleBadge = isSample ? ' <span style="background:#f0ad4e;color:#fff;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600;font-style:normal">샘플</span>' : '';
+    return `<tr data-id="${s.id}"${rowStyle}>
       <td class="center"><input type="checkbox" class="row-chk" data-id="${s.id}" style="cursor:pointer;width:15px;height:15px"></td>
       <td>${s.company || '-'}</td>
-      <td>${s.product_name || '-'}</td>
+      <td>${s.product_name || '-'}${sampleBadge}</td>
       <td><span style="background:#e8f5e9;color:#1e8449;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${s.channel || '-'}</span></td>
       <td class="center">${s.qty || s.quantity || '-'}</td>
-      <td class="num">${numFmt(s.payment)}</td>
-      <td class="num">${numFmt(s.settlement)}</td>
-      <td class="num">${numFmt(s.supply_price)}</td>
-      <td class="num">${numFmt(s.delivery_fee)}</td>
-      <td class="num">${numFmt(s.work_fee)}</td>
-      <td class="num">${numFmt(s.box_fee)}</td>
-      <td class="num ${marginClass}">${numFmt(s.margin)}</td>
-      <td class="center ${marginClass}">${marginRateStr}</td>
+      <td class="num">${isSample ? '-' : numFmt(s.payment)}</td>
+      <td class="num">${isSample ? '-' : numFmt(s.settlement)}</td>
+      <td class="num">${isSample ? '-' : numFmt(s.supply_price)}</td>
+      <td class="num">${isSample ? '-' : numFmt(s.delivery_fee)}</td>
+      <td class="num">${isSample ? '-' : numFmt(s.work_fee)}</td>
+      <td class="num">${isSample ? '-' : numFmt(s.box_fee)}</td>
+      <td class="num ${marginClass}">${isSample ? '-' : numFmt(s.margin)}</td>
+      <td class="center ${marginClass}">${isSample ? '-' : marginRateStr}</td>
       <td class="center">
         <button class="btn btn-secondary" style="padding:3px 8px;font-size:11px" onclick="openEditModal('${s.id}')">
           <i class="fas fa-edit"></i>
@@ -1107,6 +1110,7 @@ const IMPORT_COL_MAP = {
   '제품명': 'product_name',
   '제품': 'product_name',
   '상품명': 'product_name',
+  '옵션': 'product_name',  // 20260612 주문서 형식 대응
   '수량': 'qty',
   '쇼핑몰': 'channel',
   '채널': 'channel',
@@ -1300,12 +1304,7 @@ function parseImportFile(file) {
         }
 
         return record;
-      }).filter(r => {
-        if (!r.company && !r.product_name) return false; // 빈 행 제거
-        // 샘플/샘플출고 항목 제외
-        if (isSampleRow(r)) return false;
-        return true;
-      });
+      }).filter(r => r.company || r.product_name); // 빈 행 제거 (샘플 항목은 포함)
 
       // 미리보기 렌더링
       renderImportPreview(headers, dataRows.slice(0, 5), importParsedData.length, file.name);
@@ -1332,7 +1331,7 @@ function renderImportPreview(headers, sampleRows, totalCount, fileName) {
   if (!preview) return;
 
   if (titleEl) titleEl.textContent = `📄 ${fileName}`;
-  if (countEl) countEl.textContent = `총 ${totalCount}건 인식됨 (샘플/샘플출고 제외)`;
+  if (countEl) countEl.textContent = `총 ${totalCount}건 인식됨`;
 
   // 헤더 렌더링
   if (thead) {

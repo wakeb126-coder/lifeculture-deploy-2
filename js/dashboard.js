@@ -156,7 +156,7 @@ async function loadMonthlySales() {
     const all = await apiGetAll('sales') || [];
     const monthData = all.filter(r => {
       if (!r.sale_date || !r.sale_date.startsWith(thisMonth)) return false;
-      // 샘플/샘플출고 항목 제외
+      // 샘플/샘플출고 항목 매출 제외 (대시보드 집계에서 제외)
       const prod = String(r.product_name || '').toLowerCase();
       const ch = String(r.channel || '').toLowerCase();
       if (prod.includes('샘플') || ch.includes('샘플')) return false;
