@@ -696,6 +696,7 @@ function lgRenderStockTable() {
 
   var stockMap = {};
   // logistics 콜렉션 (수입/OEM/자체생산 입출고)
+  // 1패스: 입고 데이터 먼저 집계 (소비기한 있는 키 생성)
   allLogisticsData.forEach(function(r) {
     var name = (r.product_name || r.item_name || '').trim();
     var expiry = (r.expiry_date || r.expiry || '').trim();
@@ -704,14 +705,42 @@ function lgRenderStockTable() {
     var qty = Number(r.quantity || r.qty || 0);
     var tx = (r.transaction_type || '입고').trim();
     if (!name) return;
+    if (tx !== '입고' && tx !== '반품') return; // 입고만 먼저
     var key = name + '||' + expiry;
     if (!stockMap[key]) {
       stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
     }
-    if (tx === '입고' || tx === '반품') {
-      stockMap[key].inQty += qty;
-    } else if (tx === '출고') {
+    stockMap[key].inQty += qty;
+  });
+  // 2패스: 출고 데이터 집계 - 소비기한 없는 출고는 같은 품목명의 소비기한 짧은 행에 합산
+  allLogisticsData.forEach(function(r) {
+    var name = (r.product_name || r.item_name || '').trim();
+    var expiry = (r.expiry_date || r.expiry || '').trim();
+    var qty = Number(r.quantity || r.qty || 0);
+    var tx = (r.transaction_type || '입고').trim();
+    if (!name) return;
+    if (tx !== '출고') return;
+    var key = name + '||' + expiry;
+    if (stockMap[key]) {
+      // 소비기한이 일치하는 키가 있으면 그대로 차감
       stockMap[key].outQty += qty;
+    } else {
+      // 소비기한 없는 출고 → 같은 품목명 중 소비기한 가장 짧은 행에 합산
+      var matchedKey = null;
+      Object.keys(stockMap).forEach(function(k) {
+        if (k.split('||')[0] === name) {
+          if (!matchedKey) { matchedKey = k; return; }
+          var curExp = stockMap[matchedKey].expiry || '9999';
+          var thisExp = stockMap[k].expiry || '9999';
+          if (thisExp < curExp) matchedKey = k;
+        }
+      });
+      if (matchedKey) {
+        stockMap[matchedKey].outQty += qty;
+      } else {
+        // 입고 기록이 없는 경우에도 행 생성 (음수 재고 표시)
+        stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: qty };
+      }
     }
   });
   // 창고 출고 (wh_outbound)만 추가 차감
