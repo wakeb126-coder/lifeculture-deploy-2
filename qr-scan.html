@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>QR 스캔 — 라이프컬처</title>
+  <link rel="icon" href="images/favicon.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
+      background: #1a1a2e;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      background: linear-gradient(135deg, #2C5F2E, #1a3a1c);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header .logo-icon { font-size: 22px; }
+    .session-badge {
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .mode-tabs {
+      display: flex;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+    }
+    .mode-tab {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #aaa;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .mode-tab.active {
+      color: #4CAF50;
+      border-bottom-color: #4CAF50;
+      background: rgba(76,175,80,0.08);
+    }
+    .content { flex: 1; padding: 16px; }
+    .camera-box {
+      position: relative;
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 16px;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 1;
+    }
+    #qrVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .scan-frame {
+      width: 65%;
+      aspect-ratio: 1;
+      border: 3px solid #4CAF50;
+      border-radius: 12px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.4);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { border-color: #4CAF50; }
+      50% { border-color: #81C784; box-shadow: 0 0 0 9999px rgba(0,0,0,0.35), 0 0 20px rgba(76,175,80,0.5); }
+    }
+    .scan-line {
+      position: absolute;
+      width: 60%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #4CAF50, transparent);
+      animation: scanLine 2s linear infinite;
+    }
+    @keyframes scanLine {
+      0% { top: 18%; }
+      100% { top: 82%; }
+    }
+    .camera-placeholder {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 16px;
+      background: #16213e;
+      border-radius: 16px;
+      padding: 40px 20px;
+      text-align: center;
+      color: #aaa;
+      font-size: 14px;
+    }
+    .camera-placeholder .icon { font-size: 48px; margin-bottom: 12px; }
+    .btn-start {
+      display: block;
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 12px;
+      padding: 16px;
+      background: linear-gradient(135deg, #2C5F2E, #4CAF50);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-stop {
+      display: block;
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 12px;
+      padding: 12px;
+      background: #e74c3c;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .manual-section {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    .manual-section label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #aaa;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .manual-input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .manual-input-row input {
+      flex: 1;
+      padding: 12px;
+      background: #16213e;
+      border: 1.5px solid #0f3460;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+    }
+    .manual-input-row input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+    .manual-input-row button {
+      padding: 12px 20px;
+      background: #2C5F2E;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .result-card {
+      max-width: 400px;
+      margin: 16px auto 0;
+      background: #16213e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #0f3460;
+      display: none;
+    }
+    .result-card.success { border-color: #4CAF50; background: rgba(76,175,80,0.1); }
+    .result-card.error { border-color: #e74c3c; background: rgba(231,76,60,0.1); }
+    .result-card .result-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .result-card .result-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .result-card .result-row:last-child { border-bottom: none; }
+    .result-card .result-label { color: #aaa; }
+    .result-card .result-value { font-weight: 600; color: #fff; }
+    .session-info {
+      max-width: 400px;
+      margin: 0 auto 16px;
+      background: #16213e;
+      border-radius: 12px;
+      padding: 14px 16px;
+      border: 1px solid #0f3460;
+      font-size: 13px;
+    }
+    .session-info .si-title {
+      font-weight: 700;
+      color: #4CAF50;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .session-info .si-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      color: #ccc;
+    }
+    .session-id-display {
+      font-family: monospace;
+      font-size: 18px;
+      font-weight: 700;
+      color: #4CAF50;
+      letter-spacing: 3px;
+      text-align: center;
+      background: rgba(76,175,80,0.1);
+      border: 2px dashed #4CAF50;
+      border-radius: 10px;
+      padding: 12px;
+      margin: 8px 0;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .status-dot.green { background: #4CAF50; animation: blink 1.5s infinite; }
+    .status-dot.red { background: #e74c3c; }
+    .status-dot.yellow { background: #f39c12; }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .scan-count {
+      text-align: center;
+      font-size: 13px;
+      color: #aaa;
+      margin: 8px 0;
+    }
+    .scan-count span { color: #4CAF50; font-weight: 700; font-size: 18px; }
+    .history-list {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    .history-item {
+      background: #16213e;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid #4CAF50;
+      font-size: 13px;
+    }
+    .history-item .hi-lot { font-weight: 700; color: #4CAF50; font-size: 12px; }
+    .history-item .hi-item { font-weight: 600; margin: 3px 0; }
+    .history-item .hi-meta { color: #aaa; font-size: 11px; }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.3s;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+    .toast.success { background: #2C5F2E; }
+    .toast.error { background: #c0392b; }
+    .divider {
+      max-width: 400px;
+      margin: 16px auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #555;
+      font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1><span class="logo-icon">📦</span> QR 스캐너</h1>
+    <div class="session-badge" id="sessionBadge">연결 중...</div>
+  </div>
+
+  <div class="mode-tabs">
+    <div class="mode-tab active" id="tabScan" onclick="switchTab('scan')">📷 스캔</div>
+    <div class="mode-tab" id="tabSession" onclick="switchTab('session')">🔗 세션</div>
+    <div class="mode-tab" id="tabHistory" onclick="switchTab('history')">📋 이력</div>
+  </div>
+
+  <!-- 스캔 탭 -->
+  <div class="content" id="panelScan">
+    <div id="cameraPlaceholder" class="camera-placeholder">
+      <div class="icon">📷</div>
+      <div>카메라 스캔 시작 버튼을 눌러주세요</div>
+      <div style="font-size:12px;margin-top:6px;color:#777">iOS Safari, Android Chrome 모두 지원</div>
+    </div>
+    <div class="camera-box" id="cameraBox" style="display:none">
+      <video id="qrVideo" autoplay playsinline muted></video>
+      <canvas id="qrCanvas" style="display:none"></canvas>
+      <div class="scan-overlay">
+        <div class="scan-frame"></div>
+        <div class="scan-line"></div>
+      </div>
+    </div>
+
+    <button class="btn-start" id="btnStart" onclick="startCamera()">
+      <span>📷</span> 카메라 스캔 시작
+    </button>
+    <button class="btn-stop" id="btnStop" onclick="stopCamera()" style="display:none">
+      ⏹ 스캔 중지
+    </button>
+
+    <div class="scan-count" id="scanCount" style="display:none">
+      이 세션에서 <span id="scanCountNum">0</span>건 스캔 완료
+    </div>
+
+    <div class="divider">또는 직접 입력</div>
+
+    <div class="manual-section">
+      <label>Lot No. 또는 QR 데이터 직접 입력</label>
+      <div class="manual-input-row">
+        <input type="text" id="manualInput" placeholder="WH-IN-260616-001" 
+          onkeydown="if(event.key==='Enter'){submitManual()}" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button onclick="submitManual()">전송</button>
+      </div>
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <div class="result-title" id="resultTitle"></div>
+      <div id="resultBody"></div>
+    </div>
+  </div>
+
+  <!-- 세션 탭 -->
+  <div class="content" id="panelSession" style="display:none">
+    <div class="session-info">
+      <div class="si-title">
+        <span class="status-dot" id="connDot"></span>
+        <span id="connStatus">연결 상태 확인 중...</span>
+      </div>
+      <div class="si-row">
+        <span>세션 ID</span>
+        <span id="siSessionId" style="font-family:monospace;color:#4CAF50">-</span>
+      </div>
+      <div class="si-row">
+        <span>연결 방법</span>
+        <span style="color:#ccc">PC에서 세션 ID 입력</span>
+      </div>
+      <div class="si-row">
+        <span>스캔 건수</span>
+        <span id="siScanCount" style="color:#4CAF50">0건</span>
+      </div>
+    </div>
+
+    <div style="max-width:400px;margin:0 auto">
+      <div style="font-size:13px;color:#aaa;margin-bottom:8px;font-weight:600">📱 PC 연결 방법</div>
+      <div style="background:#16213e;border-radius:12px;padding:16px;font-size:13px;color:#ccc;line-height:1.8">
+        <div style="margin-bottom:8px">① 이 화면의 <b style="color:#4CAF50">세션 ID</b>를 확인합니다</div>
+        <div style="margin-bottom:8px">② 사무동 PC에서 물류관리 페이지를 엽니다</div>
+        <div style="margin-bottom:8px">③ 출고관리 탭의 <b style="color:#4CAF50">「원격 스캔 연결」</b> 버튼을 클릭합니다</div>
+        <div>④ 세션 ID를 입력하면 이 기기에서 스캔한 결과가 PC에 자동 입력됩니다</div>
+      </div>
+
+      <div style="margin-top:16px">
+        <div style="font-size:12px;color:#aaa;margin-bottom:6px">현재 세션 ID</div>
+        <div class="session-id-display" id="sessionIdDisplay">-</div>
+        <button onclick="copySessionId()" style="width:100%;padding:12px;background:#0f3460;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px">
+          📋 세션 ID 복사
+        </button>
+        <button onclick="newSession()" style="width:100%;padding:10px;background:transparent;color:#aaa;border:1px solid #333;border-radius:10px;font-size:13px;cursor:pointer;margin-top:8px">
+          🔄 새 세션 생성
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 이력 탭 -->
+  <div class="content" id="panelHistory" style="display:none">
+    <div style="max-width:400px;margin:0 auto 12px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:700">스캔 이력</div>
+      <button onclick="clearHistory()" style="padding:6px 14px;background:#e74c3c;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer">전체 삭제</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div style="text-align:center;color:#555;padding:40px;font-size:14px">스캔 이력이 없습니다</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-init.js"></script>
+  <!-- jsQR: iOS Safari 포함 전 기기 QR 인식 -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+  <script>
+    // ── 전역 변수 ──────────────────────────────────────
+    var sessionId = '';
+    var scanCount = 0;
+    var scanHistory = [];
+    var videoStream = null;
+    var scanInterval = null;
+    var currentTab = 'scan';
+    var db = null;
+
+    // ── 초기화 ──────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', function() {
+      db = firebase.firestore();
+      initSession();
+    });
+
+    function initSession() {
+      // 저장된 세션 ID 복원 또는 새로 생성
+      sessionId = localStorage.getItem('qr_session_id') || generateSessionId();
+      localStorage.setItem('qr_session_id', sessionId);
+      updateSessionUI();
+      checkFirebaseConnection();
+    }
+
+    function generateSessionId() {
+      // 4자리 숫자 세션 ID (기억하기 쉽게)
+      return String(Math.floor(1000 + Math.random() * 9000));
+    }
+
+    function newSession() {
+      if (!confirm('새 세션을 생성하시겠습니까? 기존 PC 연결이 해제됩니다.')) return;
+      sessionId = generateSessionId();
+      localStorage.setItem('qr_session_id', sessionId);
+      scanCount = 0;
+      updateSessionUI();
+      showToast('새 세션 생성: ' + sessionId, 'success');
+    }
+
+    function updateSessionUI() {
+      document.getElementById('sessionIdDisplay').textContent = sessionId;
+      document.getElementById('siSessionId').textContent = sessionId;
+      document.getElementById('sessionBadge').textContent = '세션 ' + sessionId;
+      document.getElementById('siScanCount').textContent = scanCount + '건';
+      document.getElementById('scanCountNum').textContent = scanCount;
+    }
+
+    async function checkFirebaseConnection() {
+      try {
+        await db.collection('qr_scan_queue').limit(1).get();
+        document.getElementById('connDot').className = 'status-dot green';
+        document.getElementById('connStatus').textContent = 'Firebase 연결됨';
+      } catch(e) {
+        document.getElementById('connDot').className = 'status-dot red';
+        document.getElementById('connStatus').textContent = '연결 실패: ' + e.message;
+      }
+    }
+
+    // ── 탭 전환 ──────────────────────────────────────────
+    function switchTab(tab) {
+      currentTab = tab;
+      ['scan','session','history'].forEach(function(t) {
+        document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
+        document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+      });
+      if (tab === 'history') renderHistory();
+    }
+
+    // ── 카메라 스캔 ──────────────────────────────────────
+    async function startCamera() {
+      try {
+        var constraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 640 },
+            height: { ideal: 640 }
+          }
+        };
+        videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+        var video = document.getElementById('qrVideo');
+        video.srcObject = videoStream;
+        document.getElementById('cameraPlaceholder').style.display = 'none';
+        document.getElementById('cameraBox').style.display = '';
+        document.getElementById('btnStart').style.display = 'none';
+        document.getElementById('btnStop').style.display = '';
+        document.getElementById('scanCount').style.display = '';
+
+        video.addEventListener('loadedmetadata', function() {
+          startScanLoop();
+        });
+      } catch(e) {
+        showToast('카메라 접근 실패: ' + e.message, 'error');
+        document.getElementById('cameraPlaceholder').innerHTML =
+          '<div class="icon">⚠️</div>' +
+          '<div>카메라 접근이 거부되었습니다</div>' +
+          '<div style="font-size:12px;margin-top:6px;color:#777">브라우저 설정에서 카메라 권한을 허용해주세요<br>또는 아래 직접 입력을 이용해주세요</div>';
+      }
+    }
+
+    function stopCamera() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(function(t) { t.stop(); });
+        videoStream = null;
+      }
+      if (scanInterval) {
+        clearInterval(scanInterval);
+        scanInterval = null;
+      }
+      document.getElementById('cameraBox').style.display = 'none';
+      document.getElementById('cameraPlaceholder').style.display = '';
+      document.getElementById('cameraPlaceholder').innerHTML =
+        '<div class="icon">📷</div>' +
+        '<div>카메라 스캔 시작 버튼을 눌러주세요</div>' +
+        '<div style="font-size:12px;margin-top:6px;color:#777">iOS Safari, Android Chrome 모두 지원</div>';
+      document.getElementById('btnStart').style.display = '';
+      document.getElementById('btnStop').style.display = 'none';
+    }
+
+    var lastScanned = '';
+    var lastScannedTime = 0;
+
+    function startScanLoop() {
+      var video = document.getElementById('qrVideo');
+      var canvas = document.getElementById('qrCanvas');
+      var ctx = canvas.getContext('2d');
+
+      scanInterval = setInterval(function() {
+        if (!video.videoWidth) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert'
+        });
+        if (code && code.data) {
+          var now = Date.now();
+          // 동일 QR 2초 내 중복 스캔 방지
+          if (code.data !== lastScanned || now - lastScannedTime > 2000) {
+            lastScanned = code.data;
+            lastScannedTime = now;
+            processScan(code.data);
+          }
+        }
+      }, 200);
+    }
+
+    // ── 스캔 처리 ──────────────────────────────────────
+    function submitManual() {
+      var val = document.getElementById('manualInput').value.trim();
+      if (!val) { showToast('입력값을 확인해주세요', 'error'); return; }
+      processScan(val);
+      document.getElementById('manualInput').value = '';
+    }
+
+    async function processScan(rawValue) {
+      if (!rawValue || !rawValue.trim()) return;
+      var val = rawValue.trim();
+      var parsed = null;
+
+      // JSON QR 파싱 시도
+      try {
+        parsed = JSON.parse(decodeURIComponent(val));
+      } catch(e) {
+        // 단순 Lot No.
+        parsed = { lot: val };
+      }
+
+      var scanData = {
+        session_id: sessionId,
+        raw_value: val,
+        parsed: parsed,
+        lot_no: parsed.lot || val,
+        item_name: parsed.item || '',
+        location: parsed.loc || '',
+        expiry_date: parsed.expiry || '',
+        qty: parsed.qty || '',
+        unit: parsed.unit || '',
+        scanned_at: firebase.firestore.FieldValue.serverTimestamp(),
+        scanned_at_local: new Date().toISOString(),
+        status: 'pending'
+      };
+
+      try {
+        await db.collection('qr_scan_queue').add(scanData);
+        scanCount++;
+        updateSessionUI();
+
+        // 이력 추가
+        scanHistory.unshift({
+          lot_no: scanData.lot_no,
+          item_name: scanData.item_name,
+          location: scanData.location,
+          time: new Date().toLocaleTimeString('ko-KR')
+        });
+        if (scanHistory.length > 50) scanHistory.pop();
+
+        // 결과 카드 표시
+        showResultCard(true, scanData);
+        showToast('스캔 완료: ' + scanData.lot_no, 'success');
+
+        // 진동 피드백
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+      } catch(e) {
+        showResultCard(false, { lot_no: val, error: e.message });
+        showToast('전송 실패: ' + e.message, 'error');
+      }
+    }
+
+    function showResultCard(success, data) {
+      var card = document.getElementById('resultCard');
+      var title = document.getElementById('resultTitle');
+      var body = document.getElementById('resultBody');
+      card.className = 'result-card ' + (success ? 'success' : 'error');
+      card.style.display = '';
+      if (success) {
+        title.innerHTML = '✅ 스캔 완료 — PC로 전송됨';
+        body.innerHTML =
+          '<div class="result-row"><span class="result-label">Lot No.</span><span class="result-value">' + (data.lot_no||'-') + '</span></div>' +
+          (data.item_name ? '<div class="result-row"><span class="result-label">품목명</span><span class="result-value">' + data.item_name + '</span></div>' : '') +
+          (data.location ? '<div class="result-row"><span class="result-label">위치</span><span class="result-value">' + data.location + '</span></div>' : '') +
+          (data.expiry_date ? '<div class="result-row"><span class="result-label">소비기한</span><span class="result-value">' + data.expiry_date + '</span></div>' : '') +
+          (data.qty ? '<div class="result-row"><span class="result-label">수량</span><span class="result-value">' + data.qty + ' ' + (data.unit||'') + '</span></div>' : '');
+      } else {
+        title.innerHTML = '❌ 전송 실패';
+        body.innerHTML = '<div style="color:#e74c3c;font-size:13px">' + (data.error||'알 수 없는 오류') + '</div>';
+      }
+    }
+
+    // ── 이력 ──────────────────────────────────────────
+    function renderHistory() {
+      var list = document.getElementById('historyList');
+      if (scanHistory.length === 0) {
+        list.innerHTML = '<div style="text-align:center;color:#555;padding:40px;font-size:14px">스캔 이력이 없습니다</div>';
+        return;
+      }
+      list.innerHTML = scanHistory.map(function(h) {
+        return '<div class="history-item">' +
+          '<div class="hi-lot">' + h.lot_no + '</div>' +
+          (h.item_name ? '<div class="hi-item">' + h.item_name + '</div>' : '') +
+          '<div class="hi-meta">' + (h.location ? h.location + ' · ' : '') + h.time + '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    function clearHistory() {
+      if (!confirm('이력을 삭제하시겠습니까?')) return;
+      scanHistory = [];
+      renderHistory();
+    }
+
+    // ── 유틸 ──────────────────────────────────────────
+    function copySessionId() {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(sessionId).then(function() {
+          showToast('세션 ID 복사됨: ' + sessionId, 'success');
+        });
+      } else {
+        var el = document.createElement('input');
+        el.value = sessionId;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        showToast('세션 ID 복사됨: ' + sessionId, 'success');
+      }
+    }
+
+    var toastTimer = null;
+    function showToast(msg, type) {
+      var el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = 'toast show ' + (type||'');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function() { el.className = 'toast'; }, 2500);
+    }
+  </script>
+</body>
+</html>

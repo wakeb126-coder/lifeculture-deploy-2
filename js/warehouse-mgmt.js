@@ -920,18 +920,34 @@ function whRenderOutTable() {
       '<td>' + (r.qty||0) + ' ' + (r.unit||'') + '</td>' +
       '<td>' + (r.ref_lot||'-') + '</td>' +
       '<td>' + (r.destination||'-') + '</td>' +
-      '<td><button class="btn btn-sm" onclick="whDeleteOutbound(\'' + (r.id||'') + '\')" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;padding:3px 8px;font-size:11px"><i class="fas fa-trash"></i></button></td>' +
+      '<td><button class="btn btn-sm" onclick="whDeleteOutbound(\'' + (r.id||'') + '\',\'' + (r.lot_no||'') + '\')" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;padding:3px 8px;font-size:11px"><i class="fas fa-trash"></i></button></td>' +
       '</tr>';
   }).join('');
 }
 
-async function whDeleteOutbound(id) {
-  if (!confirm('이 출고 기록을 삭제하시겠습니까?')) return;
+async function whDeleteOutbound(id, lotNo) {
+  if (!confirm('이 출고 기록을 삭제하시겠습니까?\n(수입제품/OEM/자체생산 탭 출고 수량도 함께 취소됩니다)')) return;
   try {
     await apiDelete('wh_outbound', id);
-    showToast('삭제 완료', 'success');
+    // logistics 콜렉션에서 동일 lot_no 출고 기록 삭제
+    if (lotNo) {
+      try {
+        var lgAll = await apiGetAll('logistics');
+        var lgMatch = lgAll.filter(function(r) {
+          return r.wh_lot_no === lotNo || r.lot_no === lotNo;
+        });
+        for (var i = 0; i < lgMatch.length; i++) {
+          if (lgMatch[i].id) await apiDelete('logistics', lgMatch[i].id);
+        }
+      } catch(le) {
+        console.warn('logistics 동기화 삭제 실패:', le);
+      }
+    }
+    showToast('출고 취소 완료 (재고 복원)', 'success');
     whInvalidateMapCache(); // 캐시 무효화
     await whLoadAll();
+    // logistics 탭도 갱신
+    if (typeof loadLogisticsData === 'function') loadLogisticsData();
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
   }
@@ -2853,4 +2869,165 @@ async function whBulkOutDirectSubmit() {
   whBulkOutClearAll();
   whRenderFifo();
   if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> 출고 등록'; }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 원격 QR 스캔 연결 (모바일 ↔ PC 실시간 연동)
+// ══════════════════════════════════════════════════════════════════
+var _remoteSessionId = null;
+var _remoteScanListener = null;
+var _remoteScanCount = 0;
+
+function whOpenRemoteScanModal() {
+  var modal = document.getElementById('remoteScanModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  // 이미 연결 중이면 연결 상태 복원
+  if (_remoteSessionId) {
+    document.getElementById('remoteScanSessionInput').value = _remoteSessionId;
+    document.getElementById('remoteScanConnected').style.display = '';
+    document.getElementById('btnDisconnectRemote').style.display = '';
+    document.getElementById('remoteSessionDisplay').textContent = _remoteSessionId;
+    document.getElementById('remoteScanReceived').textContent = _remoteScanCount + '건';
+  }
+}
+
+function whCloseRemoteScanModal() {
+  var modal = document.getElementById('remoteScanModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function whConnectRemoteScan() {
+  var sessionId = (document.getElementById('remoteScanSessionInput').value || '').trim();
+  if (!sessionId || sessionId.length !== 4 || !/^\d{4}$/.test(sessionId)) {
+    showToast('4자리 숫자 세션 ID를 입력해주세요', 'error');
+    return;
+  }
+  // 기존 리스너 해제
+  if (_remoteScanListener) {
+    _remoteScanListener();
+    _remoteScanListener = null;
+  }
+  _remoteSessionId = sessionId;
+  _remoteScanCount = 0;
+  document.getElementById('remoteScanConnected').style.display = '';
+  document.getElementById('btnDisconnectRemote').style.display = '';
+  document.getElementById('remoteSessionDisplay').textContent = sessionId;
+  document.getElementById('remoteScanReceived').textContent = '0건';
+  showToast('세션 ' + sessionId + ' 연결 대기 중...', 'success');
+
+  try {
+    var db = firebase.firestore();
+    // 연결 시점 이후 스캔된 항목만 수신
+    var connectedAt = new Date();
+    _remoteScanListener = db.collection('qr_scan_queue')
+      .where('session_id', '==', sessionId)
+      .where('status', '==', 'pending')
+      .onSnapshot(function(snapshot) {
+        snapshot.docChanges().forEach(function(change) {
+          if (change.type === 'added') {
+            var data = change.doc.data();
+            // 연결 이전 데이터 무시 (serverTimestamp 없을 수 있으므로 local 시간 비교)
+            var scannedAt = data.scanned_at_local ? new Date(data.scanned_at_local) : null;
+            if (scannedAt && scannedAt < connectedAt) return;
+            // 폼에 자동 입력
+            whApplyRemoteScan(data);
+            // 처리 완료 표시
+            change.doc.ref.update({ status: 'processed' });
+            _remoteScanCount++;
+            document.getElementById('remoteScanReceived').textContent = _remoteScanCount + '건';
+          }
+        });
+      }, function(err) {
+        showToast('원격 스캔 수신 오류: ' + err.message, 'error');
+      });
+  } catch(e) {
+    showToast('연결 실패: ' + e.message, 'error');
+  }
+}
+
+function whDisconnectRemoteScan() {
+  if (_remoteScanListener) {
+    _remoteScanListener();
+    _remoteScanListener = null;
+  }
+  _remoteSessionId = null;
+  _remoteScanCount = 0;
+  document.getElementById('remoteScanConnected').style.display = 'none';
+  document.getElementById('btnDisconnectRemote').style.display = 'none';
+  document.getElementById('remoteScanSessionInput').value = '';
+  showToast('원격 스캔 연결 해제됨', 'success');
+}
+
+function whApplyRemoteScan(data) {
+  // 스캔된 데이터를 현재 활성 탭의 폼에 자동 입력
+  var lotNo = data.lot_no || data.raw_value || '';
+  var itemName = data.item_name || '';
+  var location = data.location || '';
+  var expiryDate = data.expiry_date || '';
+  var qty = data.qty || '';
+  var unit = data.unit || '';
+
+  // 출고 탭이 활성화된 경우 출고 폼에 입력
+  var outContent = document.getElementById('tabContent_wh_out');
+  var inContent = document.getElementById('tabContent_wh_in');
+  var outActive = outContent && outContent.classList.contains('active');
+  var inActive = inContent && inContent.classList.contains('active');
+
+  if (outActive) {
+    // 출고 폼 자동 입력
+    if (itemName) {
+      var itemEl = document.getElementById('whout_item_name');
+      if (itemEl) { itemEl.value = itemName; itemEl.dispatchEvent(new Event('input')); }
+    }
+    if (location) {
+      var locEl = document.getElementById('whout_location');
+      if (locEl) locEl.value = location;
+    }
+    if (lotNo) {
+      var refEl = document.getElementById('whout_ref_lot');
+      if (refEl) refEl.value = lotNo;
+    }
+    if (qty) {
+      var qtyEl = document.getElementById('whout_qty');
+      if (qtyEl) qtyEl.value = qty;
+    }
+    // FIFO 가이드 갱신
+    if (itemName && typeof whRenderFifo === 'function') whRenderFifo(itemName);
+    showToast('📱 스캔 수신: ' + (itemName || lotNo), 'success');
+  } else if (inActive) {
+    // 입고 폼 자동 입력
+    if (itemName) {
+      var inItemEl = document.getElementById('whin_item_name');
+      if (inItemEl) { inItemEl.value = itemName; inItemEl.dispatchEvent(new Event('input')); }
+    }
+    if (location) {
+      var inLocEl = document.getElementById('whin_location');
+      if (inLocEl) inLocEl.value = location;
+    }
+    if (expiryDate) {
+      var inExpEl = document.getElementById('whin_expiry_date');
+      if (inExpEl) inExpEl.value = expiryDate;
+    }
+    if (qty) {
+      var inQtyEl = document.getElementById('whin_qty');
+      if (inQtyEl) inQtyEl.value = qty;
+    }
+    if (unit) {
+      var inUnitEl = document.getElementById('whin_unit');
+      if (inUnitEl) inUnitEl.value = unit;
+    }
+    showToast('📱 스캔 수신: ' + (itemName || lotNo), 'success');
+  } else {
+    // 탭이 활성화되지 않은 경우 스캔 입력창에 표시
+    var scanInput = document.getElementById('whScanInput');
+    if (scanInput) {
+      scanInput.value = lotNo;
+      whProcessScan(lotNo);
+    }
+    showToast('📱 스캔 수신: ' + (itemName || lotNo), 'success');
+  }
+
+  // 모달이 열려있으면 닫기
+  whCloseRemoteScanModal();
 }
