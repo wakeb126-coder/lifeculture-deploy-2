@@ -847,6 +847,8 @@ async function whSubmitOutbound() {
   }
   try {
     await apiPost('wh_outbound', data);
+    // logistics 콜렉션 동기화
+    await apiPost('logistics', _whBuildLogisticsOutRecord(data));
     showToast('출고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache(); // 캐시 무효화
     await whLoadAll();
@@ -1686,6 +1688,40 @@ function whSelectItemName(el) {
   if (dropdown) dropdown.style.display = 'none';
 }
 
+// ── wh_outbound → logistics 레코드 변환 헬퍼 ──────────
+// wh_outbound 데이터를 logistics 컬렉션 형식으로 변환 (출고 동기화용)
+function _whBuildLogisticsOutRecord(d) {
+  // ref_lot(연동 입고 Lot)에서 product_type 파악 시도
+  var productType = d.product_type || '수입제품';
+  // 연동 입고 Lot으로 원본 입고 데이터에서 product_type 찾기
+  if (whInboundData && d.ref_lot) {
+    var refIn = whInboundData.find(function(r){ return r.lot_no === d.ref_lot; });
+    if (refIn && refIn.inbound_type) productType = refIn.inbound_type;
+  }
+  return {
+    lot_no: d.lot_no || '',
+    transaction_type: '출고',
+    product_type: productType,
+    date: d.outbound_date || '',
+    product_name: d.item_name || '',
+    product_code: d.ref_lot || '',
+    quantity: Number(d.qty) || 0,
+    unit: d.unit || 'ea',
+    unit_price: 0,
+    total_amount: 0,
+    expiry_date: d.expiry_date || '',
+    storage_location: (d.warehouse || '') + '-' + (d.location || ''),
+    manager: d.manager || '',
+    vendor: '',
+    destination: d.destination || '',
+    status: '출고완료',
+    notes: d.memo || '',
+    wh_lot_no: d.lot_no || '',
+    wh_warehouse: d.warehouse || '',
+    wh_location: d.location || ''
+  };
+}
+
 // ── wh_inbound → logistics 레코드 변환 헬퍼 ──────────
 // wh_inbound 데이터를 logistics 컬렉션 형식으로 변환
 function _whBuildLogisticsRecord(d) {
@@ -2415,6 +2451,9 @@ async function whHandleOutSubmit(e) {
   if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 등록 중...'; }
   try {
     await apiPost('wh_outbound', data);
+    // 수입제품/OEM/자체생산 탭 출고 수량 동기화
+    var lgOutRecord = _whBuildLogisticsOutRecord(data);
+    await apiPost('logistics', lgOutRecord);
     showToast('출고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache();
     await whLoadAll();
@@ -2697,7 +2736,7 @@ async function whBulkOutSubmitAll() {
     var seq = String(seqBase + i + 1).padStart(3, '0');
     var lotNo = prefix + '-' + seq;
     try {
-      await apiPost('wh_outbound', {
+      var outData = {
         lot_no: lotNo,
         warehouse: a.warehouse,
         location: a.location,
@@ -2709,7 +2748,10 @@ async function whBulkOutSubmitAll() {
         manager: a.manager,
         ref_lot: a.ref_lot,
         memo: '일괄출고요청서'
-      });
+      };
+      await apiPost('wh_outbound', outData);
+      // logistics 콜렉션 동기화
+      await apiPost('logistics', _whBuildLogisticsOutRecord(outData));
       success++;
     } catch(err) {
       fail++;
@@ -2783,7 +2825,7 @@ async function whBulkOutDirectSubmit() {
     var seq = String(seqBase + i + 1).padStart(3, '0');
     var lotNo = prefix + '-' + seq;
     try {
-      await apiPost('wh_outbound', {
+      var outData2 = {
         lot_no: lotNo,
         warehouse: a.warehouse,
         location: a.location,
@@ -2795,7 +2837,10 @@ async function whBulkOutDirectSubmit() {
         manager: a.manager,
         ref_lot: a.ref_lot,
         memo: '일괄출고요청서'
-      });
+      };
+      await apiPost('wh_outbound', outData2);
+      // logistics 콜렉션 동기화
+      await apiPost('logistics', _whBuildLogisticsOutRecord(outData2));
       success++;
     } catch(err) {
       fail++;
