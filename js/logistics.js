@@ -194,22 +194,16 @@ function lgFilterTable(tab) {
     const txF = document.getElementById('allTxFilter')?.value || '';
     const from = document.getElementById('allDateFrom')?.value || '';
     const to = document.getElementById('allDateTo')?.value || '';
-    // logistics 콜렉션에 동기화된 wh_outbound lot_no 목록
-    const syncedLots = new Set(
-      allLogisticsData
-        .filter(r => (r.lot_no || '').startsWith('WH-OUT-') && r.transaction_type === '출고')
-        .map(r => r.lot_no)
-    );
-    // wh_outbound 미동기화 건을 logistics 형식으로 변환
-    const whOutExtra = (allWhOutboundData || []).filter(r => {
-      const lotNo = r.lot_no || r.id || '';
-      return !syncedLots.has(lotNo);
-    }).map(r => ({
+    // logistics 콜렉션에서 WH-OUT- 창고 출고 동기화 기록 제외
+    // 창고 출고는 아래 wh_outbound에서만 표시 (단일 진실 공급원)
+    const lgFiltered = allLogisticsData.filter(r => !(r.lot_no || '').startsWith('WH-OUT-'));
+    // wh_outbound 전체를 logistics 형식으로 변환
+    const whOutRows = (allWhOutboundData || []).map(r => ({
       id: r.id,
       lot_no: r.lot_no || r.id || '',
       product_type: r.product_type || '수입제품',
       transaction_type: '출고',
-      date: r.out_date || r.date || '',
+      date: r.outbound_date || r.out_date || r.date || '',
       product_name: r.item_name || '',
       quantity: r.qty,
       unit: r.unit || 'ea',
@@ -217,10 +211,10 @@ function lgFilterTable(tab) {
       expiry_date: r.expiry_date || '',
       status: '출고완료',
       manager: r.manager || '',
-      notes: r.destination || r.notes || '',
+      notes: r.destination || r.memo || '',
       _from_wh_outbound: true
     }));
-    const combined = [...allLogisticsData, ...whOutExtra];
+    const combined = [...lgFiltered, ...whOutRows];
     const data = combined.filter(r =>
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!typeF || r.product_type === typeF) &&
@@ -739,7 +733,9 @@ function lgRenderStockTable() {
     }
     stockMap[key].inQty += qty;
   });
-  // 2패스: 출고 데이터 집계 - 소비기한 없는 출고는 같은 품목명의 소비기한 짧은 행에 합산
+  // 2패스: logistics 콜렉션 출고 집계
+  // 단, 창고 출고 동기화 기록(lot_no가 WH-OUT-로 시작)은 완전히 제외
+  // 창고 출고는 아래 wh_outbound에서만 집계함 (단일 진실 공급원)
   allLogisticsData.forEach(function(r) {
     var name = (r.product_name || r.item_name || '').trim();
     var expiry = (r.expiry_date || r.expiry || '').trim();
@@ -747,12 +743,12 @@ function lgRenderStockTable() {
     var tx = (r.transaction_type || '입고').trim();
     if (!name) return;
     if (tx !== '출고') return;
+    // 창고 출고 동기화 기록은 제외 (중복 방지)
+    if ((r.lot_no || '').startsWith('WH-OUT-')) return;
     var key = name + '||' + expiry;
     if (stockMap[key]) {
-      // 소비기한이 일치하는 키가 있으면 그대로 차감
       stockMap[key].outQty += qty;
     } else {
-      // 소비기한 없는 출고 → 같은 품목명 중 소비기한 가장 짧은 행에 합산
       var matchedKey = null;
       Object.keys(stockMap).forEach(function(k) {
         if (k.split('||')[0] === name) {
@@ -765,26 +761,16 @@ function lgRenderStockTable() {
       if (matchedKey) {
         stockMap[matchedKey].outQty += qty;
       } else {
-        // 입고 기록이 없는 경우에도 행 생성 (음수 재고 표시)
         stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: qty };
       }
     }
   });
-  // 창고 출고(wh_outbound) 중 logistics 컬렉션에 동기화 안 된 건만 추가 차감
-  // (동기화된 건은 이미 위에서 allLogisticsData로 집계됨 → 이중 차감 방지)
-  var syncedWhOutLots = new Set();
-  allLogisticsData.forEach(function(r) {
-    if ((r.lot_no || '').startsWith('WH-OUT-') && r.transaction_type === '출고') {
-      syncedWhOutLots.add(r.lot_no);
-    }
-  });
+  // 3패스: 창고 출고(wh_outbound) 집계 - 단일 진실 공급원으로 직접 집계
+  // logistics의 WH-OUT- 기록은 위에서 이미 제외했으므로 여기서 wh_outbound 전체를 차감
   (allWhOutboundData || []).forEach(function(r) {
-    var lotNo = r.lot_no || r.id || '';
-    if (syncedWhOutLots.has(lotNo)) return; // 이미 logistics에 동기화된 건 건너뜀
     var name = (r.item_name || '').trim();
     var qty = Number(r.qty || 0);
     if (!name || !qty) return;
-    // 같은 품목명 중 소비기한 가장 짧은 행에 차감
     var matchedKey = null;
     Object.keys(stockMap).forEach(function(k) {
       if (k.split('||')[0] === name) {

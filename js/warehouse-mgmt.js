@@ -2467,9 +2467,7 @@ async function whHandleOutSubmit(e) {
   if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 등록 중...'; }
   try {
     await apiPost('wh_outbound', data);
-    // 수입제품/OEM/자체생산 탭 출고 수량 동기화
-    var lgOutRecord = _whBuildLogisticsOutRecord(data);
-    await apiPost('logistics', lgOutRecord);
+    // wh_outbound가 단일 진실 공급원이므로 logistics 중복 동기화 저장 안 함
     showToast('출고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache();
     await whLoadAll();
@@ -2766,8 +2764,7 @@ async function whBulkOutSubmitAll() {
         memo: '일괄출고요청서'
       };
       await apiPost('wh_outbound', outData);
-      // logistics 콜렉션 동기화
-      await apiPost('logistics', _whBuildLogisticsOutRecord(outData));
+      // wh_outbound가 단일 진실 공급원이므로 logistics 중복 동기화 저장 안 함
       success++;
     } catch(err) {
       fail++;
@@ -2855,8 +2852,7 @@ async function whBulkOutDirectSubmit() {
         memo: '일괄출고요청서'
       };
       await apiPost('wh_outbound', outData2);
-      // logistics 콜렉션 동기화
-      await apiPost('logistics', _whBuildLogisticsOutRecord(outData2));
+      // wh_outbound가 단일 진실 공급원이므로 logistics 중복 동기화 저장 안 함
       success++;
     } catch(err) {
       fail++;
