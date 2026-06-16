@@ -743,28 +743,8 @@ function lgRenderStockTable() {
       }
     }
   });
-  // 창고 출고 (wh_outbound)만 추가 차감
-  // (창고 입고는 logistics 콜렉션에 이미 등록되어 있으므로 wh_inbound는 집계 제외)
-  (allWhOutboundData || []).forEach(function(r) {
-    var name = (r.item_name || '').trim();
-    var qty = Number(r.qty || 0);
-    if (!name) return;
-    // 품목명이 일치하는 키를 창아 소비기한 짧은 순으로 차감
-    var matchedKey = null;
-    Object.keys(stockMap).forEach(function(k) {
-      if (k.split('||')[0] === name) {
-        if (!matchedKey) matchedKey = k;
-        var curExpiry = stockMap[matchedKey].expiry || '9999';
-        var thisExpiry = stockMap[k].expiry || '9999';
-        if (thisExpiry < curExpiry && stockMap[k].inQty - stockMap[k].outQty > 0) {
-          matchedKey = k;
-        }
-      }
-    });
-    if (matchedKey) {
-      stockMap[matchedKey].outQty += qty;
-    }
-  });
+  // 창고 출고(wh_outbound)는 출고 등록 시 logistics 컬렉션에 동기화 저장되므로
+  // 여기서 별도 차감하지 않음 (이중 차감 방지)
 
   var rows = Object.values(stockMap);
   if (q) rows = rows.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; });
