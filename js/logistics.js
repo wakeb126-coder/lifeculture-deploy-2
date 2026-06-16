@@ -4,6 +4,8 @@
 
 let allLogisticsData = [];
 let lgEditingId = null;
+let allWhInboundData = [];   // 창고 입고 데이터 (wh_inbound)
+let allWhOutboundData = [];  // 창고 출고 데이터 (wh_outbound)
 
 document.addEventListener('DOMContentLoaded', async () => {
   // new Date() 1회 생성 후 재사용 (중복 생성 제거)
@@ -98,8 +100,14 @@ function lgCalcAmount() {
 // =====================================================
 async function loadLogisticsData() {
   try {
-    const res = await apiGetAll('logistics');
+    const [res, whIn, whOut] = await Promise.all([
+      apiGetAll('logistics'),
+      apiGetAll('wh_inbound'),
+      apiGetAll('wh_outbound')
+    ]);
     allLogisticsData = (res || []).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    allWhInboundData = whIn || [];
+    allWhOutboundData = whOut || [];
     lgUpdateKpiCards();
     lgFilterTable('import');
     lgFilterTable('oem');
@@ -687,6 +695,7 @@ function lgRenderStockTable() {
   var typeF = document.getElementById('allTypeFilter') ? document.getElementById('allTypeFilter').value : '';
 
   var stockMap = {};
+  // logistics 콜렉션 (수입/OEM/자체생산 입출고)
   allLogisticsData.forEach(function(r) {
     var name = (r.product_name || r.item_name || '').trim();
     var expiry = (r.expiry_date || r.expiry || '').trim();
@@ -703,6 +712,48 @@ function lgRenderStockTable() {
       stockMap[key].inQty += qty;
     } else if (tx === '출고') {
       stockMap[key].outQty += qty;
+    }
+  });
+  // 창고 입고 (wh_inbound) - 재고현황에 반영
+  (allWhInboundData || []).forEach(function(r) {
+    var name = (r.item_name || '').trim();
+    var expiry = (r.expiry_date || '').trim();
+    var unit = (r.unit || 'ea').trim();
+    var qty = Number(r.qty || 0);
+    if (!name) return;
+    var key = name + '||' + expiry;
+    if (!stockMap[key]) {
+      stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: '창고입고', inQty: 0, outQty: 0 };
+    }
+    stockMap[key].inQty += qty;
+  });
+  // 창고 출고 (wh_outbound) - 재고현황에 반영
+  (allWhOutboundData || []).forEach(function(r) {
+    var name = (r.item_name || '').trim();
+    var qty = Number(r.qty || 0);
+    if (!name) return;
+    // 품목명이 일치하는 키를 찾아 출고 차감
+    var matchedKey = null;
+    Object.keys(stockMap).forEach(function(k) {
+      if (k.split('||')[0] === name) {
+        if (!matchedKey) matchedKey = k;
+        // 소비기한이 있는 키 우선 (소비기한 짧은 순)
+        var curExpiry = stockMap[matchedKey].expiry || '9999';
+        var thisExpiry = stockMap[k].expiry || '9999';
+        if (thisExpiry < curExpiry && stockMap[k].inQty - stockMap[k].outQty > 0) {
+          matchedKey = k;
+        }
+      }
+    });
+    if (matchedKey) {
+      stockMap[matchedKey].outQty += qty;
+    } else {
+      // 매칭 키 없으면 품목명만으로 새 키 생성
+      var newKey = name + '||';
+      if (!stockMap[newKey]) {
+        stockMap[newKey] = { name: name, expiry: '', unit: 'ea', ptype: '창고출고', inQty: 0, outQty: 0 };
+      }
+      stockMap[newKey].outQty += qty;
     }
   });
 

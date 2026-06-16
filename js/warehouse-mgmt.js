@@ -104,6 +104,10 @@ async function whLoadAll() {
     if (mapTab && mapTab.classList.contains('active')) {
       whShowMap(whCurrentMap, stockMap);
     }
+    // 재고현황 탭(logistics.js) 동기화 - 창고 입출고 반영
+    if (typeof loadLogisticsData === 'function') {
+      loadLogisticsData();
+    }
   } catch(e) {
     console.error('[warehouse-mgmt] 데이터 로드 실패:', e);
   }
@@ -184,10 +188,27 @@ function whCalcStock() {
     }
   });
   whOutboundData.forEach(function(r) {
-    if (!r.location || !stockMap[r.location]) return;
-    var key = r.item_name || '미상';
-    if (stockMap[r.location][key]) {
-      stockMap[r.location][key].qty -= Number(r.qty) || 0;
+    var outQty = Number(r.qty) || 0;
+    var outItem = r.item_name || '미상';
+    // 1순위: 정확한 위치+품목명 매칭
+    if (r.location && stockMap[r.location] && stockMap[r.location][outItem]) {
+      stockMap[r.location][outItem].qty -= outQty;
+      return;
+    }
+    // 2순위: 위치가 없거나 매칭 안되면 품목명 기준으로 소비기한 짧은 순으로 차감
+    var bestLoc = null;
+    var bestExpiry = '9999-99-99';
+    Object.keys(stockMap).forEach(function(loc) {
+      if (stockMap[loc][outItem] && stockMap[loc][outItem].qty > 0) {
+        var exp = stockMap[loc][outItem].expiry || '9999-99-99';
+        if (!bestLoc || exp < bestExpiry) {
+          bestLoc = loc;
+          bestExpiry = exp;
+        }
+      }
+    });
+    if (bestLoc) {
+      stockMap[bestLoc][outItem].qty -= outQty;
     }
   });
   return stockMap;
@@ -935,7 +956,8 @@ function whRenderLedger(stockMap) {
       if (qFilter && itemName.toLowerCase().indexOf(qFilter) === -1) return;
       var inQty = 0, outQty = 0;
       whInboundData.filter(function(r){ return r.location === locCode && (r.item_name||'미상') === itemName; }).forEach(function(r){ inQty += Number(r.qty)||0; });
-      whOutboundData.filter(function(r){ return r.location === locCode && (r.item_name||'미상') === itemName; }).forEach(function(r){ outQty += Number(r.qty)||0; });
+      // 출고: 정확한 위치 매칭만 집계 (위치 없는 출고는 whCalcStock에서 이미 차감)
+      whOutboundData.filter(function(r){ return (r.item_name||'미상') === itemName && r.location === locCode; }).forEach(function(r){ outQty += Number(r.qty)||0; });
       var warehouseLabel = locCode.startsWith('C') ? '❄️ 저온' : '🏭 일반';
       rows.push({ locCode: locCode, warehouseLabel: warehouseLabel, itemName: itemName, inQty: inQty, outQty: outQty, currentQty: info.qty, unit: info.unit, expiry: info.expiry });
     });
