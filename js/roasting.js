@@ -693,9 +693,30 @@ async function saveEdit() {
 // 삭제
 // =====================================================
 async function deleteRow(id) {
-  showConfirm('이 로스팅 기록을 삭제하시겠습니까?', async () => {
+  showConfirm('이 로스팅 기록을 삭제하시겠습니까?\n(로스팅 시 자동 생성된 원료수불부 출고 기록도 함께 삭제됩니다)', async () => {
     try {
-      await apiDelete('roasting_log', id || editingId);
+      const targetId = id || editingId;
+      // 삭제 전 lot_no 확보 (원료수불부 연동 삭제에 필요)
+      const record = allData.find(r => r.id === targetId);
+      const roastLotNo = record ? record.lot_no : '';
+      await apiDelete('roasting_log', targetId);
+      // 원료수불부에서 이 로스팅 lot에 의해 자동 생성된 출고 기록 삭제
+      // (notes 필드에 '로스팅 투입 (lot_no)' 형식으로 저장됨)
+      if (roastLotNo) {
+        try {
+          const rawAll = await apiGetAll('raw_materials');
+          const autoOuts = rawAll.filter(r =>
+            r.transaction_type === '출고' &&
+            (r.notes || '').includes('로스팅 투입') &&
+            (r.notes || '').includes(roastLotNo)
+          );
+          for (const out of autoOuts) {
+            if (out.id) await apiDelete('raw_materials', out.id);
+          }
+        } catch(re) {
+          console.warn('원료수불부 연동 삭제 실패:', re);
+        }
+      }
       showToast('삭제 완료!', 'success');
       closeEditModal();
       await loadData();

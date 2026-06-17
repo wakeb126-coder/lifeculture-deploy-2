@@ -620,13 +620,32 @@ function whRenderInTable() {
 }
 
 async function whDeleteInbound(id) {
-  if (!confirm('이 입고 기록을 삭제하시겠습니까?')) return;
+  if (!confirm('이 입고 기록을 삭제하시겠습니까?\n(물류현황 입고 기록도 함께 삭제됩니다)')) return;
   try {
+    // 삭제 전 lot_no 확보
+    var inRecord = whInboundData.find(function(r){ return r.id === id; });
+    var lotNo = inRecord ? (inRecord.lot_no || '') : '';
     await apiDelete('wh_inbound', id);
+    // logistics 콜렉션에서 동일 lot_no 입고 기록 삭제
+    if (lotNo) {
+      try {
+        var lgAll = await apiGetAll('logistics');
+        var lgMatch = lgAll.filter(function(r) {
+          return (r.wh_lot_no === lotNo || r.lot_no === lotNo) && r.transaction_type === '입고';
+        });
+        for (var i = 0; i < lgMatch.length; i++) {
+          if (lgMatch[i].id) await apiDelete('logistics', lgMatch[i].id);
+        }
+      } catch(le) {
+        console.warn('logistics 연동 삭제 실패:', le);
+      }
+    }
     showToast('삭제 완료', 'success');
     whInvalidateMapCache();
     await whLoadAll();
     whRenderInTable();
+    // logistics 탭도 갱신
+    if (typeof loadLogisticsData === 'function') loadLogisticsData();
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
   }
@@ -667,8 +686,13 @@ function whInToggleSelectAll() {
 async function whInDeleteSelected() {
   var checked = document.querySelectorAll('.whInRowCheck:checked');
   if (checked.length === 0) { showToast('삭제할 항목을 선택해주세요.', 'warning'); return; }
-  if (!confirm(checked.length + '건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+  if (!confirm(checked.length + '건을 삭제하시겠습니까?\n(물류현황 입고 기록도 함께 삭제됩니다)\n이 작업은 되돌릴 수 없습니다.')) return;
   var ids = Array.from(checked).map(function(b){ return b.dataset.id; });
+  // 삭제 대상 lot_no 목록 수집
+  var lotNos = ids.map(function(id) {
+    var r = whInboundData.find(function(x){ return x.id === id; });
+    return r ? (r.lot_no || '') : '';
+  }).filter(function(l){ return !!l; });
   var successCount = 0;
   var failCount = 0;
   for (var i = 0; i < ids.length; i++) {
@@ -677,18 +701,34 @@ async function whInDeleteSelected() {
       successCount++;
     } catch(e) {
       failCount++;
+    }
+  }
+  // logistics 콜렉션에서 연동 입고 기록 삭제
+  if (lotNos.length > 0) {
+    try {
+      var lgAll = await apiGetAll('logistics');
+      var lgMatch = lgAll.filter(function(r) {
+        return lotNos.indexOf(r.wh_lot_no || r.lot_no) !== -1 && r.transaction_type === '입고';
+      });
+      for (var j = 0; j < lgMatch.length; j++) {
+        if (lgMatch[j].id) await apiDelete('logistics', lgMatch[j].id);
+      }
+    } catch(le) {
+      console.warn('logistics 연동 삭제 실패:', le);
     }
   }
   showToast(successCount + '건 삭제 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
   whInvalidateMapCache();
   await whLoadAll();
   whRenderInTable();
+  if (typeof loadLogisticsData === 'function') loadLogisticsData();
 }
 // 전체 삭제
 async function whInDeleteAll() {
   if (whInboundData.length === 0) { showToast('삭제할 입고 이력이 없습니다.', 'warning'); return; }
-  if (!confirm('입고 이력 전체 ' + whInboundData.length + '건을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+  if (!confirm('입고 이력 전체 ' + whInboundData.length + '건을 삭제하시겠습니까?\n(물류현황 입고 기록도 함께 삭제됩니다)\n이 작업은 되돌릴 수 없습니다.')) return;
   var ids = whInboundData.map(function(r){ return r.id; });
+  var lotNos = whInboundData.map(function(r){ return r.lot_no || ''; }).filter(function(l){ return !!l; });
   var successCount = 0;
   var failCount = 0;
   for (var i = 0; i < ids.length; i++) {
@@ -699,10 +739,25 @@ async function whInDeleteAll() {
       failCount++;
     }
   }
+  // logistics 콜렉션에서 연동 입고 기록 삭제
+  if (lotNos.length > 0) {
+    try {
+      var lgAll = await apiGetAll('logistics');
+      var lgMatch = lgAll.filter(function(r) {
+        return lotNos.indexOf(r.wh_lot_no || r.lot_no) !== -1 && r.transaction_type === '입고';
+      });
+      for (var j = 0; j < lgMatch.length; j++) {
+        if (lgMatch[j].id) await apiDelete('logistics', lgMatch[j].id);
+      }
+    } catch(le) {
+      console.warn('logistics 연동 삭제 실패:', le);
+    }
+  }
   showToast(successCount + '건 전체 삭제 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
   whInvalidateMapCache();
   await whLoadAll();
   whRenderInTable();
+  if (typeof loadLogisticsData === 'function') loadLogisticsData();
 }
 
 // 입고 수정 모달 열기

@@ -123,9 +123,18 @@ async function loadLogisticsData() {
 // KPI 카드 업데이트
 // =====================================================
 function lgUpdateKpiCards() {
-  const importCount = allLogisticsData.filter(r => r.product_type === '수입제품').length;
-  const oemCount = allLogisticsData.filter(r => r.product_type === 'OEM제품').length;
-  const ownCount = allLogisticsData.filter(r => r.product_type === '자체생산').length;
+  // logistics 콜렉션 기준 (WH-IN- 동기화 기록 제외)
+  const lgFiltered = allLogisticsData.filter(r => !(r.lot_no || '').startsWith('WH-IN-'));
+  // wh_inbound 데이터를 logistics 형식으로 변환
+  const whInRows = (allWhInboundData || []).map(r => ({
+    product_type: r.inbound_type || '수입제품',
+    status: '입고완료',
+    transaction_type: '입고'
+  }));
+  const allCombined = [...lgFiltered, ...whInRows];
+  const importCount = allCombined.filter(r => r.product_type === '수입제품').length;
+  const oemCount = allCombined.filter(r => r.product_type === 'OEM제품' || r.product_type === 'OEM').length;
+  const ownCount = allCombined.filter(r => r.product_type === '자체생산').length;
   const pendingCount = allLogisticsData.filter(r => r.status === '입고대기').length;
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
@@ -194,9 +203,26 @@ function lgFilterTable(tab) {
     const txF = document.getElementById('allTxFilter')?.value || '';
     const from = document.getElementById('allDateFrom')?.value || '';
     const to = document.getElementById('allDateTo')?.value || '';
-    // logistics 콜렉션에서 WH-OUT- 창고 출고 동기화 기록 제외
-    // 창고 출고는 아래 wh_outbound에서만 표시 (단일 진실 공급원)
-    const lgFiltered = allLogisticsData.filter(r => !(r.lot_no || '').startsWith('WH-OUT-'));
+    // logistics 콜렉션에서 WH-OUT- / WH-IN- 창고 동기화 기록 제외
+    // 창고 입/출고는 wh_inbound / wh_outbound에서만 표시 (단일 진실 공급원)
+    const lgFiltered = allLogisticsData.filter(r => !(r.lot_no || '').startsWith('WH-OUT-') && !(r.lot_no || '').startsWith('WH-IN-'));
+    // wh_inbound 전체를 logistics 형식으로 변환
+    const whInRows = (allWhInboundData || []).map(r => ({
+      id: r.id,
+      lot_no: r.lot_no || r.id || '',
+      product_type: r.inbound_type || '수입제품',
+      transaction_type: '입고',
+      date: r.inbound_date || r.date || '',
+      product_name: r.item_name || '',
+      quantity: Number(r.qty) || 0,
+      unit: r.unit || 'ea',
+      total_amount: null,
+      expiry_date: r.expiry_date || '',
+      status: '입고완료',
+      manager: r.manager || '',
+      notes: r.memo || '',
+      _from_wh_inbound: true
+    }));
     // wh_outbound 전체를 logistics 형식으로 변환
     const whOutRows = (allWhOutboundData || []).map(r => ({
       id: r.id,
@@ -214,7 +240,7 @@ function lgFilterTable(tab) {
       notes: r.destination || r.memo || '',
       _from_wh_outbound: true
     }));
-    const combined = [...lgFiltered, ...whOutRows];
+    const combined = [...lgFiltered, ...whInRows, ...whOutRows];
     const data = combined.filter(r =>
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!typeF || r.product_type === typeF) &&
