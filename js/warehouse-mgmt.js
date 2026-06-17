@@ -767,6 +767,9 @@ function whCloseInEditModal() {
 async function whSaveInEdit() {
   var id = (document.getElementById('whInEditId') || {}).value;
   if (!id) { showToast('수정할 기록을 찾을 수 없습니다.', 'warning'); return; }
+  // 기존 lot_no 보존 (apiPut은 전체 덮어쓰기이므로 반드시 포함해야 함)
+  var existingRecord = whInboundData.find(function(r){ return r.id === id; });
+  var existingLotNo = existingRecord ? (existingRecord.lot_no || '') : '';
 
   var required = [
     { id: 'whInEdit_warehouse', label: '창고구분' },
@@ -787,6 +790,7 @@ async function whSaveInEdit() {
   }
 
   var data = {
+    lot_no: existingLotNo,
     warehouse: document.getElementById('whInEdit_warehouse').value,
     location: document.getElementById('whInEdit_location').value,
     inbound_date: document.getElementById('whInEdit_date').value,
