@@ -677,6 +677,8 @@ async function lgSaveEdit() {
       showToast('출고 수정 완료!', 'success');
       lgCloseEditModal();
       if (typeof whInvalidateMapCache === 'function') whInvalidateMapCache();
+      // ── 연동 갱신: 창고 재고현황 + 물류현황 동시 반영 ──
+      if (typeof whLoadAll === 'function') whLoadAll();
       await loadLogisticsData();
       return;
     }
@@ -701,6 +703,9 @@ async function lgSaveEdit() {
     await apiPut('logistics', lgEditingId, updated);
     showToast('수정 완료!', 'success');
     lgCloseEditModal();
+    // ── 연동 갱신: 재고현황 + 물류현황 동시 반영 ──
+    if (typeof whInvalidateMapCache === 'function') whInvalidateMapCache();
+    if (typeof whLoadAll === 'function') whLoadAll();
     await loadLogisticsData();
   } catch(e) {
     showToast('수정 실패: ' + e.message, 'error');

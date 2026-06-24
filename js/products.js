@@ -421,6 +421,21 @@ async function handleSubmit(e) {
     }
     closeModal();
     loadProducts();
+
+    // ── 연동 갱신 ──
+    // 1. warehouse-mgmt.js 제품마스터 캐시 무효화 (출고 폼 자동완성/박스환산 즉시 반영)
+    if (typeof _whProductMasterCache !== 'undefined') {
+      window._whProductMasterCache = null;
+    }
+    // 2. 물류현황 재로드 (제품명/유형 변경 즉시 반영)
+    if (typeof loadLogisticsData === 'function') {
+      loadLogisticsData();
+    }
+    // 3. 입고 자동완성 제품리스트 재로드
+    if (typeof whLoadProductMaster === 'function') {
+      window._whProductMasterCache = null;
+      whLoadProductMaster();
+    }
   } catch (e) {
     console.error('[products] 저장 실패:', e);
     showToast('저장에 실패했습니다: ' + e.message, 'danger');
