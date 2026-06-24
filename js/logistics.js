@@ -4,6 +4,7 @@
 
 let allLogisticsData = [];
 let lgEditingId = null;
+let lgEditingSource = 'logistics'; // 'logistics' | 'wh_outbound'
 let allWhInboundData = [];   // 창고 입고 데이터 (wh_inbound)
 let allWhOutboundData = [];  // 창고 출고 데이터 (wh_outbound)
 
@@ -329,7 +330,8 @@ function lgRenderTable(tbodyId, data, tab) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="13" class="empty-msg"><i class="fas fa-inbox"></i> 등록된 내역이 없습니다.</td></tr>`;
+    const colCount = tab === 'all' ? 11 : 13;
+    tbody.innerHTML = `<tr><td colspan="${colCount}" class="empty-msg"><i class="fas fa-inbox"></i> 등록된 내역이 없습니다.</td></tr>`;
     return;
   }
 
@@ -414,22 +416,29 @@ function lgRenderTable(tbodyId, data, tab) {
         </td>
       </tr>`;
     } else {
+      // 소스 파악 (wh_inbound / wh_outbound / logistics)
+      const rowSrc = r._from_wh_inbound ? 'wh_inbound' : r._from_wh_outbound ? 'wh_outbound' : 'logistics';
+      // 수량 표시: box 단위이면 박스 수량 표시, ea이면 낙개 표시
+      const qty = r.quantity != null ? Number(r.quantity) : null;
+      const qtyDisplay = qty != null
+        ? (r.unit === 'box' ? `<span style="font-weight:700">${qty.toLocaleString()}</span><small style="color:#888;margin-left:3px">box</small>`
+          : r.unit === 'pallet' ? `<span style="font-weight:700">${qty.toLocaleString()}</span><small style="color:#888;margin-left:3px">pallet</small>`
+          : `<span style="font-weight:700">${qty.toLocaleString()}</span><small style="color:#888;margin-left:3px">${r.unit||'ea'}</small>`)
+        : '-';
       return `<tr>
         <td style="font-size:11px">${r.lot_no || '-'}</td>
         <td>${typeBadge}</td>
         <td>${txBadge}</td>
         <td>${r.date || '-'}</td>
         <td><strong>${r.product_name || '-'}</strong></td>
-        <td style="text-align:right">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
-        <td>${r.unit || '-'}</td>
-        <td style="text-align:right;color:#1e8449">${totalFmt}</td>
+        <td style="text-align:right">${qtyDisplay}</td>
         <td>${expiryHtml}</td>
         <td>${statusBadge}</td>
         <td>${r.manager || '-'}</td>
         <td>${r.notes || '-'}</td>
         <td>
-          <button class="edit-row-btn" onclick="lgOpenEditModal('${r.id}')"><i class="fas fa-edit"></i></button>
-          <button class="edit-row-btn" style="color:#e74c3c;border-color:#e74c3c" onclick="lgDeleteRecord('${r.id}')"><i class="fas fa-trash"></i></button>
+          <button class="edit-row-btn" onclick="lgOpenEditModal('${r.id}','${rowSrc}')"><i class="fas fa-edit"></i></button>
+          <button class="edit-row-btn" style="color:#e74c3c;border-color:#e74c3c" onclick="lgDeleteRecord('${r.id}','${rowSrc}')"><i class="fas fa-trash"></i></button>
         </td>
       </tr>`;
     }
@@ -554,8 +563,60 @@ function lgExport(tab) {
 // =====================================================
 // 수정 모달
 // =====================================================
-async function lgOpenEditModal(id) {
+async function lgOpenEditModal(id, source) {
+  // source: 'wh_inbound' | 'wh_outbound' | undefined(logistics)
+  // wh_inbound 행 → 기존 창고 입고 수정 모달로 라우팅
+  if (source === 'wh_inbound' || (!source && !allLogisticsData.find(r => r.id === id) && allWhInboundData.find(r => r.id === id))) {
+    const rec = allWhInboundData.find(r => r.id === id);
+    if (!rec) { showToast('입고 기록을 찾을 수 없습니다.', 'warning'); return; }
+    // whInboundData가 logistics.js에서 접근 가능하도록 allWhInboundData 활용
+    // warehouse-mgmt.js의 whOpenInEditModal은 whInboundData를 사용하므로 직접 모달 채우기
+    const sv = (eid, v) => { const el = document.getElementById(eid); if (el) el.value = v != null ? v : ''; };
+    sv('whInEditId', rec.id);
+    sv('whInEdit_date', rec.inbound_date || '');
+    sv('whInEdit_item_name', rec.item_name || '');
+    sv('whInEdit_qty', rec.qty || '');
+    sv('whInEdit_mfg_date', rec.mfg_date || '');
+    sv('whInEdit_expiry_date', rec.expiry_date || '');
+    sv('whInEdit_ref_lot', rec.lot_no_product || '');
+    sv('whInEdit_supplier', rec.supplier || '');
+    sv('whInEdit_temp', rec.temp || '');
+    sv('whInEdit_manager', rec.manager || '');
+    sv('whInEdit_memo', rec.memo || '');
+    const whEl = document.getElementById('whInEdit_warehouse');
+    if (whEl) { whEl.value = rec.warehouse || 'C'; if (typeof whBuildLocationSelect === 'function') whBuildLocationSelect('whInEdit'); }
+    setTimeout(() => { sv('whInEdit_location', rec.location || ''); }, 150);
+    const typeEl = document.getElementById('whInEdit_type');
+    if (typeEl) { const tv = rec.inbound_type || rec.type || ''; Array.from(typeEl.options).forEach((o,i)=>{ if(o.value===tv) typeEl.selectedIndex=i; }); }
+    const unitEl = document.getElementById('whInEdit_unit');
+    if (unitEl) { Array.from(unitEl.options).forEach((o,i)=>{ if(o.value===(rec.unit||'pallet')) unitEl.selectedIndex=i; }); }
+    const modal = document.getElementById('whInEditModal');
+    if (modal) modal.classList.add('show');
+    return;
+  }
+  // wh_outbound 행 → 출고 수정 모달
+  if (source === 'wh_outbound' || (!source && !allLogisticsData.find(r => r.id === id) && allWhOutboundData.find(r => r.id === id))) {
+    const rec = allWhOutboundData.find(r => r.id === id);
+    if (!rec) { showToast('출고 기록을 찾을 수 없습니다.', 'warning'); return; }
+    lgEditingId = id;
+    lgEditingSource = 'wh_outbound';
+    document.getElementById('lgEditModalBody').innerHTML = `
+      <div class="form-grid form-grid-2">
+        <div class="form-group"><label>출고일자</label><input type="date" id="le_date" value="${rec.outbound_date||rec.date||''}" /></div>
+        <div class="form-group"><label>단위</label>
+          <select id="le_unit">${['ea','box','kg','L','pallet'].map(u=>`<option ${(rec.unit||'ea')===u?'selected':''}>${u}</option>`).join('')}</select></div>
+        <div class="form-group span-2"><label>품목명</label><input type="text" id="le_product_name" value="${rec.item_name||''}" /></div>
+        <div class="form-group"><label>수량</label><input type="number" id="le_quantity" value="${rec.qty||0}" step="1" /></div>
+        <div class="form-group"><label>담당자</label><input type="text" id="le_manager" value="${rec.manager||''}" /></div>
+        <div class="form-group"><label>출고처</label><input type="text" id="le_destination" value="${rec.destination||''}" /></div>
+        <div class="form-group span-2"><label>비고</label><input type="text" id="le_notes" value="${rec.memo||rec.notes||''}" /></div>
+      </div>
+    `;
+    document.getElementById('lgEditModal').classList.add('show');
+    return;
+  }
   lgEditingId = id;
+  lgEditingSource = 'logistics';
   const rec = allLogisticsData.find(r => r.id === id);
   if (!rec) return;
 
@@ -592,28 +653,51 @@ async function lgOpenEditModal(id) {
 function lgCloseEditModal() {
   document.getElementById('lgEditModal').classList.remove('show');
   lgEditingId = null;
+  lgEditingSource = 'logistics';
 }
 
 async function lgSaveEdit() {
   if (!lgEditingId) return;
-  const rec = allLogisticsData.find(r => r.id === lgEditingId);
-  const updated = {
-    ...rec,
-    transaction_type: document.getElementById('le_transaction_type').value,
-    product_type: document.getElementById('le_product_type').value,
-    date: document.getElementById('le_date').value,
-    status: document.getElementById('le_status').value,
-    product_name: document.getElementById('le_product_name').value,
-    quantity: parseFloat(document.getElementById('le_quantity').value) || 0,
-    unit: document.getElementById('le_unit').value,
-    unit_price: parseFloat(document.getElementById('le_unit_price').value) || 0,
-    total_amount: parseFloat(document.getElementById('le_total_amount').value) || 0,
-    expiry_date: document.getElementById('le_expiry_date').value,
-    manager: document.getElementById('le_manager').value,
-    vendor: document.getElementById('le_vendor').value,
-    notes: document.getElementById('le_notes').value,
-  };
   try {
+    // wh_outbound 행 수정
+    if (lgEditingSource === 'wh_outbound') {
+      const rec = allWhOutboundData.find(r => r.id === lgEditingId);
+      if (!rec) { showToast('출고 기록을 찾을 수 없습니다.', 'warning'); return; }
+      const updated = {
+        ...rec,
+        outbound_date: document.getElementById('le_date')?.value || rec.outbound_date,
+        item_name: document.getElementById('le_product_name')?.value || rec.item_name,
+        qty: parseFloat(document.getElementById('le_quantity')?.value) || rec.qty,
+        unit: document.getElementById('le_unit')?.value || rec.unit,
+        manager: document.getElementById('le_manager')?.value || rec.manager,
+        destination: document.getElementById('le_destination')?.value || rec.destination,
+        memo: document.getElementById('le_notes')?.value || rec.memo,
+      };
+      await apiPut('wh_outbound', lgEditingId, updated);
+      showToast('출고 수정 완료!', 'success');
+      lgCloseEditModal();
+      if (typeof whInvalidateMapCache === 'function') whInvalidateMapCache();
+      await loadLogisticsData();
+      return;
+    }
+    // logistics 행 수정
+    const rec = allLogisticsData.find(r => r.id === lgEditingId);
+    const updated = {
+      ...rec,
+      transaction_type: document.getElementById('le_transaction_type')?.value || rec.transaction_type,
+      product_type: document.getElementById('le_product_type')?.value || rec.product_type,
+      date: document.getElementById('le_date')?.value || rec.date,
+      status: document.getElementById('le_status')?.value || rec.status,
+      product_name: document.getElementById('le_product_name')?.value || rec.product_name,
+      quantity: parseFloat(document.getElementById('le_quantity')?.value) || 0,
+      unit: document.getElementById('le_unit')?.value || rec.unit,
+      unit_price: parseFloat(document.getElementById('le_unit_price')?.value) || 0,
+      total_amount: parseFloat(document.getElementById('le_total_amount')?.value) || 0,
+      expiry_date: document.getElementById('le_expiry_date')?.value || rec.expiry_date,
+      manager: document.getElementById('le_manager')?.value || rec.manager,
+      vendor: document.getElementById('le_vendor')?.value || rec.vendor,
+      notes: document.getElementById('le_notes')?.value || rec.notes,
+    };
     await apiPut('logistics', lgEditingId, updated);
     showToast('수정 완료!', 'success');
     lgCloseEditModal();
@@ -623,11 +707,40 @@ async function lgSaveEdit() {
   }
 }
 
-async function lgDeleteRecord(id) {
+async function lgDeleteRecord(id, source) {
   const targetId = id || lgEditingId;
-  showConfirm('이 물류 내역을 삭제하시겠습니까?', async () => {
+  const src = source || lgEditingSource || 'logistics';
+  showConfirm('이 내역을 삭제하시겠습니까?', async () => {
     try {
-      await apiDelete('logistics', targetId);
+      if (src === 'wh_outbound') {
+        const rec = allWhOutboundData.find(r => r.id === targetId);
+        const lotNo = rec ? rec.lot_no : '';
+        await apiDelete('wh_outbound', targetId);
+        // logistics 연동 삭제
+        if (lotNo) {
+          try {
+            const lgAll = await apiGetAll('logistics');
+            const lgMatch = lgAll.filter(r => r.wh_lot_no === lotNo || r.lot_no === lotNo);
+            for (const m of lgMatch) { if (m.id) await apiDelete('logistics', m.id); }
+          } catch(le) { console.warn('logistics 연동 삭제 실패:', le); }
+        }
+        if (typeof whInvalidateMapCache === 'function') whInvalidateMapCache();
+      } else if (src === 'wh_inbound') {
+        const rec = allWhInboundData.find(r => r.id === targetId);
+        const lotNo = rec ? rec.lot_no : '';
+        await apiDelete('wh_inbound', targetId);
+        // logistics 연동 삭제
+        if (lotNo) {
+          try {
+            const lgAll = await apiGetAll('logistics');
+            const lgMatch = lgAll.filter(r => (r.wh_lot_no === lotNo || r.lot_no === lotNo) && r.transaction_type === '입고');
+            for (const m of lgMatch) { if (m.id) await apiDelete('logistics', m.id); }
+          } catch(le) { console.warn('logistics 연동 삭제 실패:', le); }
+        }
+        if (typeof whInvalidateMapCache === 'function') whInvalidateMapCache();
+      } else {
+        await apiDelete('logistics', targetId);
+      }
       showToast('삭제되었습니다.', 'success');
       lgCloseEditModal();
       await loadLogisticsData();
