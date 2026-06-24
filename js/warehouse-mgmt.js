@@ -872,8 +872,8 @@ async function whSaveInEdit() {
     whInvalidateMapCache();
     await whLoadAll();
     whRenderInTable();
-    // ── 연동 갱신: 물류현황/재고현황 즉시 반영 ──
-    if (typeof loadLogisticsData === 'function') loadLogisticsData();
+    // ── 연동 갱신: 물류현황/재고현황 즉시 반영 (await로 순서 보장) ──
+    if (typeof loadLogisticsData === 'function') await loadLogisticsData();
   } catch(err) {
     showToast('수정 실패: ' + err.message, 'error');
   } finally {

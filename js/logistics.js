@@ -860,9 +860,16 @@ function lgRenderStockTable() {
   var typeF = document.getElementById('allTypeFilter') ? document.getElementById('allTypeFilter').value : '';
 
   var stockMap = {};
-  // logistics 콜렉션 (수입/OEM/자체생산 입출고)
-  // 1패스: 입고 데이터 먼저 집계 (소비기한 있는 키 생성)
+  // ──────────────────────────────────────────────────
+  // 단일 진실 공급원 기반 집계
+  //  1패스: logistics 입고 (WH-IN- 제외 → 중복 방지)
+  //  2패스: logistics 출고 (WH-OUT- 제외 → 중복 방지)
+  //  3패스: wh_inbound 전체 직접 집계 (단일 진실 공급원)
+  //  4패스: wh_outbound 전체 직접 집계 (단일 진실 공급원)
+  // ──────────────────────────────────────────────────
+  // 1패스 재실행: logistics에서 WH-IN- 제외하고 입고 집계
   allLogisticsData.forEach(function(r) {
+    if ((r.lot_no || '').startsWith('WH-IN-')) return; // 창고입고 동기화 기록 제외
     var name = (r.product_name || r.item_name || '').trim();
     var expiry = (r.expiry_date || r.expiry || '').trim();
     var unit = (r.unit || 'ea').trim();
@@ -870,25 +877,21 @@ function lgRenderStockTable() {
     var qty = Number(r.quantity || r.qty || 0);
     var tx = (r.transaction_type || '입고').trim();
     if (!name) return;
-    if (tx !== '입고' && tx !== '반품') return; // 입고만 먼저
+    if (tx !== '입고' && tx !== '반품') return;
     var key = name + '||' + expiry;
     if (!stockMap[key]) {
       stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
     }
     stockMap[key].inQty += qty;
   });
-  // 2패스: logistics 콜렉션 출고 집계
-  // 단, 창고 출고 동기화 기록(lot_no가 WH-OUT-로 시작)은 완전히 제외
-  // 창고 출고는 아래 wh_outbound에서만 집계함 (단일 진실 공급원)
+  // 2패스 재실행: logistics 출고 집계 (WH-OUT- 제외)
   allLogisticsData.forEach(function(r) {
+    if ((r.lot_no || '').startsWith('WH-OUT-')) return;
     var name = (r.product_name || r.item_name || '').trim();
     var expiry = (r.expiry_date || r.expiry || '').trim();
     var qty = Number(r.quantity || r.qty || 0);
     var tx = (r.transaction_type || '입고').trim();
-    if (!name) return;
-    if (tx !== '출고') return;
-    // 창고 출고 동기화 기록은 제외 (중복 방지)
-    if ((r.lot_no || '').startsWith('WH-OUT-')) return;
+    if (!name || tx !== '출고') return;
     var key = name + '||' + expiry;
     if (stockMap[key]) {
       stockMap[key].outQty += qty;
@@ -897,19 +900,30 @@ function lgRenderStockTable() {
       Object.keys(stockMap).forEach(function(k) {
         if (k.split('||')[0] === name) {
           if (!matchedKey) { matchedKey = k; return; }
-          var curExp = stockMap[matchedKey].expiry || '9999';
-          var thisExp = stockMap[k].expiry || '9999';
-          if (thisExp < curExp) matchedKey = k;
+          if ((stockMap[k].expiry||'9999') < (stockMap[matchedKey].expiry||'9999')) matchedKey = k;
         }
       });
-      if (matchedKey) {
-        stockMap[matchedKey].outQty += qty;
-      } else {
-        stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: qty };
-      }
+      if (matchedKey) stockMap[matchedKey].outQty += qty;
+      else stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: qty };
     }
   });
-  // 3패스: 창고 출고(wh_outbound) 집계 - 단일 진실 공급원으로 직접 집계
+  // 3패스: 창고 입고(wh_inbound) 집계 - 단일 진실 공급원
+  (allWhInboundData || []).forEach(function(r) {
+    var name = (r.item_name || '').trim();
+    var expiry = (r.expiry_date || '').trim();
+    var unit = (r.unit || 'ea').trim();
+    var ptype = r.inbound_type || '수입제품';
+    var qty = Number(r.qty || 0);
+    if (!name || !qty) return;
+    var key = name + '||' + expiry;
+    if (!stockMap[key]) {
+      stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
+    }
+    stockMap[key].inQty += qty;
+    // ptype이 없으면 wh_inbound 값으로 채움
+    if (!stockMap[key].ptype) stockMap[key].ptype = ptype;
+  });
+  // 4패스: 창고 출고(wh_outbound) 집계 - 단일 진실 공급원으로 직접 집계
   // logistics의 WH-OUT- 기록은 위에서 이미 제외했으므로 여기서 wh_outbound 전체를 차감
   (allWhOutboundData || []).forEach(function(r) {
     var name = (r.item_name || '').trim();
