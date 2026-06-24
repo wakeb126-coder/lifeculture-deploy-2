@@ -157,7 +157,7 @@ function lgFilterTable(tab) {
       r.product_type === '수입제품' &&
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!sf || r.status === sf)
-    );
+    ).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     if (isMobile) {
       lgShowMobileCard('importCardView', 'importTableWrap', data, 'import');
     } else {
@@ -173,7 +173,7 @@ function lgFilterTable(tab) {
       r.product_type === 'OEM제품' &&
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!sf || r.status === sf)
-    );
+    ).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     if (isMobile) {
       lgShowMobileCard('oemCardView', 'oemTableWrap', data, 'oem');
     } else {
@@ -189,7 +189,7 @@ function lgFilterTable(tab) {
       r.product_type === '자체생산' &&
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
       (!sf || r.status === sf)
-    );
+    ).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     if (isMobile) {
       lgShowMobileCard('ownCardView', 'ownTableWrap', data, 'own');
     } else {
@@ -248,7 +248,7 @@ function lgFilterTable(tab) {
       (!txF || r.transaction_type === txF) &&
       (!from || (r.date || '') >= from) &&
       (!to || (r.date || '') <= to)
-    );
+    ).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     if (isMobile) {
       lgShowMobileCard('allCardView', 'allTableWrap', data, 'all');
     } else {
