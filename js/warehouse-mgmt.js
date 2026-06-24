@@ -1143,12 +1143,70 @@ async function whSubmitStocktake() {
   });
   if (records.length === 0) { showToast('실사 수량을 입력해주세요.', 'warning'); return; }
   try {
+    // ── 1. 실사 결과 저장 ──
     for (var i = 0; i < records.length; i++) {
       await apiPost('wh_stocktake', records[i]);
     }
-    showToast('재고 실사 저장 완료 (' + records.length + '건)', 'success');
-    whInvalidateMapCache(); // 캐시 무효화
+
+    // ── 2. diff != 0 인 항목에 대해 WH-ADJ- 조정 레코드 자동 생성 ──
+    var adjDate = date;
+    var adjDateShort = adjDate.replace(/-/g,'').slice(2);
+    var adjPrefix = 'WH-ADJ-' + adjDateShort;
+    // 기존 ADJ lot_no 개수 조회 (중복 방지)
+    var existingAdj = [];
+    try { existingAdj = (await apiGetAll('wh_inbound')).filter(function(r){ return r.lot_no && r.lot_no.startsWith(adjPrefix); }); } catch(e2) {}
+    var adjSeq = existingAdj.length;
+    var adjCreated = 0;
+
+    for (var j = 0; j < records.length; j++) {
+      var rec = records[j];
+      var diff = Number(rec.diff) || 0;
+      if (diff === 0) continue;
+
+      adjSeq++;
+      var adjLot = adjPrefix + '-' + String(adjSeq).padStart(3, '0');
+
+      if (diff > 0) {
+        // 실사 수량 > 시스템 수량 → 플러스 조정: wh_inbound에 입고 조정 기록
+        await apiPost('wh_inbound', {
+          lot_no: adjLot,
+          inbound_date: adjDate,
+          warehouse: rec.location ? rec.location.charAt(0) : 'W',
+          location: rec.location,
+          item_name: rec.item_name,
+          qty: diff,
+          unit: 'ea',
+          inbound_type: '재고조정',
+          manager: '실사조정',
+          memo: '재고실사 플러스 조정 (실사:' + rec.actual_qty + ' / 시스템:' + rec.sys_qty + ')',
+          created_at: Date.now()
+        });
+      } else {
+        // 실사 수량 < 시스템 수량 → 마이너스 조정: wh_outbound에 출고 조정 기록
+        await apiPost('wh_outbound', {
+          lot_no: adjLot,
+          outbound_date: adjDate,
+          warehouse: rec.location ? rec.location.charAt(0) : 'W',
+          location: rec.location,
+          item_name: rec.item_name,
+          qty: Math.abs(diff),
+          unit: 'ea',
+          destination: '재고조정',
+          manager: '실사조정',
+          memo: '재고실사 마이너스 조정 (실사:' + rec.actual_qty + ' / 시스템:' + rec.sys_qty + ')',
+          created_at: Date.now()
+        });
+      }
+      adjCreated++;
+    }
+
+    var msg = '재고 실사 저장 완료 (' + records.length + '건)';
+    if (adjCreated > 0) msg += ' — 재고 자동 조정 ' + adjCreated + '건 반영';
+    showToast(msg, 'success');
+    whInvalidateMapCache();
     await whLoadAll();
+    // logistics 탭도 갱신
+    if (typeof loadLogisticsData === 'function') loadLogisticsData();
   } catch(e) {
     showToast('저장 실패: ' + e.message, 'error');
   }
@@ -2480,8 +2538,20 @@ function whShowOutItemStock(itemName) {
   var today = new Date();
   var diff = firstExpiry ? Math.ceil((new Date(firstExpiry) - today) / 86400000) : null;
   var expiryTxt = firstExpiry ? (' | 최우선 소비기한: <b style="color:' + (diff!==null&&diff<=30?'#e74c3c':'#27ae60') + '">' + firstExpiry + (diff!==null?' (D-'+diff+')':'') + '</b>') : '';
+
+  // 박스당 입수 정보 표시
+  var boxTxt = '';
+  var products = _whProductMasterCache || [];
+  var matchProduct = products.find(function(p) { return (p.product_name||'').trim() === (itemName||'').trim(); });
+  var qpb = matchProduct ? (parseInt(matchProduct.qty_per_box) || 0) : 0;
+  if (qpb > 0) {
+    var totalBoxes = Math.floor(totalQty / qpb);
+    var remainder = totalQty % qpb;
+    boxTxt = ' | <span style="color:#2980b9;font-size:12px"><i class="fas fa-box"></i> 박스당 ' + qpb + 'ea → <b>' + totalBoxes + '박스 ' + (remainder > 0 ? remainder + 'ea 낱개 남음' : '정확') + '</b></span>';
+  }
+
   stockEl.style.display = '';
-  stockEl.innerHTML = '<span style="color:#27ae60;font-size:12px"><i class="fas fa-boxes"></i> 총 재고: <b>' + totalQty.toLocaleString() + ' ' + unit + '</b> (' + candidates.length + '개 위치)' + expiryTxt + '</span>';
+  stockEl.innerHTML = '<span style="color:#27ae60;font-size:12px"><i class="fas fa-boxes"></i> 총 재고: <b>' + totalQty.toLocaleString() + ' ' + unit + '</b> (' + candidates.length + '개 위치)' + expiryTxt + '</span>' + boxTxt;
 }
 
 async function whHandleOutSubmit(e) {

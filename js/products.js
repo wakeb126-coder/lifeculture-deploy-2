@@ -309,6 +309,7 @@ function openEditModal(id) {
     personalEmail: p.personal_email,
     taxEmail: p.tax_email,
     lotAbbrev: p.lot_abbrev,
+    qtyPerBox: p.qty_per_box || '',
   };
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
@@ -399,6 +400,7 @@ async function handleSubmit(e) {
     personal_email: document.getElementById('personal_email')?.value || document.getElementById('personalEmail')?.value || '',
     tax_email: document.getElementById('tax_email')?.value || document.getElementById('taxEmail')?.value || '',
     lot_abbrev: document.getElementById('lotAbbrev')?.value || '',
+    qty_per_box: parseInt(document.getElementById('qtyPerBox')?.value) || 0,
     documents: docsJson,
     updated_at: Date.now()
   };
