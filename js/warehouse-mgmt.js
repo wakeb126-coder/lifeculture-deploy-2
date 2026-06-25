@@ -68,6 +68,29 @@ const WARM_LOCATIONS = (function() {
   return locs;
 })();
 
+// ── 위치코드 정렬 비교 함수 ──────────────────────────
+// 정렬 우선순위: 일반창고(W) → 냉장창고(C), 구역(A→B→...), 구역번호(1→2→...), 단(1→2→3), 파렛트(1→2)
+function whLocCodeCompare(a, b) {
+  // 위치코드 파싱: W-A1-2-1 또는 C-B3-1-2
+  function parse(code) {
+    var parts = (code || '').split('-');
+    // parts[0]: W or C, parts[1]: zone+num (e.g. A1, B3), parts[2]: level, parts[3]: slot
+    var whType = parts[0] === 'W' ? 0 : 1; // 일반(W)=0 우선, 냉장(C)=1
+    var zoneStr = parts[1] || '';
+    var zone = zoneStr.charAt(0);            // 구역 문자 (A, B, C ...)
+    var zoneNum = parseInt(zoneStr.slice(1)) || 0; // 구역 번호
+    var level = parseInt(parts[2]) || 0;     // 단
+    var slot  = parseInt(parts[3]) || 0;     // 파렛트
+    return [whType, zone, zoneNum, level, slot];
+  }
+  var pa = parse(a), pb = parse(b);
+  for (var i = 0; i < pa.length; i++) {
+    if (pa[i] < pb[i]) return -1;
+    if (pa[i] > pb[i]) return  1;
+  }
+  return 0;
+}
+
 // ── 초기화 ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async function() {
   var today = new Date().toISOString().split('T')[0];
@@ -1043,12 +1066,12 @@ function whRenderLedger(stockMap) {
   });
 
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:30px">등록된 재고가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#aaa;padding:30px">등록된 재고가 없습니다.</td></tr>';
     return;
   }
 
-  // 위치코드 오름차순 정렬
-  rows.sort(function(a, b) { return a.locCode.localeCompare(b.locCode); });
+  // 위치코드 정렬: 일반(W)→냉장(C), A→B→..., 구역번호, 단, 파렛트 순
+  rows.sort(function(a, b) { return whLocCodeCompare(a.locCode, b.locCode); });
 
   var today = new Date();
   tbody.innerHTML = rows.map(function(r) {
@@ -1066,6 +1089,11 @@ function whRenderLedger(stockMap) {
     } else {
       statusBadge = '<span style="background:#eafaf1;color:#27ae60;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">정상</span>';
     }
+    var moveBtn = r.currentQty > 0
+      ? '<button onclick="whOpenMoveModal(' + JSON.stringify(r.locCode) + ',' + JSON.stringify(r.itemName) + ')" ' +
+        'style="padding:3px 10px;background:#fff3e0;color:#e67e22;border:1px solid #e67e22;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">' +
+        '<i class="fas fa-exchange-alt"></i> 이동</button>'
+      : '<span style="color:#ccc;font-size:11px">재고없음</span>';
     return '<tr>' +
       '<td><span style="font-size:12px">' + r.warehouseLabel + '</span></td>' +
       '<td><code style="font-size:11px">' + r.locCode + '</code></td>' +
@@ -1076,6 +1104,7 @@ function whRenderLedger(stockMap) {
       '<td>' + (r.unit||'-') + '</td>' +
       '<td style="color:' + expiryColor + '">' + expiryText + '</td>' +
       '<td>' + statusBadge + '</td>' +
+      '<td>' + moveBtn + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -3157,4 +3186,65 @@ function whApplyRemoteScan(data) {
 
   // 모달이 열려있으면 닫기
   whCloseRemoteScanModal();
+}
+
+// ── 창고 위치 이동 ────────────────────────────────
+function whOpenMoveModal(locCode, itemName) {
+  document.getElementById('whMoveFromLoc').value = locCode;
+  document.getElementById('whMoveItemName').value = itemName;
+  document.getElementById('whMoveItemDisplay').textContent = itemName;
+  document.getElementById('whMoveFromDisplay').textContent = locCode;
+  document.getElementById('whMove_memo').value = '';
+
+  // 목적지 창고 기본값: 현재 위치와 동일한 창고 유형
+  var whType = locCode.startsWith('C') ? 'C' : 'W';
+  var whSel = document.getElementById('whMove_warehouse');
+  if (whSel) { whSel.value = whType; whBuildLocationSelect('whMove'); }
+
+  document.getElementById('whMoveModal').classList.add('show');
+}
+
+function whCloseMoveModal() {
+  document.getElementById('whMoveModal').classList.remove('show');
+}
+
+async function whSaveMove() {
+  var fromLoc  = document.getElementById('whMoveFromLoc').value;
+  var itemName = document.getElementById('whMoveItemName').value;
+  var toLoc    = document.getElementById('whMove_location').value;
+  var toWh     = document.getElementById('whMove_warehouse').value;
+  var memo     = document.getElementById('whMove_memo').value;
+
+  if (!toLoc) { showToast('이동할 위치를 선택해주세요.', 'warning'); return; }
+  if (toLoc === fromLoc) { showToast('현재 위치와 동일합니다.', 'warning'); return; }
+
+  // 해당 품목·위치의 입고 레코드를 모두 새 위치로 업데이트
+  var targets = whInboundData.filter(function(r) {
+    return r.location === fromLoc && (r.item_name || '미상') === itemName;
+  });
+
+  if (targets.length === 0) {
+    showToast('이동할 입고 기록을 찾을 수 없습니다.', 'error');
+    return;
+  }
+
+  try {
+    for (var i = 0; i < targets.length; i++) {
+      var rec = targets[i];
+      var updated = Object.assign({}, rec, {
+        warehouse: toWh,
+        location: toLoc,
+        memo: (rec.memo ? rec.memo + ' | ' : '') + '위치이동: ' + fromLoc + ' → ' + toLoc + (memo ? ' (' + memo + ')' : '')
+      });
+      delete updated.id;
+      await apiPut('wh_inbound', rec.id, updated);
+    }
+    showToast('이동 완료: ' + fromLoc + ' → ' + toLoc + ' (' + targets.length + '건)', 'success');
+    whCloseMoveModal();
+    whInvalidateMapCache();
+    await whLoadAll();
+    if (typeof loadLogisticsData === 'function') loadLogisticsData();
+  } catch(e) {
+    showToast('이동 실패: ' + e.message, 'error');
+  }
 }
