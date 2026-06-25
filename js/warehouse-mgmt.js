@@ -68,29 +68,6 @@ const WARM_LOCATIONS = (function() {
   return locs;
 })();
 
-// ── 위치코드 정렬 비교 함수 ──────────────────────────
-// 정렬 우선순위: 일반창고(W) → 냉장창고(C), 구역(A→B→...), 구역번호(1→2→...), 단(1→2→3), 파렛트(1→2)
-function whLocCodeCompare(a, b) {
-  // 위치코드 파싱: W-A1-2-1 또는 C-B3-1-2
-  function parse(code) {
-    var parts = (code || '').split('-');
-    // parts[0]: W or C, parts[1]: zone+num (e.g. A1, B3), parts[2]: level, parts[3]: slot
-    var whType = parts[0] === 'W' ? 0 : 1; // 일반(W)=0 우선, 냉장(C)=1
-    var zoneStr = parts[1] || '';
-    var zone = zoneStr.charAt(0);            // 구역 문자 (A, B, C ...)
-    var zoneNum = parseInt(zoneStr.slice(1)) || 0; // 구역 번호
-    var level = parseInt(parts[2]) || 0;     // 단
-    var slot  = parseInt(parts[3]) || 0;     // 파렛트
-    return [whType, zone, zoneNum, level, slot];
-  }
-  var pa = parse(a), pb = parse(b);
-  for (var i = 0; i < pa.length; i++) {
-    if (pa[i] < pb[i]) return -1;
-    if (pa[i] > pb[i]) return  1;
-  }
-  return 0;
-}
-
 // ── 초기화 ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async function() {
   var today = new Date().toISOString().split('T')[0];
@@ -1070,8 +1047,34 @@ function whRenderLedger(stockMap) {
     return;
   }
 
-  // 위치코드 정렬: 일반(W)→냉장(C), A→B→..., 구역번호, 단, 파렛트 순
-  rows.sort(function(a, b) { return whLocCodeCompare(a.locCode, b.locCode); });
+  // 위치코드 정렬: 일반창고 → 냉장창고, A구역 → B구역, 1-1 → 1-2 → 2-1 → 2-2
+  rows.sort(function(a, b) {
+    var aCode = a.locCode, bCode = b.locCode;
+    // 1. 창고 유형: W(일반) 먼저, C(냉장) 나중
+    var aType = aCode.startsWith('C') ? 1 : 0;
+    var bType = bCode.startsWith('C') ? 1 : 0;
+    if (aType !== bType) return aType - bType;
+    // 2. 구역 문자 (A, B, C, ...)
+    var aParts = aCode.split('-'); // [W, A1, 1, 1]
+    var bParts = bCode.split('-');
+    var aZone = aParts[1] || ''; // 'A1'
+    var bZone = bParts[1] || ''; // 'B2'
+    var aZoneLetter = aZone.replace(/[0-9]/g, '');
+    var bZoneLetter = bZone.replace(/[0-9]/g, '');
+    if (aZoneLetter !== bZoneLetter) return aZoneLetter.localeCompare(bZoneLetter);
+    // 3. 구역 번호
+    var aZoneNum = parseInt(aZone.replace(/[^0-9]/g, '')) || 0;
+    var bZoneNum = parseInt(bZone.replace(/[^0-9]/g, '')) || 0;
+    if (aZoneNum !== bZoneNum) return aZoneNum - bZoneNum;
+    // 4. 단(층)
+    var aLevel = parseInt(aParts[2]) || 0;
+    var bLevel = parseInt(bParts[2]) || 0;
+    if (aLevel !== bLevel) return aLevel - bLevel;
+    // 5. 파렉트 번호
+    var aSlot = parseInt(aParts[3]) || 0;
+    var bSlot = parseInt(bParts[3]) || 0;
+    return aSlot - bSlot;
+  });
 
   var today = new Date();
   tbody.innerHTML = rows.map(function(r) {
@@ -1089,11 +1092,6 @@ function whRenderLedger(stockMap) {
     } else {
       statusBadge = '<span style="background:#eafaf1;color:#27ae60;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">정상</span>';
     }
-    var moveBtn = r.currentQty > 0
-      ? '<button onclick="whOpenMoveModal(' + JSON.stringify(r.locCode) + ',' + JSON.stringify(r.itemName) + ')" ' +
-        'style="padding:3px 10px;background:#fff3e0;color:#e67e22;border:1px solid #e67e22;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">' +
-        '<i class="fas fa-exchange-alt"></i> 이동</button>'
-      : '<span style="color:#ccc;font-size:11px">재고없음</span>';
     return '<tr>' +
       '<td><span style="font-size:12px">' + r.warehouseLabel + '</span></td>' +
       '<td><code style="font-size:11px">' + r.locCode + '</code></td>' +
@@ -1104,7 +1102,11 @@ function whRenderLedger(stockMap) {
       '<td>' + (r.unit||'-') + '</td>' +
       '<td style="color:' + expiryColor + '">' + expiryText + '</td>' +
       '<td>' + statusBadge + '</td>' +
-      '<td>' + moveBtn + '</td>' +
+      '<td style="text-align:center">' +
+        (r.currentQty > 0
+          ? '<button onclick="whOpenMoveModal(\'' + r.locCode.replace(/'/g,"\\'") + '\',\'' + r.itemName.replace(/'/g,"\\'") + '\')" style="padding:4px 10px;background:#fff3e0;color:#e67e22;border:1px solid #e67e22;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer"><i class=\"fas fa-exchange-alt\"></i> 이동</button>'
+          : '<span style="color:#ccc;font-size:11px">재고없음</span>') +
+      '</td>' +
       '</tr>';
   }).join('');
 }
@@ -3193,7 +3195,7 @@ function whOpenMoveModal(locCode, itemName) {
   document.getElementById('whMoveFromLoc').value = locCode;
   document.getElementById('whMoveItemName').value = itemName;
   document.getElementById('whMoveItemDisplay').textContent = itemName;
-  document.getElementById('whMoveFromDisplay').textContent = locCode;
+  document.getElementById('whMoveFromDisplay').textContent = '현 위치: ' + locCode;
   document.getElementById('whMove_memo').value = '';
 
   // 목적지 창고 기본값: 현재 위치와 동일한 창고 유형
@@ -3201,11 +3203,13 @@ function whOpenMoveModal(locCode, itemName) {
   var whSel = document.getElementById('whMove_warehouse');
   if (whSel) { whSel.value = whType; whBuildLocationSelect('whMove'); }
 
-  document.getElementById('whMoveModal').classList.add('show');
+  var modal = document.getElementById('whMoveModal');
+  if (modal) { modal.style.display = 'flex'; }
 }
 
 function whCloseMoveModal() {
-  document.getElementById('whMoveModal').classList.remove('show');
+  var modal = document.getElementById('whMoveModal');
+  if (modal) { modal.style.display = 'none'; }
 }
 
 async function whSaveMove() {
@@ -3236,8 +3240,9 @@ async function whSaveMove() {
         location: toLoc,
         memo: (rec.memo ? rec.memo + ' | ' : '') + '위치이동: ' + fromLoc + ' → ' + toLoc + (memo ? ' (' + memo + ')' : '')
       });
+      var recId = updated.id;
       delete updated.id;
-      await apiPut('wh_inbound', rec.id, updated);
+      await apiPut('wh_inbound', recId, updated);
     }
     showToast('이동 완료: ' + fromLoc + ' → ' + toLoc + ' (' + targets.length + '건)', 'success');
     whCloseMoveModal();
