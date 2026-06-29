@@ -537,16 +537,108 @@ function lgResetForm() {
 // 엑셀 내보내기
 // =====================================================
 function lgExport(tab) {
+  // tab === 'all' 일 때: 현재 재고 현황 테이블 데이터를 출력
+  if (tab === 'all') {
+    // lgRenderStockTable과 동일한 로직으로 stockMap 집계
+    var stockMap = {};
+    var today = new Date();
+
+    // 1패스: logistics 입고 (WH-IN- 제외)
+    allLogisticsData.forEach(function(r) {
+      if ((r.lot_no || '').startsWith('WH-IN-')) return;
+      if (r.transaction_type !== '입고') return;
+      var name = r.product_name || '미상'; var expiry = r.expiry_date || ''; var unit = r.unit || 'ea'; var ptype = r.product_type || '';
+      var key = name + '|' + expiry;
+      if (!stockMap[key]) stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
+      stockMap[key].inQty += Number(r.quantity) || 0;
+    });
+    // 2패스: logistics 출고 (WH-OUT- 제외)
+    allLogisticsData.forEach(function(r) {
+      if ((r.lot_no || '').startsWith('WH-OUT-')) return;
+      if (r.transaction_type !== '출고') return;
+      var name = r.product_name || '미상'; var expiry = r.expiry_date || '';
+      var key = name + '|' + expiry;
+      if (stockMap[key]) { stockMap[key].outQty += Number(r.quantity) || 0; }
+      else {
+        var matchedKey = null;
+        Object.keys(stockMap).forEach(function(k) {
+          if (stockMap[k].name === name) { if (!matchedKey || (stockMap[k].expiry||'9999') < (stockMap[matchedKey].expiry||'9999')) matchedKey = k; }
+        });
+        if (matchedKey) stockMap[matchedKey].outQty += Number(r.quantity) || 0;
+        else stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: Number(r.quantity)||0 };
+      }
+    });
+    // 3패스: wh_inbound 전체
+    if (typeof allWhInboundData !== 'undefined') {
+      allWhInboundData.forEach(function(r) {
+        var name = r.item_name || '미상'; var expiry = r.expiry_date || ''; var unit = r.unit || 'ea'; var ptype = r.product_type || '';
+        var key = name + '|' + expiry;
+        if (!stockMap[key]) stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
+        stockMap[key].inQty += Number(r.qty) || 0;
+        if (!stockMap[key].ptype) stockMap[key].ptype = ptype;
+      });
+    }
+    // 4패스: wh_outbound 전체
+    if (typeof allWhOutboundData !== 'undefined') {
+      allWhOutboundData.forEach(function(r) {
+        var name = r.item_name || '미상'; var expiry = r.expiry_date || '';
+        var key = name + '|' + expiry;
+        if (stockMap[key]) { stockMap[key].outQty += Number(r.qty) || 0; }
+        else {
+          var matchedKey = null;
+          Object.keys(stockMap).forEach(function(k) {
+            if (stockMap[k].name === name) { if (!matchedKey || (stockMap[k].expiry||'9999') < (stockMap[matchedKey].expiry||'9999')) matchedKey = k; }
+          });
+          if (matchedKey) stockMap[matchedKey].outQty += Number(r.qty) || 0;
+        }
+      });
+    }
+
+    var rows = Object.values(stockMap);
+    // 필터 (전체현황 탭 필터 조건 적용)
+    var typeF = document.getElementById('allTypeFilter') ? document.getElementById('allTypeFilter').value : '';
+    var q = document.getElementById('stockSearch') ? document.getElementById('stockSearch').value.toLowerCase() : '';
+    if (q) rows = rows.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; });
+    if (typeF) rows = rows.filter(function(r) { return r.ptype === typeF; });
+    rows.sort(function(a, b) {
+      if (a.name !== b.name) return a.name.localeCompare(b.name);
+      return (a.expiry || '').localeCompare(b.expiry || '');
+    });
+
+    var headers = ['제품명', '제품유형', '소비기한', '입고 수량', '출고 수량', '현재고', '단위', '상태'];
+    var csvRows = rows.map(function(r) {
+      var stock = r.inQty - r.outQty;
+      var status = stock <= 0 ? '재고없음' : stock <= 10 ? '부족' : '정상';
+      if (r.expiry) {
+        var diff = Math.floor((new Date(r.expiry) - today) / (1000 * 60 * 60 * 24));
+        if (diff < 0) status = '기한만료';
+        else if (diff <= 30) status = '임박(' + diff + '일)';
+      }
+      return [r.name, r.ptype || '-', r.expiry || '-', r.inQty, r.outQty, stock, r.unit, status];
+    });
+    var csvContent = [headers, ...csvRows].map(function(row) { return row.map(function(cell) { return '"' + cell + '"'; }).join(','); }).join('\n');
+    var blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = '현재재고현황_' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('현재 재고 현황 엑셀 다운로드 완료!', 'success');
+    return;
+  }
+
+  // import / oem / own 탭: 거래이력 출력
   let data = [];
   if (tab === 'import') data = allLogisticsData.filter(r => r.product_type === '수입제품');
   else if (tab === 'oem') data = allLogisticsData.filter(r => r.product_type === 'OEM제품');
   else if (tab === 'own') data = allLogisticsData.filter(r => r.product_type === '자체생산');
   else data = allLogisticsData;
 
-  const headers = ['Lot No', '제품유형', '거래유형', '거래일자', '제품명', '수량', '단위', '총금액', '소비기한', '상태', '담당자', '비고'];
+  const headers = ['Lot No', '제품유형', '거래유형', '거래일자', '제품명', '수량', '단위', '소비기한', '상태', '담당자', '비고'];
   const rows = data.map(r => [
     r.lot_no || '', r.product_type || '', r.transaction_type || '', r.date || '',
-    r.product_name || '', r.quantity || 0, r.unit || '', r.total_amount || 0,
+    r.product_name || '', r.quantity || 0, r.unit || '',
     r.expiry_date || '', r.status || '', r.manager || '', r.notes || ''
   ]);
   const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
