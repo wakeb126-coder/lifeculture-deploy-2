@@ -136,9 +136,6 @@ function lgSkeletonRows(cols, count) {
 }
 
 async function loadLogisticsData() {
-  // allTableBody만 스켈레톤 표시 (stockTableBody는 lgRenderStockTable이 직접 채움)
-  var allTbody = document.getElementById('allTableBody');
-  if (allTbody) allTbody.innerHTML = lgSkeletonRows(11, 5);
   try {
     // wh_inbound, wh_outbound는 warehouse-mgmt.js의 whLoadAll()이 이미 조회하므로
     // 중복 Firestore 요청 방지를 위해 logistics만 단독 조회
