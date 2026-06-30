@@ -167,6 +167,15 @@ async function loadLogisticsData() {
     // LotNo는 캐시 기반으로만 갱신 (Firestore 재조회 없음)
   } catch(e) {
     console.error('[logistics] 데이터 로드 실패:', e);
+    // 오류 시에도 스켈레톤 제거 - 로딩 고착 방지
+    var stockTbodyErr = document.getElementById('stockTableBody');
+    var allTbodyErr = document.getElementById('allTableBody');
+    if (stockTbodyErr && stockTbodyErr.querySelector('.skeleton-row')) {
+      stockTbodyErr.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#e74c3c;padding:30px"><i class="fas fa-exclamation-triangle"></i> 데이터 로드 실패. 새로고침을 시도해 주세요.</td></tr>';
+    }
+    if (allTbodyErr && allTbodyErr.querySelector('.skeleton-row')) {
+      allTbodyErr.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#e74c3c;padding:30px"><i class="fas fa-exclamation-triangle"></i> 데이터 로드 실패. 새로고침을 시도해 주세요.</td></tr>';
+    }
   }
 }
 
