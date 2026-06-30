@@ -23,12 +23,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (fromEl) fromEl.value = `${y}-${m}-01`;
   if (toEl) toEl.value = today;
 
-  // 성능 개선: LotNo 생성과 데이터 로드를 병렬 실행
-  // lgRefreshLotNo는 내부적으로 logistics를 다시 읽지 않도록 캐시 활용
-  const [, data] = await Promise.all([
-    lgRefreshLotNoFast(),   // logistics 읽기 없이 날짜기반 LotNo 생성
-    loadLogisticsData()     // 실제 데이터 로드
-  ]);
+  // LotNo 생성 (날짜기반 임시 LotNo, 데이터 로드 없이 즉시 생성)
+  await lgRefreshLotNoFast();
+  // loadLogisticsData는 warehouse-mgmt.js의 whLoadAll() 완료 후 호출됨
+  // (wh_inbound, wh_outbound 데이터가 채워진 상태 보장)
 
   const form = document.getElementById('logisticsForm');
   if (form) form.addEventListener('submit', lgHandleSubmit);
@@ -144,14 +142,13 @@ async function loadLogisticsData() {
   if (stockTbody) stockTbody.innerHTML = lgSkeletonRows(8, 5);
   if (allTbody) allTbody.innerHTML = lgSkeletonRows(11, 5);
   try {
-    const [res, whIn, whOut] = await Promise.all([
-      apiGetAll('logistics'),
-      apiGetAll('wh_inbound'),
-      apiGetAll('wh_outbound')
-    ]);
+    // wh_inbound, wh_outbound는 warehouse-mgmt.js의 whLoadAll()이 이미 조회하므로
+    // 중복 Firestore 요청 방지를 위해 logistics만 단독 조회
+    const res = await apiGetAll('logistics');
     allLogisticsData = (res || []).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-    allWhInboundData = whIn || [];
-    allWhOutboundData = whOut || [];
+    // warehouse-mgmt.js 전역 변수 재사용 (없으면 빈 배열)
+    allWhInboundData = (typeof whInboundData !== 'undefined' ? whInboundData : []);
+    allWhOutboundData = (typeof whOutboundData !== 'undefined' ? whOutboundData : []);
     lgUpdateKpiCards();
     // 성능 개선: 현재 활성 탭만 렌더링 (비활성 탭은 탭 전환 시 렌더링)
     const activeTab = document.querySelector('.tab-btn.active');

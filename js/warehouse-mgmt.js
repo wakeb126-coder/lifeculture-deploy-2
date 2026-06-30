@@ -75,9 +75,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     var el = document.getElementById(id);
     if (el) el.value = today;
   });
-  // 최초 로드: _calledByUser 플래그 미설정 (중복 loadLogisticsData 호출 방지)
+  // 최초 로드: whLoadAll 완료 후 loadLogisticsData 호출
+  // (wh_inbound, wh_outbound가 채워진 상태에서 logistics 데이터 로드)
   await whLoadAll();
   whInitLotNos();
+  // logistics.js의 loadLogisticsData 호출 (warehouse-mgmt.js가 나중에 로드되므로 함수 존재 보장)
+  if (typeof loadLogisticsData === 'function') {
+    await loadLogisticsData();
+  }
 });
 
 // 입출고 등록/수정/삭제 후 수동 호출 시 사용
