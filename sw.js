@@ -1,8 +1,8 @@
 // ================================================
-// 라이프컬처 생산관리 앱 - Service Worker v3.6
+// 라이프컬처 생산관리 앱 - Service Worker v3.7
 // 오프라인 캐싱 및 PWA 지원
 // ================================================
-const CACHE_NAME = 'lifeculture-mes-v3.6';
+const CACHE_NAME = 'lifeculture-mes-v3.7';
 
 const STATIC_ASSETS = [
   './login.html',
@@ -54,7 +54,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      console.log('[SW] 캐시 설치 중... v3.5');
+      console.log('[SW] 캐싱 중... v3.7');
       // 각 파일을 개별적으로 캐싱 (하나 실패해도 나머지 진행)
       const results = await Promise.allSettled(
         STATIC_ASSETS.map(url =>
@@ -65,7 +65,7 @@ self.addEventListener('install', (event) => {
       const succeeded = results.filter(r => r.status === 'fulfilled').length;
       console.log(`[SW] 캐싱 완료: ${succeeded}/${STATIC_ASSETS.length}`);
     }).then(() => {
-      console.log('[SW] 설치 완료 v3.5');
+      console.log('[SW] 설치 완료 v3.7');
       self.skipWaiting();
     })
   );
@@ -84,7 +84,7 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => {
-      console.log('[SW] 활성화 완료 v3.5');
+      console.log('[SW] 활성화 완료 v3.7');
       return self.clients.claim();
     })
   );
