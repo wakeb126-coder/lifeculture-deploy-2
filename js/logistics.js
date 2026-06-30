@@ -2,11 +2,11 @@
 // 물류관리 JS (수입제품 / OEM제품 / 자체생산 구분)
 // =====================================================
 
-let allLogisticsData = [];
-let lgEditingId = null;
-let lgEditingSource = 'logistics'; // 'logistics' | 'wh_outbound'
-let allWhInboundData = [];   // 창고 입고 데이터 (wh_inbound)
-let allWhOutboundData = [];  // 창고 출고 데이터 (wh_outbound)
+var allLogisticsData = [];
+var lgEditingId = null;
+var lgEditingSource = 'logistics'; // 'logistics' | 'wh_outbound'
+var allWhInboundData = [];   // 창고 입고 데이터 (wh_inbound)
+var allWhOutboundData = [];  // 창고 출고 데이터 (wh_outbound)
 
 document.addEventListener('DOMContentLoaded', async () => {
   // new Date() 1회 생성 후 재사용

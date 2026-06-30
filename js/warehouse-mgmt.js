@@ -6,10 +6,10 @@
 // =====================================================
 
 // ── 전역 상태 ──────────────────────────────────────
-let whInboundData = [];
-let whOutboundData = [];
-let whStocktakeData = [];
-let whCurrentMap = 'cold';
+var whInboundData = [];
+var whOutboundData = [];
+var whStocktakeData = [];
+var whCurrentMap = 'cold';
 
 // ── 배치도 HTML 캐시 ──────────────────────────────
 // 재고 데이터가 변경되지 않으면 이전 렌더링 결과를 재사용
