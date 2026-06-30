@@ -8,8 +8,9 @@ function getFirestore() {
   return firebase.firestore();
 }
 
-// 전체 데이터 조회
+// 전체 데이터 조회 (10초 타임아웃 안전망 포함)
 async function apiGetAll(table, searchParams = {}) {
+  const TIMEOUT_MS = 10000; // 10초
   try {
     const db = getFirestore();
     let ref = db.collection(table);
@@ -17,17 +18,25 @@ async function apiGetAll(table, searchParams = {}) {
       ref = ref.orderBy(searchParams.orderBy, searchParams.orderDir || 'asc');
     }
     if (searchParams.limit) ref = ref.limit(searchParams.limit);
-    const snapshot = await ref.get();
-    const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    // createdAt 기준 내림차순 정렬 (클라이언트 사이드 - 인덱스 불필요)
-    docs.sort((a, b) => {
-      const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
-      const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : (b.createdAt || 0);
-      return tb - ta;
+    // 타임아웃 Promise와 경쟁 - 10초 초과 시 빈 배열 반환
+    const timeoutPromise = new Promise(function(resolve) {
+      setTimeout(function() {
+        console.warn('[DB] apiGetAll ' + table + ' 타임아웃 (10초) - 빈 배열 반환');
+        resolve([]);
+      }, TIMEOUT_MS);
     });
-    return docs;
+    const fetchPromise = ref.get().then(function(snapshot) {
+      const docs = snapshot.docs.map(function(doc) { return Object.assign({ id: doc.id }, doc.data()); });
+      docs.sort(function(a, b) {
+        const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
+        const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : (b.createdAt || 0);
+        return tb - ta;
+      });
+      return docs;
+    });
+    return await Promise.race([fetchPromise, timeoutPromise]);
   } catch (e) {
-    console.error(`[DB] apiGetAll ${table} 오류:`, e);
+    console.error('[DB] apiGetAll ' + table + ' 오류:', e);
     return [];
   }
 }

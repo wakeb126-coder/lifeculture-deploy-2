@@ -2765,31 +2765,43 @@ async function whBulkOutItemInput(inputEl, idx) {
 
   // 1) 제품마스터에서 검색
   var products = await whLoadProductMaster();
-  var fromMaster = products
-    .filter(function(p) { return (p.product_name || '').toLowerCase().includes(q); })
-    .map(function(p) { return p.product_name || ''; })
-    .filter(Boolean);
-
-  // 2) wh_inbound 실재고 품목명에서 검색 (제품마스터에 없는 품목 보완)
-  var stockItems = whCalcStock ? whCalcStock() : {};
-  var fromStock = Object.keys(stockItems)
-    .filter(function(name) {
-      return name.toLowerCase().includes(q) && (stockItems[name].total || 0) > 0;
-    });
-
-  // 3) 합산 후 중복 제거
-  var merged = [];
   var seen = {};
-  fromMaster.concat(fromStock).forEach(function(name) {
-    if (!seen[name]) { seen[name] = true; merged.push(name); }
+  var merged = [];
+  products.forEach(function(p) {
+    var name = (p.product_name || '').trim();
+    if (name && name.toLowerCase().includes(q) && !seen[name]) {
+      seen[name] = true;
+      merged.push(name);
+    }
+  });
+
+  // 2) wh_inbound 캐시에서 직접 검색 (제품마스터에 없는 품목 보완)
+  // whInboundData: [{ item_name, qty, ... }] 형태
+  var inboundNames = {};
+  (whInboundData || []).forEach(function(r) {
+    var name = (r.item_name || '').trim();
+    if (name) inboundNames[name] = (inboundNames[name] || 0) + (Number(r.qty) || 0);
+  });
+  // wh_outbound 차감
+  (whOutboundData || []).forEach(function(r) {
+    var name = (r.item_name || '').trim();
+    if (name && inboundNames[name] !== undefined) {
+      inboundNames[name] -= (Number(r.qty) || 0);
+    }
+  });
+  Object.keys(inboundNames).forEach(function(name) {
+    if (name.toLowerCase().includes(q) && !seen[name]) {
+      seen[name] = true;
+      merged.push(name);
+    }
   });
 
   if (merged.length === 0) { dropdown.style.display = 'none'; return; }
   dropdown.innerHTML = merged.slice(0, 20).map(function(name) {
     var nameAttr = name.replace(/"/g, '&quot;');
-    var inStock = stockItems[name] ? stockItems[name].total : null;
-    var stockBadge = inStock !== null
-      ? '<span style="color:#27ae60;font-size:11px;margin-left:6px">(재고 ' + inStock.toLocaleString() + ')</span>'
+    var stock = inboundNames[name];
+    var stockBadge = (stock !== undefined && stock > 0)
+      ? '<span style="color:#27ae60;font-size:11px;margin-left:6px">(재고 ' + Math.round(stock).toLocaleString() + ')</span>'
       : '';
     return '<div onclick="whBulkOutSelectItem(this,' + idx + ')" data-name="' + nameAttr + '"' +
       ' style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0"' +

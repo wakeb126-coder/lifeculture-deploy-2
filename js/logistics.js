@@ -69,10 +69,8 @@ async function lgGenerateLotNo() {
     const typeCode = type === '입고' ? 'IN' : type === '출고' ? 'OUT' : type === '반품' ? 'RET' : 'ADJ';
     const prodCode = prodType === '수입제품' ? 'IMP' : prodType === 'OEM제품' ? 'OEM' : prodType === '자체생산' ? 'OWN' : 'LOG';
     const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '').slice(2);
-    // 성능 개선: Firestore 재조회 대신 메모리 캐시(allLogisticsData) 사용
-    const data = (typeof allLogisticsData !== 'undefined' && allLogisticsData.length > 0)
-      ? allLogisticsData
-      : await apiGetAll('logistics');
+    // 캐시 사용 (Firestore 재조회 없음 - 성능 최적화)
+    const data = (typeof allLogisticsData !== 'undefined') ? allLogisticsData : [];
     const prefix = `LG-${prodCode}-${typeCode}-${dateStr}`;
     const todayLots = data.filter(r => r.lot_no && r.lot_no.startsWith(prefix));
     const seq = String(todayLots.length + 1).padStart(3, '0');
@@ -167,8 +165,7 @@ async function loadLogisticsData() {
     if (currentTab === 'all' || !['import','oem','own'].includes(currentTab)) {
       if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
     }
-    // LotNo 정확한 번호로 교체 (비동기, 화면 블록 없이)
-    lgRefreshLotNo().catch(function(){});
+    // LotNo는 캐시 기반으로만 갱신 (Firestore 재조회 없음)
   } catch(e) {
     console.error('[logistics] 데이터 로드 실패:', e);
   }
