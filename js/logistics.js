@@ -136,10 +136,8 @@ function lgSkeletonRows(cols, count) {
 }
 
 async function loadLogisticsData() {
-  // 스켈레톤 로딩 표시
-  var stockTbody = document.getElementById('stockTableBody');
+  // allTableBody만 스켈레톤 표시 (stockTableBody는 lgRenderStockTable이 직접 채움)
   var allTbody = document.getElementById('allTableBody');
-  if (stockTbody) stockTbody.innerHTML = lgSkeletonRows(8, 5);
   if (allTbody) allTbody.innerHTML = lgSkeletonRows(11, 5);
   try {
     // wh_inbound, wh_outbound는 warehouse-mgmt.js의 whLoadAll()이 이미 조회하므로
@@ -164,13 +162,13 @@ async function loadLogisticsData() {
     // LotNo는 캐시 기반으로만 갱신 (Firestore 재조회 없음)
   } catch(e) {
     console.error('[logistics] 데이터 로드 실패:', e);
-    // 오류 시에도 스켈레톤 제거 - 로딩 고착 방지
+    // 오류 시 스켈레톤 제거 - 로딩 고착 방지
     var stockTbodyErr = document.getElementById('stockTableBody');
     var allTbodyErr = document.getElementById('allTableBody');
-    if (stockTbodyErr && stockTbodyErr.querySelector('.skeleton-row')) {
+    if (stockTbodyErr) {
       stockTbodyErr.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#e74c3c;padding:30px"><i class="fas fa-exclamation-triangle"></i> 데이터 로드 실패. 새로고침을 시도해 주세요.</td></tr>';
     }
-    if (allTbodyErr && allTbodyErr.querySelector('.skeleton-row')) {
+    if (allTbodyErr) {
       allTbodyErr.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#e74c3c;padding:30px"><i class="fas fa-exclamation-triangle"></i> 데이터 로드 실패. 새로고침을 시도해 주세요.</td></tr>';
     }
   }
