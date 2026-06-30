@@ -9,7 +9,7 @@ let allWhInboundData = [];   // 창고 입고 데이터 (wh_inbound)
 let allWhOutboundData = [];  // 창고 출고 데이터 (wh_outbound)
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // new Date() 1회 생성 후 재사용 (중복 생성 제거)
+  // new Date() 1회 생성 후 재사용
   const now = new Date();
   const today = now.toISOString().split('T')[0];
   const y = now.getFullYear();
@@ -22,8 +22,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const toEl = document.getElementById('allDateTo');
   if (fromEl) fromEl.value = `${y}-${m}-01`;
   if (toEl) toEl.value = today;
-  await lgRefreshLotNo();
-  await loadLogisticsData();
+
+  // 성능 개선: LotNo 생성과 데이터 로드를 병렬 실행
+  // lgRefreshLotNo는 내부적으로 logistics를 다시 읽지 않도록 캐시 활용
+  const [, data] = await Promise.all([
+    lgRefreshLotNoFast(),   // logistics 읽기 없이 날짜기반 LotNo 생성
+    loadLogisticsData()     // 실제 데이터 로드
+  ]);
+
   const form = document.getElementById('logisticsForm');
   if (form) form.addEventListener('submit', lgHandleSubmit);
 });
@@ -31,6 +37,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 // =====================================================
 // Lot No 자동생성
 // =====================================================
+// 빠른 버전: Firestore 조회 없이 날짜+랜덤으로 임시 LotNo 생성 (데이터 로드 후 정확한 번호로 교체)
+async function lgRefreshLotNoFast() {
+  const display = document.getElementById('lgLotDisplay');
+  if (!display) return;
+  display.textContent = '생성 중...';
+  const type = document.getElementById('lg_transaction_type')?.value || 'IN';
+  const prodType = document.getElementById('lg_product_type')?.value || '';
+  const typeCode = type === '입고' ? 'IN' : type === '출고' ? 'OUT' : type === '반품' ? 'RET' : 'ADJ';
+  const prodCode = prodType === '수입제품' ? 'IMP' : prodType === 'OEM제품' ? 'OEM' : prodType === '자체생산' ? 'OWN' : 'LOG';
+  const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '').slice(2);
+  const rand = String(Math.floor(Math.random() * 900) + 100);
+  const lot = `LG-${prodCode}-${typeCode}-${dateStr}-${rand}`;
+  display.textContent = lot;
+  display.dataset.lot = lot;
+}
+
 async function lgRefreshLotNo() {
   const display = document.getElementById('lgLotDisplay');
   if (!display) return;
@@ -110,11 +132,20 @@ async function loadLogisticsData() {
     allWhInboundData = whIn || [];
     allWhOutboundData = whOut || [];
     lgUpdateKpiCards();
-    lgFilterTable('import');
-    lgFilterTable('oem');
-    lgFilterTable('own');
-    lgFilterTable('all');
-    if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
+    // 성능 개선: 현재 활성 탭만 렌더링 (비활성 탭은 탭 전환 시 렌더링)
+    const activeTab = document.querySelector('.tab-btn.active');
+    const activeTabId = activeTab ? activeTab.id : 'tabAll';
+    const tabMap = { 'tabImport': 'import', 'tabOem': 'oem', 'tabOwn': 'own', 'tabAll': 'all',
+                     'tabWhMap': 'wh_map', 'tabWhIn': 'wh_in', 'tabWhOut': 'wh_out', 'tabWhStocktake': 'wh_stocktake' };
+    const currentTab = tabMap[activeTabId] || 'all';
+    if (['import','oem','own','all'].includes(currentTab)) {
+      lgFilterTable(currentTab);
+    }
+    if (currentTab === 'all' || !['import','oem','own'].includes(currentTab)) {
+      if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
+    }
+    // LotNo 정확한 번호로 교체 (비동기, 화면 블록 없이)
+    lgRefreshLotNo().catch(function(){});
   } catch(e) {
     console.error('[logistics] 데이터 로드 실패:', e);
   }

@@ -75,9 +75,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     var el = document.getElementById(id);
     if (el) el.value = today;
   });
+  // 최초 로드: _calledByUser 플래그 미설정 (중복 loadLogisticsData 호출 방지)
   await whLoadAll();
   whInitLotNos();
 });
+
+// 입출고 등록/수정/삭제 후 수동 호출 시 사용
+async function whReloadAll() {
+  whLoadAll._calledByUser = true;
+  await whLoadAll();
+  whLoadAll._calledByUser = false;
+}
 
 async function whLoadAll() {
   try {
@@ -105,7 +113,9 @@ async function whLoadAll() {
       whShowMap(whCurrentMap, stockMap);
     }
     // 재고현황 탭(logistics.js) 동기화 - 창고 입출고 반영
-    if (typeof loadLogisticsData === 'function') {
+    // 주의: 페이지 최초 로드 시에는 logistics.js의 DOMContentLoaded가 이미 호출하므로
+    // whLoadAll이 수동 호출(입출고 등록/수정/삭제)된 경우에만 재로드
+    if (typeof loadLogisticsData === 'function' && whLoadAll._calledByUser) {
       loadLogisticsData();
     }
   } catch(e) {
@@ -574,7 +584,7 @@ async function whSubmitInbound() {
     await apiPost('wh_inbound', data);
     showToast('입고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache(); // 캐시 무효화
-    await whLoadAll();
+    await whReloadAll();
     whRefreshInLot();
     var form = document.getElementById('whInboundForm');
     if (form) form.reset();
@@ -642,7 +652,7 @@ async function whDeleteInbound(id) {
     }
     showToast('삭제 완료', 'success');
     whInvalidateMapCache();
-    await whLoadAll();
+    await whReloadAll();
     whRenderInTable();
     // logistics 탭도 갱신
     if (typeof loadLogisticsData === 'function') loadLogisticsData();
@@ -719,7 +729,7 @@ async function whInDeleteSelected() {
   }
   showToast(successCount + '건 삭제 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
   whInvalidateMapCache();
-  await whLoadAll();
+  await whReloadAll();
   whRenderInTable();
   if (typeof loadLogisticsData === 'function') loadLogisticsData();
 }
@@ -755,7 +765,7 @@ async function whInDeleteAll() {
   }
   showToast(successCount + '건 전체 삭제 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
   whInvalidateMapCache();
-  await whLoadAll();
+  await whReloadAll();
   whRenderInTable();
   if (typeof loadLogisticsData === 'function') loadLogisticsData();
 }
@@ -870,7 +880,7 @@ async function whSaveInEdit() {
     showToast('입고 정보가 수정되었습니다.', 'success');
     whCloseInEditModal();
     whInvalidateMapCache();
-    await whLoadAll();
+    await whReloadAll();
     whRenderInTable();
     // ── 연동 갱신: 물류현황/재고현황 즉시 반영 (await로 순서 보장) ──
     if (typeof loadLogisticsData === 'function') await loadLogisticsData();
@@ -912,7 +922,7 @@ async function whSubmitOutbound() {
     await apiPost('logistics', _whBuildLogisticsOutRecord(data));
     showToast('출고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache(); // 캐시 무효화
-    await whLoadAll();
+    await whReloadAll();
     whRefreshOutLot();
     var form = document.getElementById('whOutboundForm');
     if (form) form.reset();
@@ -1006,7 +1016,7 @@ async function whDeleteOutbound(id, lotNo) {
     }
     showToast('출고 취소 완료 (재고 복원)', 'success');
     whInvalidateMapCache(); // 캐시 무효화
-    await whLoadAll();
+    await whReloadAll();
     // logistics 탭도 갱신
     if (typeof loadLogisticsData === 'function') loadLogisticsData();
   } catch(e) {
@@ -1237,7 +1247,7 @@ async function whSubmitStocktake() {
     if (adjCreated > 0) msg += ' — 재고 자동 조정 ' + adjCreated + '건 반영';
     showToast(msg, 'success');
     whInvalidateMapCache();
-    await whLoadAll();
+    await whReloadAll();
     // logistics 탭도 갱신
     if (typeof loadLogisticsData === 'function') loadLogisticsData();
   } catch(e) {
@@ -1271,7 +1281,7 @@ async function whDeleteStocktake(id) {
   try {
     await apiDelete('wh_stocktake', id);
     showToast('삭제 완료', 'success');
-    await whLoadAll();
+    await whReloadAll();
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
   }
@@ -1972,7 +1982,7 @@ async function whHandleInSubmit(e) {
     await apiPost('logistics', lgRecord);
     showToast('입고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache();
-    await whLoadAll();
+    await whReloadAll();
     whRefreshInLot();
     whResetInForm();
   } catch(err) {
@@ -2272,7 +2282,7 @@ async function whBulkSubmitAll() {
   if (successCount > 0) {
     showToast(successCount + '건 등록 완료' + (failCount > 0 ? ' (' + failCount + '건 실패)' : ''), 'success');
     whInvalidateMapCache();
-    await whLoadAll();
+    await whReloadAll();
     whRenderInTable();
     whRefreshInLot();
     // 등록 완료 후 테이블 초기화
@@ -2632,7 +2642,7 @@ async function whHandleOutSubmit(e) {
     // wh_outbound가 단일 진실 공급원이므로 logistics 중복 동기화 저장 안 함
     showToast('출고 등록 완료: ' + data.lot_no, 'success');
     whInvalidateMapCache();
-    await whLoadAll();
+    await whReloadAll();
     whRefreshOutLot();
     whResetOutForm();
     whRenderFifo();
@@ -2934,7 +2944,7 @@ async function whBulkOutSubmitAll() {
   }
   showToast('일괄 출고 완료: ' + success + '건 성공' + (fail > 0 ? ', ' + fail + '건 실패' : ''), success > 0 ? 'success' : 'error');
   whInvalidateMapCache();
-  await whLoadAll();
+  await whReloadAll();
   whRefreshOutLot();
   previewEl.style.display = 'none';
   previewEl._pendingData = null;
@@ -3022,7 +3032,7 @@ async function whBulkOutDirectSubmit() {
   }
   showToast('일괄 출고 완료: ' + success + '건 성공' + (fail > 0 ? ', ' + fail + '건 실패' : ''), success > 0 ? 'success' : 'error');
   whInvalidateMapCache();
-  await whLoadAll();
+  await whReloadAll();
   whRefreshOutLot();
   whBulkOutClearAll();
   whRenderFifo();
@@ -3247,7 +3257,7 @@ async function whSaveMove() {
     showToast('이동 완료: ' + fromLoc + ' → ' + toLoc + ' (' + targets.length + '건)', 'success');
     whCloseMoveModal();
     whInvalidateMapCache();
-    await whLoadAll();
+    await whReloadAll();
     if (typeof loadLogisticsData === 'function') loadLogisticsData();
   } catch(e) {
     showToast('이동 실패: ' + e.message, 'error');
