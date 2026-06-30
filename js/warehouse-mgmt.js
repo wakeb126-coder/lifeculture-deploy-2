@@ -2761,17 +2761,40 @@ async function whBulkOutItemInput(inputEl, idx) {
   var dropdown = document.getElementById('whBulkOutDrop_' + idx);
   if (!dropdown) return;
   if (!query) { dropdown.style.display = 'none'; return; }
+  var q = query.toLowerCase();
+
+  // 1) 제품마스터에서 검색
   var products = await whLoadProductMaster();
-  var filtered = products.filter(function(p) {
-    return (p.product_name || '').toLowerCase().includes(query.toLowerCase());
+  var fromMaster = products
+    .filter(function(p) { return (p.product_name || '').toLowerCase().includes(q); })
+    .map(function(p) { return p.product_name || ''; })
+    .filter(Boolean);
+
+  // 2) wh_inbound 실재고 품목명에서 검색 (제품마스터에 없는 품목 보완)
+  var stockItems = whCalcStock ? whCalcStock() : {};
+  var fromStock = Object.keys(stockItems)
+    .filter(function(name) {
+      return name.toLowerCase().includes(q) && (stockItems[name].total || 0) > 0;
+    });
+
+  // 3) 합산 후 중복 제거
+  var merged = [];
+  var seen = {};
+  fromMaster.concat(fromStock).forEach(function(name) {
+    if (!seen[name]) { seen[name] = true; merged.push(name); }
   });
-  if (filtered.length === 0) { dropdown.style.display = 'none'; return; }
-  dropdown.innerHTML = filtered.slice(0, 15).map(function(p) {
-    var nameAttr = (p.product_name || '').replace(/"/g, '&quot;');
+
+  if (merged.length === 0) { dropdown.style.display = 'none'; return; }
+  dropdown.innerHTML = merged.slice(0, 20).map(function(name) {
+    var nameAttr = name.replace(/"/g, '&quot;');
+    var inStock = stockItems[name] ? stockItems[name].total : null;
+    var stockBadge = inStock !== null
+      ? '<span style="color:#27ae60;font-size:11px;margin-left:6px">(재고 ' + inStock.toLocaleString() + ')</span>'
+      : '';
     return '<div onclick="whBulkOutSelectItem(this,' + idx + ')" data-name="' + nameAttr + '"' +
       ' style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0"' +
       ' onmouseover="this.style.background=\'#fff5f5\'" onmouseout="this.style.background=\'#fff\'">' +
-      (p.product_name || '-') + '</div>';
+      name + stockBadge + '</div>';
   }).join('');
   dropdown.style.display = 'block';
 }

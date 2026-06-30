@@ -867,11 +867,10 @@ async function lgDeleteRecord(id, source) {
         const rec = allWhOutboundData.find(r => r.id === targetId);
         const lotNo = rec ? rec.lot_no : '';
         await apiDelete('wh_outbound', targetId);
-        // logistics 연동 삭제
+        // logistics 연동 삭제 — Firestore 재조회 없이 캐시 사용
         if (lotNo) {
           try {
-            const lgAll = await apiGetAll('logistics');
-            const lgMatch = lgAll.filter(r => r.wh_lot_no === lotNo || r.lot_no === lotNo);
+            const lgMatch = allLogisticsData.filter(r => r.wh_lot_no === lotNo || r.lot_no === lotNo);
             for (const m of lgMatch) { if (m.id) await apiDelete('logistics', m.id); }
           } catch(le) { console.warn('logistics 연동 삭제 실패:', le); }
         }
@@ -880,11 +879,10 @@ async function lgDeleteRecord(id, source) {
         const rec = allWhInboundData.find(r => r.id === targetId);
         const lotNo = rec ? rec.lot_no : '';
         await apiDelete('wh_inbound', targetId);
-        // logistics 연동 삭제
+        // logistics 연동 삭제 — Firestore 재조회 없이 캐시 사용
         if (lotNo) {
           try {
-            const lgAll = await apiGetAll('logistics');
-            const lgMatch = lgAll.filter(r => (r.wh_lot_no === lotNo || r.lot_no === lotNo) && r.transaction_type === '입고');
+            const lgMatch = allLogisticsData.filter(r => (r.wh_lot_no === lotNo || r.lot_no === lotNo) && r.transaction_type === '입고');
             for (const m of lgMatch) { if (m.id) await apiDelete('logistics', m.id); }
           } catch(le) { console.warn('logistics 연동 삭제 실패:', le); }
         }
@@ -1030,7 +1028,17 @@ function lgRenderStockTable() {
     }
     stockMap[key].inQty += qty;
   });
+  // nameIndex: 품목명 → 가장 소비기한 빠른 key (O(n) 검색용 인덱스)
+  function buildNameIndex() {
+    var idx = {};
+    Object.keys(stockMap).forEach(function(k) {
+      var n = k.split('||')[0];
+      if (!idx[n] || (stockMap[k].expiry||'9999') < (stockMap[idx[n]].expiry||'9999')) idx[n] = k;
+    });
+    return idx;
+  }
   // 2패스 재실행: logistics 출고 집계 (WH-OUT- 제외)
+  var nameIdx2 = buildNameIndex();
   allLogisticsData.forEach(function(r) {
     if ((r.lot_no || '').startsWith('WH-OUT-')) return;
     var name = (r.product_name || r.item_name || '').trim();
@@ -1042,13 +1050,7 @@ function lgRenderStockTable() {
     if (stockMap[key]) {
       stockMap[key].outQty += qty;
     } else {
-      var matchedKey = null;
-      Object.keys(stockMap).forEach(function(k) {
-        if (k.split('||')[0] === name) {
-          if (!matchedKey) { matchedKey = k; return; }
-          if ((stockMap[k].expiry||'9999') < (stockMap[matchedKey].expiry||'9999')) matchedKey = k;
-        }
-      });
+      var matchedKey = nameIdx2[name] || null;
       if (matchedKey) stockMap[matchedKey].outQty += qty;
       else stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: qty };
     }
@@ -1069,24 +1071,14 @@ function lgRenderStockTable() {
     // ptype이 없으면 wh_inbound 값으로 채움
     if (!stockMap[key].ptype) stockMap[key].ptype = ptype;
   });
-  // 4패스: 창고 출고(wh_outbound) 집계 - 단일 진실 공급원으로 직접 집계
-  // logistics의 WH-OUT- 기록은 위에서 이미 제외했으므로 여기서 wh_outbound 전체를 차감
+  // 4패스: 창고 출고(wh_outbound) 집계 - nameIndex 활용으로 O(n) 처리
+  var nameIdx4 = buildNameIndex();
   (allWhOutboundData || []).forEach(function(r) {
     var name = (r.item_name || '').trim();
     var qty = Number(r.qty || 0);
     if (!name || !qty) return;
-    var matchedKey = null;
-    Object.keys(stockMap).forEach(function(k) {
-      if (k.split('||')[0] === name) {
-        if (!matchedKey) { matchedKey = k; return; }
-        var curExp = stockMap[matchedKey].expiry || '9999';
-        var thisExp = stockMap[k].expiry || '9999';
-        if (thisExp < curExp) matchedKey = k;
-      }
-    });
-    if (matchedKey) {
-      stockMap[matchedKey].outQty += qty;
-    }
+    var matchedKey = nameIdx4[name] || null;
+    if (matchedKey) stockMap[matchedKey].outQty += qty;
   });
 
   var rows = Object.values(stockMap);
