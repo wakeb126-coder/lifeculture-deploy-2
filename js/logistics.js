@@ -69,7 +69,10 @@ async function lgGenerateLotNo() {
     const typeCode = type === '입고' ? 'IN' : type === '출고' ? 'OUT' : type === '반품' ? 'RET' : 'ADJ';
     const prodCode = prodType === '수입제품' ? 'IMP' : prodType === 'OEM제품' ? 'OEM' : prodType === '자체생산' ? 'OWN' : 'LOG';
     const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '').slice(2);
-    const data = await apiGetAll('logistics');
+    // 성능 개선: Firestore 재조회 대신 메모리 캐시(allLogisticsData) 사용
+    const data = (typeof allLogisticsData !== 'undefined' && allLogisticsData.length > 0)
+      ? allLogisticsData
+      : await apiGetAll('logistics');
     const prefix = `LG-${prodCode}-${typeCode}-${dateStr}`;
     const todayLots = data.filter(r => r.lot_no && r.lot_no.startsWith(prefix));
     const seq = String(todayLots.length + 1).padStart(3, '0');
@@ -121,7 +124,27 @@ function lgCalcAmount() {
 // =====================================================
 // 데이터 로드
 // =====================================================
+// 스켈레톤 행 생성 헬퍼
+function lgSkeletonRows(cols, count) {
+  count = count || 5;
+  var rows = '';
+  for (var i = 0; i < count; i++) {
+    rows += '<tr class="skeleton-row">';
+    for (var j = 0; j < cols; j++) {
+      var w = (j === 0) ? '60%' : (j === cols-1) ? '40%' : '80%';
+      rows += '<td><div class="skeleton skeleton-cell" style="width:' + w + '"></div></td>';
+    }
+    rows += '</tr>';
+  }
+  return rows;
+}
+
 async function loadLogisticsData() {
+  // 스켈레톤 로딩 표시
+  var stockTbody = document.getElementById('stockTableBody');
+  var allTbody = document.getElementById('allTableBody');
+  if (stockTbody) stockTbody.innerHTML = lgSkeletonRows(8, 5);
+  if (allTbody) allTbody.innerHTML = lgSkeletonRows(11, 5);
   try {
     const [res, whIn, whOut] = await Promise.all([
       apiGetAll('logistics'),

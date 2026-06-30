@@ -44,6 +44,11 @@
     .filter-bar .form-group { margin-bottom:0; }
     .section-divider { font-size:12px; font-weight:700; color:var(--primary); margin:16px 0 10px; padding-bottom:6px; border-bottom:1.5px solid #e8e8e8; }
     #whBulkDropZone.dragover { border-color:#27ae60; background:#e8fff2; transform:scale(1.01); }
+    /* 스켈레톤 로딩 UI */
+    .skeleton { background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%); background-size:200% 100%; animation:skeleton-loading 1.2s infinite; border-radius:6px; }
+    @keyframes skeleton-loading { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .skeleton-row td { padding:10px 12px; }
+    .skeleton-cell { height:16px; border-radius:4px; }
   </style>
 </head>
 <body>

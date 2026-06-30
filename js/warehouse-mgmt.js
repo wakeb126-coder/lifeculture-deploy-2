@@ -139,8 +139,9 @@ async function whInitLotNos() {
 async function whRefreshInLot() {
   var today = new Date().toISOString().split('T')[0].replace(/-/g,'').slice(2);
   var prefix = 'WH-IN-' + today;
-  var fresh = await apiGetAll('wh_inbound');
-  var seq = String((fresh.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length) + 1).padStart(3,'0');
+  // 성능 개선: Firestore 재조회 대신 메모리 캐시 사용
+  var data = (whInboundData && whInboundData.length > 0) ? whInboundData : await apiGetAll('wh_inbound');
+  var seq = String((data.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length) + 1).padStart(3,'0');
   var lot = prefix + '-' + seq;
   var el = document.getElementById('whInLotDisplay');
   if (el) { el.textContent = lot; el.dataset.lot = lot; }
@@ -149,8 +150,9 @@ async function whRefreshInLot() {
 async function whRefreshOutLot() {
   var today = new Date().toISOString().split('T')[0].replace(/-/g,'').slice(2);
   var prefix = 'WH-OUT-' + today;
-  var fresh = await apiGetAll('wh_outbound');
-  var seq = String((fresh.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length) + 1).padStart(3,'0');
+  // 성능 개선: Firestore 재조회 대신 메모리 캐시 사용
+  var data = (whOutboundData && whOutboundData.length > 0) ? whOutboundData : await apiGetAll('wh_outbound');
+  var seq = String((data.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length) + 1).padStart(3,'0');
   var lot = prefix + '-' + seq;
   var el = document.getElementById('whOutLotDisplay');
   if (el) { el.textContent = lot; el.dataset.lot = lot; }
@@ -639,7 +641,8 @@ async function whDeleteInbound(id) {
     // logistics 콜렉션에서 동일 lot_no 입고 기록 삭제
     if (lotNo) {
       try {
-        var lgAll = await apiGetAll('logistics');
+        // 성능 개선: Firestore 재조회 대신 메모리 캐시 사용
+        var lgAll = (typeof allLogisticsData !== 'undefined' && allLogisticsData.length > 0) ? allLogisticsData : await apiGetAll('logistics');
         var lgMatch = lgAll.filter(function(r) {
           return (r.wh_lot_no === lotNo || r.lot_no === lotNo) && r.transaction_type === '입고';
         });
@@ -716,7 +719,8 @@ async function whInDeleteSelected() {
   // logistics 콜렉션에서 연동 입고 기록 삭제
   if (lotNos.length > 0) {
     try {
-      var lgAll = await apiGetAll('logistics');
+      // 성능 개선: Firestore 재조회 대신 메모리 캐시 사용
+      var lgAll = (typeof allLogisticsData !== 'undefined' && allLogisticsData.length > 0) ? allLogisticsData : await apiGetAll('logistics');
       var lgMatch = lgAll.filter(function(r) {
         return lotNos.indexOf(r.wh_lot_no || r.lot_no) !== -1 && r.transaction_type === '입고';
       });
@@ -752,7 +756,8 @@ async function whInDeleteAll() {
   // logistics 콜렉션에서 연동 입고 기록 삭제
   if (lotNos.length > 0) {
     try {
-      var lgAll = await apiGetAll('logistics');
+      // 성능 개선: Firestore 재조회 대신 메모리 캐시 사용
+      var lgAll = (typeof allLogisticsData !== 'undefined' && allLogisticsData.length > 0) ? allLogisticsData : await apiGetAll('logistics');
       var lgMatch = lgAll.filter(function(r) {
         return lotNos.indexOf(r.wh_lot_no || r.lot_no) !== -1 && r.transaction_type === '입고';
       });
@@ -1003,7 +1008,8 @@ async function whDeleteOutbound(id, lotNo) {
     // logistics 콜렉션에서 동일 lot_no 출고 기록 삭제
     if (lotNo) {
       try {
-        var lgAll = await apiGetAll('logistics');
+        // 성능 개선: Firestore 재조회 대신 메모리 캐시 사용
+        var lgAll = (typeof allLogisticsData !== 'undefined' && allLogisticsData.length > 0) ? allLogisticsData : await apiGetAll('logistics');
         var lgMatch = lgAll.filter(function(r) {
           return r.wh_lot_no === lotNo || r.lot_no === lotNo;
         });
