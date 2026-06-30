@@ -162,9 +162,8 @@ async function loadLogisticsData() {
     if (['import','oem','own','all'].includes(currentTab)) {
       lgFilterTable(currentTab);
     }
-    if (currentTab === 'all' || !['import','oem','own'].includes(currentTab)) {
-      if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
-    }
+    // 재고현황은 탭에 관계없이 항상 갱신 (스켈레톤 상태로 멈추는 문제 해결)
+    if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
     // LotNo는 캐시 기반으로만 갱신 (Firestore 재조회 없음)
   } catch(e) {
     console.error('[logistics] 데이터 로드 실패:', e);
