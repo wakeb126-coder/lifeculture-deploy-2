@@ -75,14 +75,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     var el = document.getElementById(id);
     if (el) el.value = today;
   });
-  // 최초 로드: whLoadAll 완료 후 loadLogisticsData 호출
-  // (wh_inbound, wh_outbound가 채워진 상태에서 logistics 데이터 로드)
+  // 최초 로드: 창고 데이터 로드
+  // (loadLogisticsData는 logistics.js의 DOMContentLoaded에서 직접 호출하므로 여기서는 호출 안 함)
   await whLoadAll();
   whInitLotNos();
-  // logistics.js의 loadLogisticsData 호출 (warehouse-mgmt.js가 나중에 로드되므로 함수 존재 보장)
-  if (typeof loadLogisticsData === 'function') {
-    await loadLogisticsData();
-  }
 });
 
 // 입출고 등록/수정/삭제 후 수동 호출 시 사용
@@ -118,10 +114,9 @@ async function whLoadAll() {
       whShowMap(whCurrentMap, stockMap);
     }
     // 재고현황 탭(logistics.js) 동기화 - 창고 입출고 반영
-    // 주의: 페이지 최초 로드 시에는 logistics.js의 DOMContentLoaded가 이미 호출하므로
     // whLoadAll이 수동 호출(입출고 등록/수정/삭제)된 경우에만 재로드
     if (typeof loadLogisticsData === 'function' && whLoadAll._calledByUser) {
-      loadLogisticsData();
+      await loadLogisticsData();
     }
   } catch(e) {
     console.error('[warehouse-mgmt] 데이터 로드 실패:', e);

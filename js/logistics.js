@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // LotNo 생성 (날짜기반 임시 LotNo, 데이터 로드 없이 즉시 생성)
   await lgRefreshLotNoFast();
-  // loadLogisticsData는 warehouse-mgmt.js의 whLoadAll() 완료 후 호출됨
-  // (wh_inbound, wh_outbound 데이터가 채워진 상태 보장)
+  // logistics 데이터 직접 로드 (warehouse-mgmt.js 의존 제거)
+  await loadLogisticsData();
 
   const form = document.getElementById('logisticsForm');
   if (form) form.addEventListener('submit', lgHandleSubmit);
@@ -137,13 +137,18 @@ function lgSkeletonRows(cols, count) {
 
 async function loadLogisticsData() {
   try {
-    // wh_inbound, wh_outbound는 warehouse-mgmt.js의 whLoadAll()이 이미 조회하므로
-    // 중복 Firestore 요청 방지를 위해 logistics만 단독 조회
-    const res = await apiGetAll('logistics');
-    allLogisticsData = (res || []).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-    // warehouse-mgmt.js 전역 변수 재사용 (없으면 빈 배열)
-    allWhInboundData = (typeof whInboundData !== 'undefined' ? whInboundData : []);
-    allWhOutboundData = (typeof whOutboundData !== 'undefined' ? whOutboundData : []);
+    // logistics, wh_inbound, wh_outbound 병렬 조회
+    const results = await Promise.all([
+      apiGetAll('logistics'),
+      apiGetAll('wh_inbound'),
+      apiGetAll('wh_outbound')
+    ]);
+    allLogisticsData = (results[0] || []).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    allWhInboundData = results[1] || [];
+    allWhOutboundData = results[2] || [];
+    // warehouse-mgmt.js 전역 변수도 동기화 (입출고 등록 후 whLoadAll 호출 시 일치하도록)
+    if (typeof whInboundData !== 'undefined') whInboundData = allWhInboundData;
+    if (typeof whOutboundData !== 'undefined') whOutboundData = allWhOutboundData;
     lgUpdateKpiCards();
     // 성능 개선: 현재 활성 탭만 렌더링 (비활성 탭은 탭 전환 시 렌더링)
     const activeTab = document.querySelector('.tab-btn.active');
@@ -686,16 +691,16 @@ function lgExport(tab) {
   else if (tab === 'own') data = allLogisticsData.filter(r => r.product_type === '자체생산');
   else data = allLogisticsData;
 
-  const headers = ['Lot No', '제품유형', '거래유형', '거래일자', '제품명', '수량', '단위', '소비기한', '상태', '담당자', '비고'];
-  const rows = data.map(r => [
+  var headers2 = ['Lot No', '제품유형', '거래유형', '거래일자', '제품명', '수량', '단위', '소비기한', '상태', '담당자', '비고'];
+  var rows2 = data.map(function(r) { return [
     r.lot_no || '', r.product_type || '', r.transaction_type || '', r.date || '',
     r.product_name || '', r.quantity || 0, r.unit || '',
     r.expiry_date || '', r.status || '', r.manager || '', r.notes || ''
-  ]);
-  const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  ]; });
+  var csvContent2 = [headers2, ...rows2].map(function(row) { return row.map(function(cell) { return '"' + cell + '"'; }).join(','); }).join('\n');
+  var blob2 = new Blob(['\uFEFF' + csvContent2], { type: 'text/csv;charset=utf-8;' });
+  var url2 = URL.createObjectURL(blob2);
+  var a2 = document.createElement('a');
   a.href = url;
   a.download = `물류현황_${tab}_${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
