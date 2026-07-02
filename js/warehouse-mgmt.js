@@ -633,7 +633,7 @@ function whRenderInTable() {
       '<td><code style="font-size:11px">' + (r.location||'-') + '</code></td>' +
       '<td>' + (r.inbound_date||'-') + '</td>' +
       '<td><b>' + (r.item_name||'-') + '</b></td>' +
-      '<td style="text-align:right">' + (r.qty||0) + '</td>' +
+      '<td style="text-align:right">' + _whFmtQtyBreakdown(r.qty, r.unit, r.item_name, r.qty_ea, r.qty_box, r.qty_pt) + '</td>' +
       '<td>' + (r.unit||'-') + '</td>' +
       '<td>' + (r.expiry_date||'-') + '</td>' +
       '<td>' + (r.supplier||'-') + '</td>' +
@@ -1009,7 +1009,8 @@ function whRenderOutTable() {
       '<td><span style="background:#fef9e7;color:#f39c12;padding:2px 8px;border-radius:12px;font-size:11px">' + (r.warehouse==='C'?'저온':'일반') + '</span></td>' +
       '<td><code style="font-size:11px">' + (r.location||'-') + '</code></td>' +
       '<td><b>' + (r.item_name||'-') + '</b></td>' +
-      '<td>' + (r.qty||0) + ' ' + (r.unit||'') + '</td>' +
+      '<td style="text-align:right">' + _whFmtQtyBreakdown(r.qty, r.unit, r.item_name, r.qty_ea, r.qty_box, r.qty_pt) + '</td>' +
+      '<td>' + (r.unit||'') + '</td>' +
       '<td>' + (r.ref_lot||'-') + '</td>' +
       '<td>' + (r.destination||'-') + '</td>' +
       '<td><button class="btn btn-sm" onclick="whDeleteOutbound(\'' + (r.id||'') + '\',\'' + (r.lot_no||'') + '\')" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;padding:3px 8px;font-size:11px"><i class="fas fa-trash"></i></button></td>' +
@@ -1961,6 +1962,32 @@ function _whCalcBreakdown(qty, unit, qpb, bpp) {
     qty_ea = qty;
   }
   return { qty_ea: qty_ea, qty_box: qty_box, qty_pt: qty_pt };
+}
+
+// ── 수량 표시 헬퍼: 저장된 qty_ea/box/pt 우선, 없으면 제품마스터로 환산 ──────────
+// 입고/출고 목록 테이블 수량 셀 표시용
+function _whFmtQtyBreakdown(qty, unit, itemName, savedEa, savedBox, savedPt) {
+  var qty_ea, qty_box, qty_pt;
+  // 저장된 qty_ea/box/pt가 있으면 우선 사용
+  if (savedEa !== undefined && savedEa !== null) {
+    qty_ea = Number(savedEa) || 0;
+    qty_box = Number(savedBox) || 0;
+    qty_pt = Number(savedPt) || 0;
+  } else {
+    // 없으면 제품마스터에서 환산
+    var products = _whProductMasterCache || [];
+    var matchP = products.find(function(p) { return (p.product_name||'').trim() === (itemName||'').trim(); });
+    var qpb = matchP ? (parseInt(matchP.qty_per_box) || 0) : 0;
+    var bpp = matchP ? (parseInt(matchP.boxes_per_pallet) || 0) : 0;
+    var bd = _whCalcBreakdown(Number(qty)||0, unit||'ea', qpb, bpp);
+    qty_ea = bd.qty_ea; qty_box = bd.qty_box; qty_pt = bd.qty_pt;
+  }
+  var parts = [];
+  if (qty_pt > 0) parts.push('<span style="color:#8e44ad;font-size:11px">' + qty_pt.toLocaleString() + ' PT</span>');
+  if (qty_box > 0) parts.push('<span style="color:#2980b9;font-size:11px">' + qty_box.toLocaleString() + ' Box</span>');
+  if (qty_ea > 0) parts.push('<span style="color:#27ae60;font-size:11px;font-weight:600">' + qty_ea.toLocaleString() + ' ea</span>');
+  if (parts.length === 0) return '<span style="color:#555">' + (Number(qty)||0).toLocaleString() + ' ' + (unit||'') + '</span>';
+  return parts.join('<br>');
 }
 
 // ── wh_outbound → logistics 레코드 변환 헬퍼 ──────────

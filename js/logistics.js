@@ -418,6 +418,38 @@ function lgRenderTable(tbodyId, data, tab) {
   const statusClass = { '입고대기': 'status-입고대기', '입고완료': 'status-입고완료', '출고중': 'status-출고중', '출고완료': 'status-출고완료', '반품': 'status-반품' };
   const typeClass = { '수입제품': 'type-import', 'OEM제품': 'type-oem', '자체생산': 'type-own' };
 
+  // 제품마스터 캐시 (동기 접근, 없으면 빈 배열)
+  const _pmCache = _lgProductCache || [];
+
+  // 낱개/Box/PT 환산 표시 헬퍼
+  function _lgFmtBreakdown(qty, unit, productName, savedEa, savedBox, savedPt) {
+    let ea, box, pt;
+    if (savedEa !== undefined && savedEa !== null) {
+      ea = Number(savedEa) || 0;
+      box = Number(savedBox) || 0;
+      pt = Number(savedPt) || 0;
+    } else {
+      const pm = _pmCache.find(p => (p.product_name||'').trim() === (productName||'').trim());
+      const qpb = pm ? (parseInt(pm.qty_per_box) || 0) : 0;
+      const bpp = pm ? (parseInt(pm.boxes_per_pallet) || 0) : 0;
+      const n = Number(qty) || 0;
+      const u = unit || 'ea';
+      if (u === 'pallet') {
+        pt = n; box = bpp > 0 ? n * bpp : 0; ea = (qpb > 0 && bpp > 0) ? n * bpp * qpb : 0;
+      } else if (u === 'box') {
+        box = n; pt = bpp > 0 ? Math.floor(n / bpp) : 0; ea = qpb > 0 ? n * qpb : 0;
+      } else {
+        ea = n; box = qpb > 0 ? Math.floor(n / qpb) : 0; pt = (qpb > 0 && bpp > 0) ? Math.floor(n / (qpb * bpp)) : 0;
+      }
+    }
+    const parts = [];
+    if (pt > 0) parts.push(`<span style="color:#8e44ad;font-size:11px">${pt.toLocaleString()} PT</span>`);
+    if (box > 0) parts.push(`<span style="color:#2980b9;font-size:11px">${box.toLocaleString()} Box</span>`);
+    if (ea > 0) parts.push(`<span style="color:#27ae60;font-size:11px;font-weight:600">${ea.toLocaleString()} ea</span>`);
+    if (parts.length === 0) return `<span style="color:#555">${(Number(qty)||0).toLocaleString()} ${unit||''}</span>`;
+    return parts.join(' / ');
+  }
+
   tbody.innerHTML = data.map(r => {
     const txBadge = `<span style="color:${txColor[r.transaction_type]||'#555'};font-weight:700">${r.transaction_type || '-'}</span>`;
     const statusBadge = `<span class="status-badge ${statusClass[r.status] || ''}">${r.status || '-'}</span>`;
@@ -443,7 +475,7 @@ function lgRenderTable(tbodyId, data, tab) {
         <td>${txBadge}</td>
         <td>${r.date || '-'}</td>
         <td><strong>${r.product_name || '-'}</strong></td>
-        <td style="text-align:right">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
+        <td style="text-align:right">${_lgFmtBreakdown(r.quantity, r.unit, r.product_name, r.qty_ea, r.qty_box, r.qty_pt)}</td>
         <td>${r.unit || '-'}</td>
         <td style="text-align:right;color:#1e8449">${totalFmt}</td>
         <td>${r.origin || '-'}</td>
@@ -462,7 +494,7 @@ function lgRenderTable(tbodyId, data, tab) {
         <td>${txBadge}</td>
         <td>${r.date || '-'}</td>
         <td><strong>${r.product_name || '-'}</strong></td>
-        <td style="text-align:right">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
+        <td style="text-align:right">${_lgFmtBreakdown(r.quantity, r.unit, r.product_name, r.qty_ea, r.qty_box, r.qty_pt)}</td>
         <td>${r.unit || '-'}</td>
         <td style="text-align:right;color:#1e8449">${totalFmt}</td>
         <td>${r.oem_manufacturer || '-'}</td>
@@ -481,7 +513,7 @@ function lgRenderTable(tbodyId, data, tab) {
         <td>${txBadge}</td>
         <td>${r.date || '-'}</td>
         <td><strong>${r.product_name || '-'}</strong></td>
-        <td style="text-align:right">${r.quantity != null ? Number(r.quantity).toLocaleString() : '-'}</td>
+        <td style="text-align:right">${_lgFmtBreakdown(r.quantity, r.unit, r.product_name, r.qty_ea, r.qty_box, r.qty_pt)}</td>
         <td>${r.unit || '-'}</td>
         <td style="text-align:right;color:#1e8449">${totalFmt}</td>
         <td>${r.process || '-'}</td>
@@ -497,20 +529,13 @@ function lgRenderTable(tbodyId, data, tab) {
     } else {
       // 소스 파악 (wh_inbound / wh_outbound / logistics)
       const rowSrc = r._from_wh_inbound ? 'wh_inbound' : r._from_wh_outbound ? 'wh_outbound' : 'logistics';
-      // 수량 표시: box 단위이면 박스 수량 표시, ea이면 낙개 표시
-      const qty = r.quantity != null ? Number(r.quantity) : null;
-      const qtyDisplay = qty != null
-        ? (r.unit === 'box' ? `<span style="font-weight:700">${qty.toLocaleString()}</span><small style="color:#888;margin-left:3px">box</small>`
-          : r.unit === 'pallet' ? `<span style="font-weight:700">${qty.toLocaleString()}</span><small style="color:#888;margin-left:3px">pallet</small>`
-          : `<span style="font-weight:700">${qty.toLocaleString()}</span><small style="color:#888;margin-left:3px">${r.unit||'ea'}</small>`)
-        : '-';
       return `<tr>
         <td style="font-size:11px">${r.lot_no || '-'}</td>
         <td>${typeBadge}</td>
         <td>${txBadge}</td>
         <td>${r.date || '-'}</td>
         <td><strong>${r.product_name || '-'}</strong></td>
-        <td style="text-align:right">${qtyDisplay}</td>
+        <td style="text-align:right">${_lgFmtBreakdown(r.quantity, r.unit, r.product_name, r.qty_ea, r.qty_box, r.qty_pt)}</td>
         <td>${expiryHtml}</td>
         <td>${statusBadge}</td>
         <td>${r.manager || '-'}</td>
@@ -1183,13 +1208,25 @@ function lgRenderStockTable() {
       if (ea > 0) parts.push('<span style="' + colorStyle + ';font-size:11px">' + ea.toLocaleString() + ' ea</span>');
       return parts.length > 0 ? parts.join('<br>') : '<span style="color:#aaa">-</span>';
     }
+    // 현재고 Box/PT 환산 (제품마스터 연동)
+    var pmList = _lgProductCache || [];
+    var pmMatch = pmList.find(function(p) { return (p.product_name||'').trim() === r.name; });
+    var qpb = pmMatch ? (parseInt(pmMatch.qty_per_box) || 0) : 0;
+    var bpp = pmMatch ? (parseInt(pmMatch.boxes_per_pallet) || 0) : 0;
+    var stockBox = qpb > 0 ? Math.floor(stockEa / qpb) : 0;
+    var stockPt = (qpb > 0 && bpp > 0) ? Math.floor(stockEa / (qpb * bpp)) : 0;
+    var stockParts = [];
+    if (stockPt > 0) stockParts.push('<span style="color:#8e44ad;font-size:11px">' + stockPt.toLocaleString() + ' PT</span>');
+    if (stockBox > 0) stockParts.push('<span style="color:#2980b9;font-size:11px">' + stockBox.toLocaleString() + ' Box</span>');
+    stockParts.push('<span style="font-weight:700;font-size:13px;color:' + (stock <= 0 ? '#e74c3c' : '#222') + '">' + stockEa.toLocaleString() + ' ea</span>');
+    var stockDisplay = stockParts.join('<br>');
     return '<tr>' +
       '<td><b>' + r.name + '</b></td>' +
       '<td><span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">' + (r.ptype || '-') + '</span></td>' +
       '<td style="' + expiryStyle + '">' + (r.expiry || '-') + expiryStatus + '</td>' +
       '<td style="text-align:right">' + fmtQtyCell(r.inQty_ea, r.inQty_box, r.inQty_pt, 'color:#27ae60;font-weight:600') + '</td>' +
       '<td style="text-align:right">' + fmtQtyCell(r.outQty_ea, r.outQty_box, r.outQty_pt, 'color:#e74c3c;font-weight:600') + '</td>' +
-      '<td style="text-align:right;font-weight:700;font-size:14px;color:' + (stock <= 0 ? '#e74c3c' : '#222') + '">' + stockEa.toLocaleString() + ' ea</td>' +
+      '<td style="text-align:right">' + stockDisplay + '</td>' +
       '<td>' + r.unit + '</td>' +
       '<td>' + stockBadge + '</td>' +
       '</tr>';
