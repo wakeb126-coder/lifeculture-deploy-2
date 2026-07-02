@@ -149,15 +149,18 @@ function lgSkeletonRows(cols, count) {
 
 async function loadLogisticsData() {
   try {
-    // logistics, wh_inbound, wh_outbound 병렬 조회
+    // logistics, wh_inbound, wh_outbound, products 병렬 조회
     const results = await Promise.all([
       apiGetAll('logistics'),
       apiGetAll('wh_inbound'),
-      apiGetAll('wh_outbound')
+      apiGetAll('wh_outbound'),
+      apiGetAll('products')
     ]);
     allLogisticsData = (results[0] || []).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
     allWhInboundData = results[1] || [];
     allWhOutboundData = results[2] || [];
+    // 제품마스터 캐시 선로딩 (환산 표시용)
+    _lgProductCache = results[3] || [];
     // warehouse-mgmt.js 전역 변수도 동기화 (입출고 등록 후 whLoadAll 호출 시 일치하도록)
     if (typeof whInboundData !== 'undefined') whInboundData = allWhInboundData;
     if (typeof whOutboundData !== 'undefined') whOutboundData = allWhOutboundData;
@@ -411,6 +414,12 @@ function lgRenderTable(tbodyId, data, tab) {
   if (!data.length) {
     const colCount = tab === 'all' ? 11 : 13;
     tbody.innerHTML = `<tr><td colspan="${colCount}" class="empty-msg"><i class="fas fa-inbox"></i> 등록된 내역이 없습니다.</td></tr>`;
+    return;
+  }
+
+  // 제품마스터 캐시 없으면 비동기 로딩 후 재렌더링
+  if (!_lgProductCache) {
+    lgGetProductCache().then(function() { lgRenderTable(tbodyId, data, tab); });
     return;
   }
 
@@ -1046,9 +1055,14 @@ document.addEventListener('click', function(e) {
 // 재고 현황 집계 및 렌더링
 // 같은 품목명 + 소비기한 기준으로 입고/출고 합산
 // ===========================
-function lgRenderStockTable() {
+async function lgRenderStockTable() {
   var tbody = document.getElementById('stockTableBody');
   if (!tbody) return;
+
+  // 제품마스터 캐시 보장: null이면 로딩 대기
+  if (!_lgProductCache) {
+    try { await lgGetProductCache(); } catch(e) { _lgProductCache = []; }
+  }
 
   var q = (document.getElementById('stockSearch') ? document.getElementById('stockSearch').value : '').toLowerCase();
   var typeF = document.getElementById('allTypeFilter') ? document.getElementById('allTypeFilter').value : '';

@@ -93,11 +93,14 @@ async function whLoadAll() {
     var results = await Promise.all([
       apiGetAll('wh_inbound'),
       apiGetAll('wh_outbound'),
-      apiGetAll('wh_stocktake')
+      apiGetAll('wh_stocktake'),
+      apiGetAll('products')
     ]);
     whInboundData = results[0] || [];
     whOutboundData = results[1] || [];
     whStocktakeData = results[2] || [];
+    // 제품마스터 캐시 선로딩 (환산 표시용)
+    _whProductMasterCache = results[3] || [];
     // InventoryStore 공유 스토어에 창고 데이터 저장
     if (window.InventoryStore) {
       window.InventoryStore.setAll({
@@ -618,6 +621,11 @@ async function whSubmitInbound() {
 function whRenderInTable() {
   var tbody = document.getElementById('whInTableBody');
   if (!tbody) return;
+  // 제품마스터 캐시 없으면 로딩 후 재렌더링
+  if (!_whProductMasterCache) {
+    whLoadProductMaster().then(function() { whRenderInTable(); });
+    return;
+  }
   var data = whInboundData.slice().sort(function(a,b){ return (b.inbound_date||'').localeCompare(a.inbound_date||''); });
   if (data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>등록된 입고 내역이 없습니다.</td></tr>';
@@ -997,6 +1005,11 @@ function whFifoGuide() {
 function whRenderOutTable() {
   var tbody = document.getElementById('whOutTableBody');
   if (!tbody) return;
+  // 제품마스터 캐시 없으면 로딩 후 재렌더링
+  if (!_whProductMasterCache) {
+    whLoadProductMaster().then(function() { whRenderOutTable(); });
+    return;
+  }
   var data = whOutboundData.slice().sort(function(a,b){ return (b.outbound_date||'').localeCompare(a.outbound_date||''); });
   if (data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>등록된 출고 내역이 없습니다.</td></tr>';
