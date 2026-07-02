@@ -4,7 +4,7 @@
 let allProducts = [];
 let filteredProducts = [];
 let currentPage = 1;
-const pageSize = 15;
+let pageSize = 15;
 let editingId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,6 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target === modal) closeModal();
     });
   }
+
+  // 페이지당 개수 변경
+  const pageSizeSelect = document.getElementById('pageSizeSelect');
+  if (pageSizeSelect) pageSizeSelect.addEventListener('change', () => {
+    pageSize = parseInt(pageSizeSelect.value);
+    currentPage = 1;
+    renderTable();
+  });
 
   // 더보기 메뉴
   setupMoreMenu2();
@@ -157,8 +165,24 @@ function docStatusBadge(docs) {
 function renderTable() {
   const tbody = document.getElementById('productsTableBody');
   if (!tbody) return;
-  const start = (currentPage - 1) * pageSize;
-  const pageData = filteredProducts.slice(start, start + pageSize);
+
+  const total = filteredProducts.length;
+  const totalPages = pageSize >= 9999 ? 1 : Math.ceil(total / pageSize);
+  if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+
+  const start = (currentPage - 1) * (pageSize >= 9999 ? total : pageSize);
+  const end = pageSize >= 9999 ? total : start + pageSize;
+  const pageData = filteredProducts.slice(start, end);
+
+  // 건수 표시
+  const countEl = document.getElementById('tableCount');
+  if (countEl) {
+    if (total === allProducts.length) {
+      countEl.textContent = `전체 ${total}건`;
+    } else {
+      countEl.textContent = `검색 ${total}건 / 전체 ${allProducts.length}건`;
+    }
+  }
 
   if (!pageData.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#999"><i class="fas fa-inbox" style="font-size:32px;margin-bottom:12px;display:block"></i>제품 정보가 없습니다.</td></tr>`;
@@ -166,8 +190,6 @@ function renderTable() {
     const typeColors = { '자체생산': 'badge-success', 'OEM': 'badge-info', '수입제품': 'badge-warning', '농산물': 'badge-primary', '기타': 'badge-secondary' };
     tbody.innerHTML = pageData.map(p => {
       const typeCls = typeColors[p.product_type] || 'badge-secondary';
-      
-      // 소비기한 날짜 형식 변경 (YYYY-MM-DD -> YYYY년 MM월 DD일까지)
       let shelfLifeText = '-';
       if (p.shelf_life_date) {
         const d = new Date(p.shelf_life_date);
@@ -175,7 +197,6 @@ function renderTable() {
           shelfLifeText = `${d.getFullYear()}년 ${(d.getMonth()+1).toString().padStart(2, '0')}월 ${d.getDate().toString().padStart(2, '0')}일까지`;
         }
       }
-
       return `<tr>
         <td><strong>${p.product_code || '-'}</strong></td>
         <td>
@@ -194,6 +215,50 @@ function renderTable() {
       </tr>`;
     }).join('');
   }
+
+  // 페이지네이션 UI 렌더링
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  const wrap = document.getElementById('paginationWrap');
+  if (!wrap) return;
+  if (totalPages <= 1) { wrap.innerHTML = ''; return; }
+
+  const btnStyle = (active) => `style="padding:5px 10px;border:1px solid ${active ? 'var(--primary)' : 'var(--border)'};border-radius:6px;background:${active ? 'var(--primary)' : '#fff'};color:${active ? '#fff' : '#333'};cursor:pointer;font-size:13px;min-width:32px"`;
+
+  let html = '';
+  // 이전 버튼
+  html += `<button ${btnStyle(false)} onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled style="opacity:0.4;cursor:default"' : ''}>&laquo;</button>`;
+
+  // 페이지 번호 (5개씩 표시)
+  let startP = Math.max(1, currentPage - 2);
+  let endP = Math.min(totalPages, startP + 4);
+  if (endP - startP < 4) startP = Math.max(1, endP - 4);
+
+  if (startP > 1) html += `<button ${btnStyle(false)} onclick="goPage(1)">1</button>${startP > 2 ? '<span style="padding:0 4px;color:#999">...</span>' : ''}`;
+
+  for (let i = startP; i <= endP; i++) {
+    html += `<button ${btnStyle(i === currentPage)} onclick="goPage(${i})">${i}</button>`;
+  }
+
+  if (endP < totalPages) html += `${endP < totalPages - 1 ? '<span style="padding:0 4px;color:#999">...</span>' : ''}<button ${btnStyle(false)} onclick="goPage(${totalPages})">${totalPages}</button>`;
+
+  // 다음 버튼
+  html += `<button ${btnStyle(false)} onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled style="opacity:0.4;cursor:default"' : ''}>&raquo;</button>`;
+
+  wrap.innerHTML = html;
+}
+
+function goPage(page) {
+  const total = filteredProducts.length;
+  const totalPages = pageSize >= 9999 ? 1 : Math.ceil(total / pageSize);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderTable();
+  // 테이블 상단으로 스크롤
+  const tableEl = document.getElementById('productsTable');
+  if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ===========================

@@ -134,8 +134,19 @@
             </tbody>
           </table>
         </div>
-        <div class="table-footer">
-          <span id="tableCount">0건</span>
+        <div class="table-footer" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span id="tableCount" style="color:#666;font-size:14px">0건</span>
+          <div id="paginationWrap" style="display:flex;align-items:center;gap:4px"></div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:13px;color:#666">페이지당</label>
+            <select id="pageSizeSelect" style="padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <option value="10">10개</option>
+              <option value="15" selected>15개</option>
+              <option value="20">20개</option>
+              <option value="50">50개</option>
+              <option value="9999">전체</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
