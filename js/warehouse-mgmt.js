@@ -1884,6 +1884,83 @@ function whSelectItemName(el) {
   // 드롭다운 닫기
   var dropdown = document.getElementById('whin_item_dropdown');
   if (dropdown) dropdown.style.display = 'none';
+
+  // 환산 수량 표시 업데이트
+  whInCalcQty();
+}
+
+// ── 입고 환산 수량 계산 및 표시 ──────────────────────────
+function whInCalcQty() {
+  var breakdownEl = document.getElementById('whin_qty_breakdown');
+  if (!breakdownEl) return;
+  var qty = parseInt(document.getElementById('whin_qty') ? document.getElementById('whin_qty').value : 0) || 0;
+  var unit = document.getElementById('whin_unit') ? document.getElementById('whin_unit').value : 'ea';
+  var itemName = document.getElementById('whin_item_name') ? document.getElementById('whin_item_name').value.trim() : '';
+  if (!qty || !itemName) {
+    breakdownEl.innerHTML = '<span style="color:#aaa">품목 선택 후 수량 입력 시 자동 표시</span>';
+    return;
+  }
+  var products = _whProductMasterCache || [];
+  var matchProduct = products.find(function(p) { return (p.product_name||'').trim() === itemName; });
+  var qpb = matchProduct ? (parseInt(matchProduct.qty_per_box) || 0) : 0;
+  var bpp = matchProduct ? (parseInt(matchProduct.boxes_per_pallet) || 0) : 0;
+  var result = _whCalcBreakdown(qty, unit, qpb, bpp);
+  var parts = [];
+  if (result.qty_pt > 0) parts.push('<b>' + result.qty_pt + ' PT</b>');
+  if (result.qty_box > 0) parts.push('<b>' + result.qty_box + ' Box</b>');
+  if (result.qty_ea > 0) parts.push('<b>' + result.qty_ea + ' ea</b>');
+  if (parts.length === 0) parts.push('<b>' + qty + ' ' + unit + '</b>');
+  var hint = (qpb > 0 ? ' <small style="color:#888">(박스당 ' + qpb + 'ea' + (bpp > 0 ? ', PT당 ' + bpp + '박스' : '') + ')</small>' : '');
+  breakdownEl.innerHTML = parts.join(' + ') + hint;
+}
+
+// ── 출고 환산 수량 계산 및 표시 ──────────────────────────
+function whOutCalcQty() {
+  var breakdownEl = document.getElementById('whout_qty_breakdown');
+  if (!breakdownEl) return;
+  var qty = parseInt(document.getElementById('whout_qty') ? document.getElementById('whout_qty').value : 0) || 0;
+  var unit = document.getElementById('whout_unit') ? document.getElementById('whout_unit').value : 'ea';
+  var itemName = document.getElementById('whout_item_name') ? document.getElementById('whout_item_name').value.trim() : '';
+  if (!qty || !itemName) {
+    breakdownEl.innerHTML = '<span style="color:#aaa">품목 선택 후 수량 입력 시 자동 표시</span>';
+    return;
+  }
+  var products = _whProductMasterCache || [];
+  var matchProduct = products.find(function(p) { return (p.product_name||'').trim() === itemName; });
+  var qpb = matchProduct ? (parseInt(matchProduct.qty_per_box) || 0) : 0;
+  var bpp = matchProduct ? (parseInt(matchProduct.boxes_per_pallet) || 0) : 0;
+  var result = _whCalcBreakdown(qty, unit, qpb, bpp);
+  var parts = [];
+  if (result.qty_pt > 0) parts.push('<b>' + result.qty_pt + ' PT</b>');
+  if (result.qty_box > 0) parts.push('<b>' + result.qty_box + ' Box</b>');
+  if (result.qty_ea > 0) parts.push('<b>' + result.qty_ea + ' ea</b>');
+  if (parts.length === 0) parts.push('<b>' + qty + ' ' + unit + '</b>');
+  var hint = (qpb > 0 ? ' <small style="color:#888">(박스당 ' + qpb + 'ea' + (bpp > 0 ? ', PT당 ' + bpp + '박스' : '') + ')</small>' : '');
+  breakdownEl.innerHTML = parts.join(' + ') + hint;
+}
+
+// ── 수량 환산 공통 헬퍼 ──────────────────────────────────
+// qty(수량), unit(단위: pallet/box/ea/kg), qpb(박스당 낱개), bpp(파렛트당 박스)
+// 반환: { qty_ea, qty_box, qty_pt } (낱개 기준 환산)
+function _whCalcBreakdown(qty, unit, qpb, bpp) {
+  var qty_ea = 0, qty_box = 0, qty_pt = 0;
+  if (unit === 'pallet') {
+    qty_pt = qty;
+    qty_box = bpp > 0 ? qty * bpp : 0;
+    qty_ea = qpb > 0 && bpp > 0 ? qty * bpp * qpb : (qpb > 0 ? 0 : 0);
+  } else if (unit === 'box') {
+    qty_box = qty;
+    qty_pt = bpp > 0 ? Math.floor(qty / bpp) : 0;
+    qty_ea = qpb > 0 ? qty * qpb : 0;
+  } else if (unit === 'ea') {
+    qty_ea = qty;
+    qty_box = qpb > 0 ? Math.floor(qty / qpb) : 0;
+    qty_pt = (qpb > 0 && bpp > 0) ? Math.floor(qty / (qpb * bpp)) : 0;
+  } else {
+    // kg 등 기타 단위는 낱개로 간주
+    qty_ea = qty;
+  }
+  return { qty_ea: qty_ea, qty_box: qty_box, qty_pt: qty_pt };
 }
 
 // ── wh_outbound → logistics 레코드 변환 헬퍼 ──────────
@@ -1995,6 +2072,15 @@ async function whHandleInSubmit(e) {
     manager: document.getElementById('whin_manager').value.trim(),
     memo: (document.getElementById('whin_notes') || {}).value || ''
   };
+  // 낱개/Box/PT 환산 수량 계산 및 저장 (하위 호환: 기존 qty 필드 유지)
+  var _inProducts = _whProductMasterCache || [];
+  var _inMatchP = _inProducts.find(function(p) { return (p.product_name||'').trim() === data.item_name; });
+  var _inQpb = _inMatchP ? (parseInt(_inMatchP.qty_per_box) || 0) : 0;
+  var _inBpp = _inMatchP ? (parseInt(_inMatchP.boxes_per_pallet) || 0) : 0;
+  var _inBreakdown = _whCalcBreakdown(data.qty, data.unit, _inQpb, _inBpp);
+  data.qty_ea = _inBreakdown.qty_ea;
+  data.qty_box = _inBreakdown.qty_box;
+  data.qty_pt = _inBreakdown.qty_pt;
   var submitBtn = document.querySelector('#whInForm button[type="submit"]');
   if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 등록 중...'; }
   try {
@@ -2651,6 +2737,15 @@ async function whHandleOutSubmit(e) {
     manager: document.getElementById('whout_manager').value.trim(),
     memo: (document.getElementById('whout_notes') || {}).value || ''
   };
+  // 낱개/Box/PT 환산 수량 계산 및 저장 (하위 호환: 기존 qty 필드 유지)
+  var _outProducts = _whProductMasterCache || [];
+  var _outMatchP = _outProducts.find(function(p) { return (p.product_name||'').trim() === data.item_name; });
+  var _outQpb = _outMatchP ? (parseInt(_outMatchP.qty_per_box) || 0) : 0;
+  var _outBpp = _outMatchP ? (parseInt(_outMatchP.boxes_per_pallet) || 0) : 0;
+  var _outBreakdown = _whCalcBreakdown(data.qty, data.unit, _outQpb, _outBpp);
+  data.qty_ea = _outBreakdown.qty_ea;
+  data.qty_box = _outBreakdown.qty_box;
+  data.qty_pt = _outBreakdown.qty_pt;
   var stockMap = whCalcStock();
   var locStock = ((stockMap[data.location] || {})[data.item_name]) || { qty: 0 };
   if (locStock.qty < data.qty) {

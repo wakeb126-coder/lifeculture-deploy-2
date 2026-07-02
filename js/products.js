@@ -375,6 +375,7 @@ function openEditModal(id) {
     taxEmail: p.tax_email,
     lotAbbrev: p.lot_abbrev,
     qtyPerBox: p.qty_per_box || '',
+    boxesPerPallet: p.boxes_per_pallet || '',
   };
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
@@ -466,6 +467,7 @@ async function handleSubmit(e) {
     tax_email: document.getElementById('tax_email')?.value || document.getElementById('taxEmail')?.value || '',
     lot_abbrev: document.getElementById('lotAbbrev')?.value || '',
     qty_per_box: parseInt(document.getElementById('qtyPerBox')?.value) || 0,
+    boxes_per_pallet: parseInt(document.getElementById('boxesPerPallet')?.value) || 0,
     documents: docsJson,
     updated_at: Date.now()
   };

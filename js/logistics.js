@@ -1035,6 +1035,8 @@ function lgRenderStockTable() {
   //  2패스: logistics 출고 (WH-OUT- 제외 → 중복 방지)
   //  3패스: wh_inbound 전체 직접 집계 (단일 진실 공급원)
   //  4패스: wh_outbound 전체 직접 집계 (단일 진실 공급원)
+  // 수량 세분화: inQty_ea/inQty_box/inQty_pt, outQty_ea/outQty_box/outQty_pt
+  // 하위 호환: qty_ea/qty_box/qty_pt 없으면 qty를 qty_ea로 간주
   // ──────────────────────────────────────────────────
   // 1패스 재실행: logistics에서 WH-IN- 제외하고 입고 집계
   allLogisticsData.forEach(function(r) {
@@ -1049,9 +1051,14 @@ function lgRenderStockTable() {
     if (tx !== '입고' && tx !== '반품') return;
     var key = name + '||' + expiry;
     if (!stockMap[key]) {
-      stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
+      stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0,
+        inQty_ea: 0, inQty_box: 0, inQty_pt: 0, outQty_ea: 0, outQty_box: 0, outQty_pt: 0 };
     }
     stockMap[key].inQty += qty;
+    // qty_ea/qty_box/qty_pt 있으면 세분화 집계, 없으면 qty를 qty_ea로 간주
+    stockMap[key].inQty_ea += Number(r.qty_ea !== undefined ? r.qty_ea : qty) || 0;
+    stockMap[key].inQty_box += Number(r.qty_box || 0);
+    stockMap[key].inQty_pt += Number(r.qty_pt || 0);
   });
   // nameIndex: 품목명 → 가장 소비기한 빠른 key (O(n) 검색용 인덱스)
   function buildNameIndex() {
@@ -1072,13 +1079,16 @@ function lgRenderStockTable() {
     var tx = (r.transaction_type || '입고').trim();
     if (!name || tx !== '출고') return;
     var key = name + '||' + expiry;
-    if (stockMap[key]) {
-      stockMap[key].outQty += qty;
-    } else {
-      var matchedKey = nameIdx2[name] || null;
-      if (matchedKey) stockMap[matchedKey].outQty += qty;
-      else stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: qty };
+    var targetKey = stockMap[key] ? key : (nameIdx2[name] || null);
+    if (!targetKey) {
+      stockMap[key] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: (r.product_type||''), inQty: 0, outQty: 0,
+        inQty_ea: 0, inQty_box: 0, inQty_pt: 0, outQty_ea: 0, outQty_box: 0, outQty_pt: 0 };
+      targetKey = key;
     }
+    stockMap[targetKey].outQty += qty;
+    stockMap[targetKey].outQty_ea += Number(r.qty_ea !== undefined ? r.qty_ea : qty) || 0;
+    stockMap[targetKey].outQty_box += Number(r.qty_box || 0);
+    stockMap[targetKey].outQty_pt += Number(r.qty_pt || 0);
   });
   // 3패스: 창고 입고(wh_inbound) 집계 - 단일 진실 공급원
   (allWhInboundData || []).forEach(function(r) {
@@ -1090,9 +1100,14 @@ function lgRenderStockTable() {
     if (!name || !qty) return;
     var key = name + '||' + expiry;
     if (!stockMap[key]) {
-      stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0 };
+      stockMap[key] = { name: name, expiry: expiry, unit: unit, ptype: ptype, inQty: 0, outQty: 0,
+        inQty_ea: 0, inQty_box: 0, inQty_pt: 0, outQty_ea: 0, outQty_box: 0, outQty_pt: 0 };
     }
     stockMap[key].inQty += qty;
+    // 하위 호환: qty_ea 없으면 qty 사용
+    stockMap[key].inQty_ea += Number(r.qty_ea !== undefined ? r.qty_ea : qty) || 0;
+    stockMap[key].inQty_box += Number(r.qty_box || 0);
+    stockMap[key].inQty_pt += Number(r.qty_pt || 0);
     // ptype이 없으면 wh_inbound 값으로 채움
     if (!stockMap[key].ptype) stockMap[key].ptype = ptype;
   });
@@ -1103,7 +1118,13 @@ function lgRenderStockTable() {
     var qty = Number(r.qty || 0);
     if (!name || !qty) return;
     var matchedKey = nameIdx4[name] || null;
-    if (matchedKey) stockMap[matchedKey].outQty += qty;
+    if (matchedKey) {
+      stockMap[matchedKey].outQty += qty;
+      // 하위 호환: qty_ea 없으면 qty 사용
+      stockMap[matchedKey].outQty_ea += Number(r.qty_ea !== undefined ? r.qty_ea : qty) || 0;
+      stockMap[matchedKey].outQty_box += Number(r.qty_box || 0);
+      stockMap[matchedKey].outQty_pt += Number(r.qty_pt || 0);
+    }
   });
 
   var rows = Object.values(stockMap);
@@ -1120,7 +1141,7 @@ function lgRenderStockTable() {
   if (countEl2) countEl2.textContent = rows.length + '품목';
 
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>재고 데이터가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>재고 데이터가 없습니다.</td></tr>';
     return;
   }
 
@@ -1129,6 +1150,7 @@ function lgRenderStockTable() {
 
   tbody.innerHTML = rows.map(function(r) {
     var stock = r.inQty - r.outQty;
+    var stockEa = r.inQty_ea - r.outQty_ea;
     var color = typeColors[r.ptype] || '#888';
     var bg = typeBg[r.ptype] || '#f0f0f0';
     var expiryStatus = '';
@@ -1153,13 +1175,21 @@ function lgRenderStockTable() {
     } else {
       stockBadge = '<span style="background:#eafaf1;color:#27ae60;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">정상</span>';
     }
+    // 입고/출고 낱개·Box·PT 세분 표시
+    function fmtQtyCell(ea, box, pt, colorStyle) {
+      var parts = [];
+      if (pt > 0) parts.push('<span style="color:#8e44ad;font-size:11px">' + pt.toLocaleString() + ' PT</span>');
+      if (box > 0) parts.push('<span style="color:#2980b9;font-size:11px">' + box.toLocaleString() + ' Box</span>');
+      if (ea > 0) parts.push('<span style="' + colorStyle + ';font-size:11px">' + ea.toLocaleString() + ' ea</span>');
+      return parts.length > 0 ? parts.join('<br>') : '<span style="color:#aaa">-</span>';
+    }
     return '<tr>' +
       '<td><b>' + r.name + '</b></td>' +
       '<td><span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">' + (r.ptype || '-') + '</span></td>' +
       '<td style="' + expiryStyle + '">' + (r.expiry || '-') + expiryStatus + '</td>' +
-      '<td style="text-align:right;color:#27ae60;font-weight:600">' + r.inQty.toLocaleString() + '</td>' +
-      '<td style="text-align:right;color:#e74c3c;font-weight:600">' + r.outQty.toLocaleString() + '</td>' +
-      '<td style="text-align:right;font-weight:700;font-size:15px">' + stock.toLocaleString() + '</td>' +
+      '<td style="text-align:right">' + fmtQtyCell(r.inQty_ea, r.inQty_box, r.inQty_pt, 'color:#27ae60;font-weight:600') + '</td>' +
+      '<td style="text-align:right">' + fmtQtyCell(r.outQty_ea, r.outQty_box, r.outQty_pt, 'color:#e74c3c;font-weight:600') + '</td>' +
+      '<td style="text-align:right;font-weight:700;font-size:14px;color:' + (stock <= 0 ? '#e74c3c' : '#222') + '">' + stockEa.toLocaleString() + ' ea</td>' +
       '<td>' + r.unit + '</td>' +
       '<td>' + stockBadge + '</td>' +
       '</tr>';
