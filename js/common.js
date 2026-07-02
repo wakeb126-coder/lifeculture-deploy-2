@@ -361,3 +361,54 @@ function exportToExcel(data, filename, headers) {
 function printPage() {
   window.print();
 }
+
+// ===========================
+// 재고 공유 데이터 스토어 (InventoryStore)
+// logistics.js ↔ warehouse-mgmt.js 간 데이터 공유
+// CustomEvent 기반으로 파일 간 타이밍 의존성 제거
+// ===========================
+window.InventoryStore = (function() {
+  var _data = {
+    logistics: [],
+    wh_inbound: [],
+    wh_outbound: [],
+    wh_stocktake: []
+  };
+  var _listeners = {};
+
+  function on(event, fn) {
+    if (!_listeners[event]) _listeners[event] = [];
+    _listeners[event].push(fn);
+  }
+
+  function off(event, fn) {
+    if (!_listeners[event]) return;
+    _listeners[event] = _listeners[event].filter(function(f) { return f !== fn; });
+  }
+
+  function emit(event, detail) {
+    (_listeners[event] || []).forEach(function(fn) {
+      try { fn(detail); } catch(e) { console.warn('[InventoryStore] 이벤트 핸들러 오류:', e); }
+    });
+    // DOM CustomEvent도 함께 발행 (다른 모듈에서 addEventListener 사용 가능)
+    try {
+      document.dispatchEvent(new CustomEvent('inventory:' + event, { detail: detail }));
+    } catch(e) {}
+  }
+
+  function set(key, value) {
+    _data[key] = value || [];
+    emit('updated', { key: key, data: _data[key] });
+  }
+
+  function get(key) {
+    return _data[key] || [];
+  }
+
+  function setAll(obj) {
+    Object.keys(obj).forEach(function(k) { _data[k] = obj[k] || []; });
+    emit('updated', { key: 'all', data: _data });
+  }
+
+  return { on: on, off: off, emit: emit, set: set, get: get, setAll: setAll };
+})();

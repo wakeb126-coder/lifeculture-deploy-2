@@ -30,6 +30,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const form = document.getElementById('logisticsForm');
   if (form) form.addEventListener('submit', lgHandleSubmit);
+
+  // InventoryStore 이벤트 리스너 - 창고 입출고 후 재고 현황 자동 갱신 (개선 5)
+  if (window.InventoryStore) {
+    window.InventoryStore.on('warehouse:updated', function(detail) {
+      // 창고 데이터가 변경되면 logistics.js 전역 변수도 동기화
+      if (detail && detail.wh_inbound) allWhInboundData = detail.wh_inbound;
+      if (detail && detail.wh_outbound) allWhOutboundData = detail.wh_outbound;
+      // 재고 현황 테이블 즉시 갱신
+      if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
+      lgUpdateKpiCards();
+    });
+  }
 });
 
 // =====================================================
@@ -149,6 +161,14 @@ async function loadLogisticsData() {
     // warehouse-mgmt.js 전역 변수도 동기화 (입출고 등록 후 whLoadAll 호출 시 일치하도록)
     if (typeof whInboundData !== 'undefined') whInboundData = allWhInboundData;
     if (typeof whOutboundData !== 'undefined') whOutboundData = allWhOutboundData;
+    // InventoryStore 공유 스토어에 저장 (모듈 간 데이터 공유)
+    if (window.InventoryStore) {
+      window.InventoryStore.setAll({
+        logistics: allLogisticsData,
+        wh_inbound: allWhInboundData,
+        wh_outbound: allWhOutboundData
+      });
+    }
     lgUpdateKpiCards();
     // 성능 개선: 현재 활성 탭만 렌더링 (비활성 탭은 탭 전환 시 렌더링)
     const activeTab = document.querySelector('.tab-btn.active');
@@ -164,15 +184,18 @@ async function loadLogisticsData() {
     // LotNo는 캐시 기반으로만 갱신 (Firestore 재조회 없음)
   } catch(e) {
     console.error('[logistics] 데이터 로드 실패:', e);
-    // 오류 시 스켈레톤 제거 - 로딩 고착 방지
-    var stockTbodyErr = document.getElementById('stockTableBody');
-    var allTbodyErr = document.getElementById('allTableBody');
-    if (stockTbodyErr) {
-      stockTbodyErr.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#e74c3c;padding:30px"><i class="fas fa-exclamation-triangle"></i> 데이터 로드 실패. 새로고침을 시도해 주세요.</td></tr>';
-    }
-    if (allTbodyErr) {
-      allTbodyErr.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#e74c3c;padding:30px"><i class="fas fa-exclamation-triangle"></i> 데이터 로드 실패. 새로고침을 시도해 주세요.</td></tr>';
-    }
+    // 오류 시 재시도 버튼과 함께 오류 메시지 표시 (로딩 고착 방지)
+    var errMsg = '<tr><td colspan="8" style="text-align:center;padding:30px">' +
+      '<div style="color:#e74c3c;margin-bottom:10px"><i class="fas fa-exclamation-triangle"></i> 데이터를 불러오지 못했습니다.</div>' +
+      '<button onclick="loadLogisticsData()" style="padding:6px 16px;background:#2ecc71;color:#fff;border:none;border-radius:4px;cursor:pointer">다시 시도</button>' +
+      '</td></tr>';
+    var errMsg11 = errMsg.replace('colspan="8"', 'colspan="11"');
+    var tbodies = ['stockTableBody','allTableBody','importTableBody','oemTableBody','ownTableBody'];
+    tbodies.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = id === 'allTableBody' ? errMsg11 : errMsg;
+    });
+    if (typeof showToast === 'function') showToast('데이터 로드 실패. 네트워크 연결을 확인해 주세요.', 'error');
   }
 }
 

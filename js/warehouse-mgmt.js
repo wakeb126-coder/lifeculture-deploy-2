@@ -98,6 +98,14 @@ async function whLoadAll() {
     whInboundData = results[0] || [];
     whOutboundData = results[1] || [];
     whStocktakeData = results[2] || [];
+    // InventoryStore 공유 스토어에 창고 데이터 저장
+    if (window.InventoryStore) {
+      window.InventoryStore.setAll({
+        wh_inbound: whInboundData,
+        wh_outbound: whOutboundData,
+        wh_stocktake: whStocktakeData
+      });
+    }
 
     // ── 최적화: stockMap을 1회만 계산하여 모든 함수에 전달 ──
     whInvalidateMapCache(); // 데이터 변경 시 캐시 무효화
@@ -117,6 +125,14 @@ async function whLoadAll() {
     // whLoadAll이 수동 호출(입출고 등록/수정/삭제)된 경우에만 재로드
     if (typeof loadLogisticsData === 'function' && whLoadAll._calledByUser) {
       await loadLogisticsData();
+    }
+    // InventoryStore 이벤트 발행 - 입출고 후 자동 갱신 알림
+    if (window.InventoryStore && whLoadAll._calledByUser) {
+      window.InventoryStore.emit('warehouse:updated', {
+        wh_inbound: whInboundData,
+        wh_outbound: whOutboundData,
+        wh_stocktake: whStocktakeData
+      });
     }
   } catch(e) {
     console.error('[warehouse-mgmt] 데이터 로드 실패:', e);
