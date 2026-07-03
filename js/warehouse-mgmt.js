@@ -2222,19 +2222,47 @@ function whResetInForm() {
 var _whBulkRowCount = 0;
 
 // 위치코드 목록 (창고 선택에 따라 동적 생성)
-function _whGetLocOptions(wh) {
+// onlyEmpty=true 이면 현재 재고가 있는 위치는 제외하고 빈 위치만 반환
+function _whGetLocOptions(wh, onlyEmpty) {
   var locs = wh === 'C' ? COLD_LOCATIONS : (wh === 'W' ? WARM_LOCATIONS : []);
   if (!locs || locs.length === 0) return '<option value="">위치 선택</option>';
+
+  // 현재 재고가 있는 위치 집합 계산
+  var usedLocs = {};
+  if (onlyEmpty) {
+    var stockMap = whCalcStock();
+    Object.keys(stockMap).forEach(function(loc) {
+      var hasStock = Object.values(stockMap[loc]).some(function(v) { return (Number(v.qty) || 0) > 0; });
+      if (hasStock) usedLocs[loc] = true;
+    });
+    // 현재 일괄입고 폼에서 이미 선택된 위치도 사용 중으로 처리
+    var tbody = document.getElementById('whBulkBody');
+    if (tbody) {
+      tbody.querySelectorAll('select[id^="whBulkLoc_"]').forEach(function(sel) {
+        if (sel.value) usedLocs[sel.value] = true;
+      });
+    }
+  }
+
   var html = '<option value="">위치 선택</option>';
   var zoneKeys = [];
   locs.forEach(function(l) { if (zoneKeys.indexOf(l.zoneKey) < 0) zoneKeys.push(l.zoneKey); });
+  var totalEmpty = 0;
   zoneKeys.forEach(function(zk) {
-    html += '<optgroup label="' + (wh === 'C' ? '저온' : '일반') + ' ' + zk + '구역">';
-    locs.filter(function(l){ return l.zoneKey === zk; }).forEach(function(l) {
+    var filtered = locs.filter(function(l) {
+      return l.zoneKey === zk && (!onlyEmpty || !usedLocs[l.code]);
+    });
+    if (filtered.length === 0) return;
+    totalEmpty += filtered.length;
+    html += '<optgroup label="' + (wh === 'C' ? '저온' : '일반') + ' ' + zk + '구역 (빈 위치 ' + filtered.length + '개)">';
+    filtered.forEach(function(l) {
       html += '<option value="' + l.code + '">' + l.code + '</option>';
     });
     html += '</optgroup>';
   });
+  if (onlyEmpty && totalEmpty === 0) {
+    html = '<option value="">빈 위치 없음</option>';
+  }
   return html;
 }
 
@@ -2242,7 +2270,7 @@ function _whGetLocOptions(wh) {
 function _whBulkRowHtml(idx, data) {
   data = data || {};
   var wh = data.warehouse || '';
-  var locOpts = _whGetLocOptions(wh);
+  var locOpts = _whGetLocOptions(wh, true); // 빈 위치만 표시
   var today = new Date().toISOString().split('T')[0];
   var typeOpts = ['수입제품','OEM제품','자체생산','기타'].map(function(t) {
     return '<option value="' + t + '"' + (data.inbound_type === t ? ' selected' : '') + '>' + t + '</option>';
@@ -2346,7 +2374,7 @@ function whBulkAddRow(data) {
 function whBulkWarehouseChange(sel, idx) {
   var wh = sel.value;
   var locEl = document.getElementById('whBulkLoc_' + idx);
-  if (locEl) locEl.innerHTML = _whGetLocOptions(wh);
+  if (locEl) locEl.innerHTML = _whGetLocOptions(wh, true); // 빈 위치만 표시
   var zoneEl = document.getElementById('whBulkZone_' + idx);
   if (zoneEl) zoneEl.value = '';
 }
