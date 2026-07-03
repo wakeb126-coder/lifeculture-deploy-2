@@ -2310,8 +2310,11 @@ function _whBulkRowHtml(idx, data) {
       '<input type="date" value="' + (data.inbound_date || today) + '" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
     '</td>' +
     // 품목명
-    '<td style="padding:3px 4px;border:1px solid #ddd">' +
-      '<input type="text" value="' + (data.item_name || '') + '" placeholder="품목명" style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px" />' +
+    '<td style="padding:3px 4px;border:1px solid #ddd;position:relative">' +
+      '<input type="text" id="whBulkItem_' + idx + '" value="' + (data.item_name || '').replace(/"/g, '&quot;') + '" placeholder="품목명 입력..." autocomplete="off" ' +
+      'oninput="whBulkItemInput(this,' + idx + ')" onblur="setTimeout(function(){var d=document.getElementById(\"whBulkItemDrop_' + idx + '\");if(d)d.style.display=\"none\"},200)" ' +
+      'style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;box-sizing:border-box" />' +
+      '<div id="whBulkItemDrop_' + idx + '" style="display:none;position:absolute;z-index:9999;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);max-height:200px;overflow-y:auto;min-width:200px;left:4px;top:100%"></div>' +
     '</td>' +
     // 수량
     '<td style="padding:3px 4px;border:1px solid #ddd">' +
@@ -2907,6 +2910,82 @@ function whResetOutForm() {
   if (dropdown) dropdown.style.display = 'none';
   var stockEl = document.getElementById('whout_stock_info');
   if (stockEl) stockEl.style.display = 'none';
+}
+
+// ── 일괄 입고 품목명 자동완성 ──────────────────────
+async function whBulkItemInput(inputEl, idx) {
+  var query = (inputEl.value || '').trim();
+  var dropdown = document.getElementById('whBulkItemDrop_' + idx);
+  if (!dropdown) return;
+  if (!query) { dropdown.style.display = 'none'; return; }
+  var q = query.toLowerCase();
+
+  var products = await whLoadProductMaster();
+  var seen = {};
+  var filtered = [];
+  products.forEach(function(p) {
+    var name = (p.product_name || '').trim();
+    if (name && name.toLowerCase().includes(q) && !seen[name]) {
+      seen[name] = true;
+      filtered.push(p);
+    }
+  });
+
+  if (filtered.length === 0) {
+    dropdown.innerHTML = '<div style="padding:10px 12px;color:#aaa;font-size:12px">검색 결과 없음</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+
+  dropdown.innerHTML = filtered.slice(0, 25).map(function(p) {
+    var name = p.product_name || '';
+    var nameAttr = name.replace(/"/g, '&quot;');
+    var typeAttr = (p.product_type || '').replace(/"/g, '&quot;');
+    var pt = p.product_type || '';
+    var typeBadge = '';
+    if (pt.includes('수입')) typeBadge = '<span style="font-size:10px;background:#e8f4fd;color:#2980b9;padding:1px 6px;border-radius:8px;margin-left:6px">수입</span>';
+    else if (pt.includes('OEM')) typeBadge = '<span style="font-size:10px;background:#fef9e7;color:#d68910;padding:1px 6px;border-radius:8px;margin-left:6px">OEM</span>';
+    else if (pt.includes('자체')) typeBadge = '<span style="font-size:10px;background:#eafaf1;color:#1e8449;padding:1px 6px;border-radius:8px;margin-left:6px">자체</span>';
+    var codeTxt = p.product_code ? '<span style="font-size:10px;color:#aaa;margin-left:4px">[' + p.product_code + ']</span>' : '';
+    return '<div onclick="whBulkItemSelect(this,' + idx + ')"' +
+      ' data-name="' + nameAttr + '" data-type="' + typeAttr + '"' +
+      ' style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:4px"' +
+      ' onmouseover="this.style.background=\'#f0fff4\'" onmouseout="this.style.background=\'#fff\'">' +
+      '<span style="font-weight:600;color:#222">' + name + '</span>' + codeTxt + typeBadge +
+      '</div>';
+  }).join('');
+  dropdown.style.display = 'block';
+}
+
+function whBulkItemSelect(el, idx) {
+  var name = el ? el.getAttribute('data-name') : '';
+  var type = el ? el.getAttribute('data-type') : '';
+  // 품목명 입력
+  var inp = document.getElementById('whBulkItem_' + idx);
+  if (inp) inp.value = name;
+  // 입고유형 자동 설정: 해당 행의 입고유형 select 찾기
+  var tr = document.getElementById('whBulkRow_' + idx);
+  if (tr && type) {
+    var mapped = _whTypeMap[type] || '';
+    if (mapped) {
+      // TD 순서: 0=#, 1=창고, 2=위치, 3=구역, 4=입고일, 5=품목명, 6=수량, 7=단위, 8=소비기한, 9=공급업체, 10=담당자, 11=입고유형
+      var tds = tr.querySelectorAll('td');
+      if (tds[11]) {
+        var typeSelect = tds[11].querySelector('select');
+        if (typeSelect) {
+          for (var i = 0; i < typeSelect.options.length; i++) {
+            if (typeSelect.options[i].value === mapped) {
+              typeSelect.selectedIndex = i;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  // 드롭다운 닫기
+  var dropdown = document.getElementById('whBulkItemDrop_' + idx);
+  if (dropdown) dropdown.style.display = 'none';
 }
 
 // ══════════════════════════════════════════════════
