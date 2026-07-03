@@ -1728,9 +1728,12 @@ async function whStartBarcodeDetector() {
   var video = document.getElementById('whQrVideoEl');
   if (!video) return;
   try {
-    var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
     video.srcObject = stream;
+    video.play();
+
     if ('BarcodeDetector' in window) {
+      // 방법 1: BarcodeDetector API (쿨룸안드로이드/데스크탑 Chrome)
       var detector = new BarcodeDetector({ formats: ['qr_code','code_128','code_39','ean_13','ean_8'] });
       var scan = async function() {
         if (!video.srcObject) return;
@@ -1743,11 +1746,48 @@ async function whStartBarcodeDetector() {
         } catch(e) {}
         requestAnimationFrame(scan);
       };
-      video.addEventListener('loadedmetadata', function(){ requestAnimationFrame(scan); });
+      video.addEventListener('loadedmetadata', function(){ requestAnimationFrame(scan); }, { once: true });
+      if (video.readyState >= 2) requestAnimationFrame(scan);
+    } else if (typeof jsQR !== 'undefined') {
+      // 방법 2: jsQR 폴백 (BarcodeDetector 미지원 환경)
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext('2d');
+      var _scanning = true;
+      var scanJsQR = function() {
+        if (!video.srcObject || !_scanning) return;
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+          if (code && code.data) {
+            _scanning = false;
+            whProcessScan(code.data);
+            return;
+          }
+        }
+        requestAnimationFrame(scanJsQR);
+      };
+      video.addEventListener('loadedmetadata', function(){ requestAnimationFrame(scanJsQR); }, { once: true });
+      if (video.readyState >= 2) requestAnimationFrame(scanJsQR);
+      // 모달 닫힐 시 스캔 중지
+      var closeBtn = document.querySelector('#whQrScanModal .modal-close');
+      if (closeBtn) closeBtn.addEventListener('click', function(){ _scanning = false; }, { once: true });
+    } else {
+      // 방법 3: 둘 다 미지원 시 안내 표시
+      var container = document.getElementById('whQrVideo');
+      if (container) {
+        var msg = document.createElement('div');
+        msg.style.cssText = 'position:absolute;bottom:8px;left:0;right:0;text-align:center;color:#fff;font-size:11px;background:rgba(0,0,0,0.5);padding:4px';
+        msg.textContent = '이 브라우저는 카메라 QR 스캔을 지원하지 않습니다. 직접 입력을 이용해주세요.';
+        container.style.position = 'relative';
+        container.appendChild(msg);
+      }
     }
   } catch(e) {
     var container = document.getElementById('whQrVideo');
-    if (container) container.innerHTML = '<div style="color:#fff;padding:20px;text-align:center;font-size:13px">카메라 접근 불가<br>직접 입력을 이용해주세요</div>';
+    if (container) container.innerHTML = '<div style="color:#fff;padding:20px;text-align:center;font-size:13px">카메라 접근 불가<br><small>' + (e.message||'') + '</small><br><br>직접 입력을 이용해주세요</div>';
   }
 }
 
@@ -1755,26 +1795,43 @@ function whProcessScan(rawValue) {
   if (!rawValue || !rawValue.trim()) return;
   var val = rawValue.trim();
   var resultEl = document.getElementById('whQrScanResult');
-  try {
-    var parsed = JSON.parse(decodeURIComponent(val));
-    if (parsed.lot) {
-      whCloseQrScanner();
-      var locEl = document.getElementById('whout_location');
-      var itemEl = document.getElementById('whout_item_name');
-      var refEl = document.getElementById('whout_ref_lot');
-      if (locEl) locEl.value = parsed.loc || '';
-      if (itemEl) itemEl.value = parsed.item || '';
-      if (refEl) refEl.value = parsed.lot || '';
-      var whEl = document.getElementById('whout_warehouse');
-      if (whEl && parsed.loc) {
-        whEl.value = parsed.loc.startsWith('C') ? 'C' : 'W';
-        whBuildLocationSelect('whout');
-        setTimeout(function(){ if (locEl) locEl.value = parsed.loc; }, 100);
-      }
-      showToast('QR 스캔 완료: ' + parsed.lot, 'success');
-      return;
+
+  // QR 데이터 파싱: 3단계 시도
+  // 1) 원본 값이 JSON인 경우 (실제 QR 스캔 결과 - api.qrserver.com은 URL디코딩 후 QR 저장)
+  // 2) encodeURIComponent된 JSON인 경우 (직접 입력 또는 일부 스캔너)
+  // 3) Lot No. 직접 입력
+  var parsed = null;
+  // 시도 1: 원본 JSON 파싱
+  try { parsed = JSON.parse(val); } catch(e) {}
+  // 시도 2: URL디코딩 후 JSON 파싱
+  if (!parsed || !parsed.lot) {
+    try { parsed = JSON.parse(decodeURIComponent(val)); } catch(e) {}
+  }
+
+  if (parsed && parsed.lot) {
+    whCloseQrScanner();
+    var locEl = document.getElementById('whout_location');
+    var itemEl = document.getElementById('whout_item_name');
+    var refEl = document.getElementById('whout_ref_lot');
+    if (locEl) locEl.value = parsed.loc || '';
+    if (itemEl) itemEl.value = parsed.item || '';
+    if (refEl) refEl.value = parsed.lot || '';
+    var whEl = document.getElementById('whout_warehouse');
+    if (whEl && parsed.loc) {
+      whEl.value = parsed.loc.startsWith('C') ? 'C' : 'W';
+      whBuildLocationSelect('whout');
+      setTimeout(function(){ if (locEl) locEl.value = parsed.loc; }, 100);
     }
-  } catch(e) {}
+    // 수량/단위도 자동 입력
+    var qtyEl = document.getElementById('whout_qty');
+    var unitEl = document.getElementById('whout_unit');
+    if (qtyEl && parsed.qty) qtyEl.value = parsed.qty;
+    if (unitEl && parsed.unit) unitEl.value = parsed.unit;
+    showToast('QR 스캔 완료: ' + parsed.lot, 'success');
+    return;
+  }
+
+  // 시도 3: Lot No. 직접 조회
   var record = whInboundData.find(function(r){ return r.lot_no === val; });
   if (record) {
     whCloseQrScanner();
