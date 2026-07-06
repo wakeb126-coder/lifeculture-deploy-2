@@ -307,22 +307,32 @@ function lgFilterTable(tab) {
       _from_wh_inbound: true
     }));
     // wh_outbound 전체를 logistics 형식으로 변환
-    const whOutRows = (allWhOutboundData || []).map(r => ({
-      id: r.id,
-      lot_no: r.lot_no || r.id || '',
-      product_type: r.product_type || '수입제품',
-      transaction_type: '출고',
-      date: r.outbound_date || r.out_date || r.date || '',
-      product_name: r.item_name || '',
-      quantity: r.qty,
-      unit: r.unit || 'ea',
-      total_amount: null,
-      expiry_date: r.expiry_date || '',
-      status: '출고완료',
-      manager: r.manager || '',
-      notes: r.destination || r.memo || '',
-      _from_wh_outbound: true
-    }));
+    // wh_inbound 데이터를 lot_no 기준으로 인덱싱 (product_type 연동용)
+    const _whInMap = {};
+    (allWhInboundData || []).forEach(r => { if (r.lot_no) _whInMap[r.lot_no] = r; });
+    const whOutRows = (allWhOutboundData || []).map(r => {
+      // product_type 우선순위: 1) 직접 저장된 값 2) ref_lot로 입고 레코드에서 가져오기 3) 없으면 null
+      var ptype = r.product_type || null;
+      if (!ptype && r.ref_lot && _whInMap[r.ref_lot]) {
+        ptype = _whInMap[r.ref_lot].inbound_type || null;
+      }
+      return {
+        id: r.id,
+        lot_no: r.lot_no || r.id || '',
+        product_type: ptype || '',
+        transaction_type: '출고',
+        date: r.outbound_date || r.out_date || r.date || '',
+        product_name: r.item_name || '',
+        quantity: r.qty,
+        unit: r.unit || 'ea',
+        total_amount: null,
+        expiry_date: r.expiry_date || '',
+        status: '출고완료',
+        manager: r.manager || '',
+        notes: r.destination || r.memo || '',
+        _from_wh_outbound: true
+      };
+    });
     const combined = [...lgFiltered, ...whInRows, ...whOutRows];
     const data = combined.filter(r =>
       (!q || (r.product_name || '').toLowerCase().includes(q)) &&
@@ -718,7 +728,13 @@ function lgExport(tab) {
       return (a.expiry || '').localeCompare(b.expiry || '');
     });
 
-    var headers = ['제품명', '제품유형', '소비기한', '입고 수량', '출고 수량', '현재고', '단위', '상태'];
+    var headers = ['제품명', '제품유형', '소비기한',
+      '입고(ea)', '입고(Box)', '입고(PT)',
+      '출고(ea)', '출고(Box)', '출고(PT)',
+      '현재고(ea)', '현재고(Box)', '현재고(PT)',
+      '단위', '상태'];
+    // 제품마스터 캐시 로드 (Box/PT 환산용)
+    var _expProducts = typeof _lgProductCache !== 'undefined' ? (_lgProductCache || []) : [];
     var csvRows = rows.map(function(r) {
       var stock = r.inQty - r.outQty;
       var status = stock <= 0 ? '재고없음' : stock <= 10 ? '부족' : '정상';
@@ -727,7 +743,25 @@ function lgExport(tab) {
         if (diff < 0) status = '기한만료';
         else if (diff <= 30) status = '임박(' + diff + '일)';
       }
-      return [r.name, r.ptype || '-', r.expiry || '-', r.inQty, r.outQty, stock, r.unit, status];
+      // 제품마스터에서 환산 기준 조회
+      var _pm = _expProducts.find(function(p) { return (p.product_name||'').trim() === r.name; });
+      var _qpb = _pm ? (parseInt(_pm.qty_per_box) || 0) : 0;
+      var _bpp = _pm ? (parseInt(_pm.boxes_per_pallet) || 0) : 0;
+      // 집계된 ea/box/pt 값 사용 (없으면 환산)
+      var inEa = r.inQty_ea || r.inQty;
+      var inBox = r.inQty_box || (_qpb > 0 ? Math.floor(inEa / _qpb) : 0);
+      var inPt = r.inQty_pt || (_bpp > 0 ? Math.floor(inBox / _bpp) : 0);
+      var outEa = r.outQty_ea || r.outQty;
+      var outBox = r.outQty_box || (_qpb > 0 ? Math.floor(outEa / _qpb) : 0);
+      var outPt = r.outQty_pt || (_bpp > 0 ? Math.floor(outBox / _bpp) : 0);
+      var curEa = inEa - outEa;
+      var curBox = _qpb > 0 ? Math.floor(curEa / _qpb) : (inBox - outBox);
+      var curPt = _bpp > 0 ? Math.floor(curBox / _bpp) : (inPt - outPt);
+      return [r.name, r.ptype || '-', r.expiry || '-',
+        inEa, inBox, inPt,
+        outEa, outBox, outPt,
+        curEa, curBox, curPt,
+        r.unit, status];
     });
     var csvContent = [headers, ...csvRows].map(function(row) { return row.map(function(cell) { return '"' + cell + '"'; }).join(','); }).join('\n');
     var blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });

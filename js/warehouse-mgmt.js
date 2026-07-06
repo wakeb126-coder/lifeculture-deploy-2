@@ -659,9 +659,18 @@ function whRenderInTable() {
     whLoadProductMaster().then(function() { whRenderInTable(); });
     return;
   }
+  var _inSearchQ = (document.getElementById('whInSearch') ? document.getElementById('whInSearch').value.trim().toLowerCase() : '');
   var data = whInboundData.slice().sort(function(a,b){ return (b.inbound_date||'').localeCompare(a.inbound_date||''); });
+  if (_inSearchQ) {
+    data = data.filter(function(r) {
+      return (r.item_name||'').toLowerCase().includes(_inSearchQ) ||
+             (r.lot_no||'').toLowerCase().includes(_inSearchQ) ||
+             (r.location||'').toLowerCase().includes(_inSearchQ) ||
+             (r.supplier||'').toLowerCase().includes(_inSearchQ);
+    });
+  }
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>등록된 입고 내역이 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>' + (_inSearchQ ? '검색 결과가 없습니다.' : '등록된 입고 내역이 없습니다.') + '</td></tr>';
     return;
   }
   tbody.innerHTML = data.map(function(r) {
@@ -935,10 +944,33 @@ async function whSaveInEdit() {
     updated_at: Date.now()
   };
 
+  // qty_ea/qty_box/qty_pt 환산 계산
+  var _editProducts = _whProductMasterCache || [];
+  var _editMatchP = _editProducts.find(function(p) { return (p.product_name||'').trim() === data.item_name; });
+  var _editQpb = _editMatchP ? (parseInt(_editMatchP.qty_per_box) || 0) : 0;
+  var _editBpp = _editMatchP ? (parseInt(_editMatchP.boxes_per_pallet) || 0) : 0;
+  var _editBreakdown = _whCalcBreakdown(data.qty, data.unit, _editQpb, _editBpp);
+  data.qty_ea = _editBreakdown.qty_ea;
+  data.qty_box = _editBreakdown.qty_box;
+  data.qty_pt = _editBreakdown.qty_pt;
+
   var saveBtn = document.querySelector('#whInEditModal .btn-primary');
   if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...'; }
   try {
     await apiPut('wh_inbound', id, data);
+
+    // ── logistics 컬렉션 동기화: lot_no로 기존 logistics 레코드 찾아 업데이트 ──
+    if (existingLotNo) {
+      try {
+        var lgAll = await apiGetAll('logistics');
+        var lgMatch = lgAll.find(function(r) { return r.lot_no === existingLotNo && r.transaction_type === '입고'; });
+        if (lgMatch && lgMatch.id) {
+          var lgUpdated = _whBuildLogisticsRecord(data);
+          await apiPut('logistics', lgMatch.id, lgUpdated);
+        }
+      } catch(lgErr) { /* logistics 동기화 실패는 무시 */ }
+    }
+
     showToast('입고 정보가 수정되었습니다.', 'success');
     whCloseInEditModal();
     whInvalidateMapCache();
@@ -1043,9 +1075,18 @@ function whRenderOutTable() {
     whLoadProductMaster().then(function() { whRenderOutTable(); });
     return;
   }
+  var _outSearchQ = (document.getElementById('whOutSearch') ? document.getElementById('whOutSearch').value.trim().toLowerCase() : '');
   var data = whOutboundData.slice().sort(function(a,b){ return (b.outbound_date||'').localeCompare(a.outbound_date||''); });
+  if (_outSearchQ) {
+    data = data.filter(function(r) {
+      return (r.item_name||'').toLowerCase().includes(_outSearchQ) ||
+             (r.lot_no||'').toLowerCase().includes(_outSearchQ) ||
+             (r.location||'').toLowerCase().includes(_outSearchQ) ||
+             (r.destination||'').toLowerCase().includes(_outSearchQ);
+    });
+  }
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>등록된 출고 내역이 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>' + (_outSearchQ ? '검색 결과가 없습니다.' : '등록된 출고 내역이 없습니다.') + '</td></tr>';
     return;
   }
   tbody.innerHTML = data.map(function(r) {
@@ -1346,10 +1387,47 @@ function whRenderStocktakeTable() {
 }
 
 async function whDeleteStocktake(id) {
-  if (!confirm('삭제하시겠습니까?')) return;
+  if (!confirm('삭제하시겠습니까?\n(연동된 재고 조정 기록도 함께 삭제됩니다)')) return;
   try {
+    // 1. 삭제할 실사 레코드 조회 (날짜·위치·품목 정보 확보)
+    var stRec = whStocktakeData.find(function(r){ return r.id === id; });
     await apiDelete('wh_stocktake', id);
-    showToast('삭제 완료', 'success');
+
+    // 2. 연동된 WH-ADJ 조정 레코드 삭제
+    if (stRec && stRec.stocktake_date && stRec.diff && Number(stRec.diff) !== 0) {
+      var adjDateShort = (stRec.stocktake_date || '').replace(/-/g,'').slice(2);
+      var adjPrefix = 'WH-ADJ-' + adjDateShort;
+      var diff = Number(stRec.diff);
+      var adjDeleted = 0;
+      if (diff > 0) {
+        // 플러스 조정: wh_inbound에서 WH-ADJ 레코드 찾아 삭제
+        var inbAdj = whInboundData.filter(function(r) {
+          return (r.lot_no||'').startsWith(adjPrefix) &&
+                 r.location === stRec.location &&
+                 r.item_name === stRec.item_name &&
+                 r.inbound_type === '재고조정';
+        });
+        for (var i = 0; i < inbAdj.length; i++) {
+          try { await apiDelete('wh_inbound', inbAdj[i].id); adjDeleted++; } catch(e2) {}
+        }
+      } else {
+        // 마이너스 조정: wh_outbound에서 WH-ADJ 레코드 찾아 삭제
+        var outAdj = whOutboundData.filter(function(r) {
+          return (r.lot_no||'').startsWith(adjPrefix) &&
+                 r.location === stRec.location &&
+                 r.item_name === stRec.item_name &&
+                 r.destination === '재고조정';
+        });
+        for (var j = 0; j < outAdj.length; j++) {
+          try { await apiDelete('wh_outbound', outAdj[j].id); adjDeleted++; } catch(e3) {}
+        }
+      }
+      showToast('삭제 완료' + (adjDeleted > 0 ? ' (재고 조정 ' + adjDeleted + '건 함께 삭제)' : ''), 'success');
+    } else {
+      showToast('삭제 완료', 'success');
+    }
+
+    whInvalidateMapCache();
     await whReloadAll();
   } catch(e) {
     showToast('삭제 실패: ' + e.message, 'error');
@@ -2516,11 +2594,19 @@ async function whBulkSubmitAll() {
   var fresh = await apiGetAll('wh_inbound');
   var seq = (fresh.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length) + 1;
 
+  // 제품마스터 캐시 보장
+  var _bulkInProducts = _whProductMasterCache || await whLoadProductMaster();
+
   var successCount = 0;
   var failCount = 0;
   for (var i = 0; i < records.length; i++) {
     var r = records[i];
     var lotNo = prefix + '-' + String(seq + i).padStart(3, '0');
+    // qty_ea/qty_box/qty_pt 환산 계산
+    var _bulkMatchP = _bulkInProducts.find(function(p) { return (p.product_name||'').trim() === r.item_name; });
+    var _bulkQpb = _bulkMatchP ? (parseInt(_bulkMatchP.qty_per_box) || 0) : 0;
+    var _bulkBpp = _bulkMatchP ? (parseInt(_bulkMatchP.boxes_per_pallet) || 0) : 0;
+    var _bulkBd = _whCalcBreakdown(r.qty, r.unit, _bulkQpb, _bulkBpp);
     var payload = {
       lot_no: lotNo,
       warehouse: r.warehouse,
@@ -2530,6 +2616,9 @@ async function whBulkSubmitAll() {
       item_name: r.item_name,
       qty: r.qty,
       unit: r.unit,
+      qty_ea: _bulkBd.qty_ea,
+      qty_box: _bulkBd.qty_box,
+      qty_pt: _bulkBd.qty_pt,
       expiry_date: r.expiry_date,
       supplier: r.supplier,
       manager: r.manager,
@@ -3305,11 +3394,19 @@ async function whBulkOutSubmitAll() {
   var prefix = 'WH-OUT-' + today;
   var fresh = await apiGetAll('wh_outbound');
   var seqBase = fresh.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length;
+  // 제품마스터 캐시 보장
+  var _bulkOutProducts = _whProductMasterCache || await whLoadProductMaster();
+
   var success = 0, fail = 0;
   for (var i = 0; i < assignments.length; i++) {
     var a = assignments[i];
     var seq = String(seqBase + i + 1).padStart(3, '0');
     var lotNo = prefix + '-' + seq;
+    // qty_ea/qty_box/qty_pt 환산 계산
+    var _boMatchP = _bulkOutProducts.find(function(p) { return (p.product_name||'').trim() === a.item_name; });
+    var _boQpb = _boMatchP ? (parseInt(_boMatchP.qty_per_box) || 0) : 0;
+    var _boBpp = _boMatchP ? (parseInt(_boMatchP.boxes_per_pallet) || 0) : 0;
+    var _boBd = _whCalcBreakdown(a.qty, a.unit, _boQpb, _boBpp);
     try {
       var outData = {
         lot_no: lotNo,
@@ -3318,6 +3415,9 @@ async function whBulkOutSubmitAll() {
         item_name: a.item_name,
         qty: a.qty,
         unit: a.unit,
+        qty_ea: _boBd.qty_ea,
+        qty_box: _boBd.qty_box,
+        qty_pt: _boBd.qty_pt,
         outbound_date: a.date,
         destination: a.destination,
         manager: a.manager,
@@ -3393,11 +3493,19 @@ async function whBulkOutDirectSubmit() {
   var prefix = 'WH-OUT-' + todayStr;
   var fresh = await apiGetAll('wh_outbound');
   var seqBase = fresh.filter(function(r){ return r.lot_no && r.lot_no.startsWith(prefix); }).length;
+  // 제품마스터 캐시 보장
+  var _bdProducts = _whProductMasterCache || await whLoadProductMaster();
+
   var success = 0, fail = 0;
   for (var i = 0; i < allAssignments.length; i++) {
     var a = allAssignments[i];
     var seq = String(seqBase + i + 1).padStart(3, '0');
     var lotNo = prefix + '-' + seq;
+    // qty_ea/qty_box/qty_pt 환산 계산
+    var _bdMatchP = _bdProducts.find(function(p) { return (p.product_name||'').trim() === a.item_name; });
+    var _bdQpb = _bdMatchP ? (parseInt(_bdMatchP.qty_per_box) || 0) : 0;
+    var _bdBpp = _bdMatchP ? (parseInt(_bdMatchP.boxes_per_pallet) || 0) : 0;
+    var _bdBd = _whCalcBreakdown(a.qty, a.unit, _bdQpb, _bdBpp);
     try {
       var outData2 = {
         lot_no: lotNo,
@@ -3406,6 +3514,9 @@ async function whBulkOutDirectSubmit() {
         item_name: a.item_name,
         qty: a.qty,
         unit: a.unit,
+        qty_ea: _bdBd.qty_ea,
+        qty_box: _bdBd.qty_box,
+        qty_pt: _bdBd.qty_pt,
         outbound_date: a.date,
         destination: a.destination,
         manager: a.manager,
