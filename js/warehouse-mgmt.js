@@ -1018,9 +1018,9 @@ function whRenderOutTable() {
   tbody.innerHTML = data.map(function(r) {
     return '<tr>' +
       '<td>' + (r.lot_no||'-') + '</td>' +
-      '<td>' + (r.outbound_date||'-') + '</td>' +
       '<td><span style="background:#fef9e7;color:#f39c12;padding:2px 8px;border-radius:12px;font-size:11px">' + (r.warehouse==='C'?'저온':'일반') + '</span></td>' +
       '<td><code style="font-size:11px">' + (r.location||'-') + '</code></td>' +
+      '<td>' + (r.outbound_date||'-') + '</td>' +
       '<td><b>' + (r.item_name||'-') + '</b></td>' +
       '<td style="text-align:right">' + _whFmtQtyBreakdown(r.qty, r.unit, r.item_name, r.qty_ea, r.qty_box, r.qty_pt) + '</td>' +
       '<td>' + (r.unit||'') + '</td>' +
