@@ -185,6 +185,39 @@ function whBuildLocationSelect(prefix) {
   var wh = whEl.value;
   locEl.innerHTML = '<option value="">위치 선택</option>';
   if (!wh) return;
+  // 위치이동 모달은 빈 위치만 표시 (현재 이동 대상 위치 제외)
+  if (prefix === 'whMove') {
+    var fromLoc = (document.getElementById('whMoveFromLoc') || {}).value || '';
+    var stockMap = whCalcStock();
+    var usedLocs = {};
+    Object.keys(stockMap).forEach(function(loc) {
+      if (loc === fromLoc) return; // 이동 출발지는 제외 (이미 비워질 예정)
+      var hasStock = Object.values(stockMap[loc]).some(function(v) { return (Number(v.qty) || 0) > 0; });
+      if (hasStock) usedLocs[loc] = true;
+    });
+    var locs2 = wh === 'C' ? COLD_LOCATIONS : WARM_LOCATIONS;
+    var zoneKeys2 = [];
+    locs2.forEach(function(l) { if (zoneKeys2.indexOf(l.zoneKey) < 0) zoneKeys2.push(l.zoneKey); });
+    var totalEmpty = 0;
+    zoneKeys2.forEach(function(zk) {
+      var filtered = locs2.filter(function(l) { return l.zoneKey === zk && !usedLocs[l.code]; });
+      if (filtered.length === 0) return;
+      totalEmpty += filtered.length;
+      var group = document.createElement('optgroup');
+      group.label = (wh === 'C' ? '저온' : '일반') + ' ' + zk + '구역 (빈 위치 ' + filtered.length + '개)';
+      filtered.forEach(function(l) {
+        var opt = document.createElement('option');
+        opt.value = l.code;
+        opt.textContent = l.code + '  (' + l.level + '단 ' + l.slot + '번파렛트)';
+        group.appendChild(opt);
+      });
+      locEl.appendChild(group);
+    });
+    if (totalEmpty === 0) {
+      locEl.innerHTML = '<option value="">빈 위치 없음</option>';
+    }
+    return;
+  }
   var locs = wh === 'C' ? COLD_LOCATIONS : WARM_LOCATIONS;
   var zoneKeys = [];
   locs.forEach(function(l) { if (zoneKeys.indexOf(l.zoneKey) < 0) zoneKeys.push(l.zoneKey); });
@@ -3613,8 +3646,11 @@ async function whSaveMove() {
     showToast('이동 완료: ' + fromLoc + ' → ' + toLoc + ' (' + targets.length + '건)', 'success');
     whCloseMoveModal();
     whInvalidateMapCache();
+    // _calledByUser 플래그 설정 → logistics 탭 자동 갱신 보장
+    whLoadAll._calledByUser = true;
     await whReloadAll();
-    if (typeof loadLogisticsData === 'function') loadLogisticsData();
+    whLoadAll._calledByUser = false;
+    if (typeof loadLogisticsData === 'function') await loadLogisticsData();
   } catch(e) {
     showToast('이동 실패: ' + e.message, 'error');
   }
