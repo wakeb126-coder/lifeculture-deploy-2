@@ -422,7 +422,7 @@ function lgRenderTable(tbodyId, data, tab) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   if (!data.length) {
-    const colCount = tab === 'all' ? 11 : 13;
+    const colCount = tab === 'all' ? 12 : 13;
     tbody.innerHTML = `<tr><td colspan="${colCount}" class="empty-msg"><i class="fas fa-inbox"></i> 등록된 내역이 없습니다.</td></tr>`;
     return;
   }
@@ -548,12 +548,17 @@ function lgRenderTable(tbodyId, data, tab) {
     } else {
       // 소스 파악 (wh_inbound / wh_outbound / logistics)
       const rowSrc = r._from_wh_inbound ? 'wh_inbound' : r._from_wh_outbound ? 'wh_outbound' : 'logistics';
+      // 제품규격 조회
+      const _pmAll = _lgProductCache || [];
+      const _pmMatchAll = _pmAll.find(p => (p.product_name||'').trim() === (r.product_name||'').trim());
+      const specAll = r.specification || (_pmMatchAll ? (_pmMatchAll.specification || _pmMatchAll.spec_code || '') : '');
       return `<tr>
         <td style="font-size:11px">${r.lot_no || '-'}</td>
         <td>${typeBadge}</td>
         <td>${txBadge}</td>
         <td>${r.date || '-'}</td>
         <td><strong>${r.product_name || '-'}</strong></td>
+        <td style="font-size:11px;color:#555">${specAll || '-'}</td>
         <td style="text-align:right">${_lgFmtBreakdown(r.quantity, r.unit, r.product_name, r.qty_ea, r.qty_box, r.qty_pt)}</td>
         <td>${expiryHtml}</td>
         <td>${statusBadge}</td>
@@ -1252,7 +1257,7 @@ async function lgRenderStockTable() {
   if (countEl2) countEl2.textContent = rows.length + '품목';
 
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>재고 데이터가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>재고 데이터가 없습니다.</td></tr>';
     return;
   }
 
@@ -1301,20 +1306,33 @@ async function lgRenderStockTable() {
     var pmMatch = pmList.find(function(p) { return (p.product_name||'').trim() === r.name; });
     var qpb = pmMatch ? (parseInt(pmMatch.qty_per_box) || 0) : 0;
     var bpp = pmMatch ? (parseInt(pmMatch.boxes_per_pallet) || 0) : 0;
+    var specVal = pmMatch ? (pmMatch.specification || pmMatch.spec_code || '') : '';
+    // 입고 ea/box/pt 계산 (저장값 없으면 제품마스터 환산)
+    var inEa = r.inQty_ea || 0;
+    var inBox = r.inQty_box || (qpb > 0 ? Math.floor(inEa / qpb) : 0);
+    var inPt = r.inQty_pt || ((qpb > 0 && bpp > 0) ? Math.floor(inEa / (qpb * bpp)) : 0);
+    // 출고 ea/box/pt 계산
+    var outEa = r.outQty_ea || 0;
+    var outBox = r.outQty_box || (qpb > 0 ? Math.floor(outEa / qpb) : 0);
+    var outPt = r.outQty_pt || ((qpb > 0 && bpp > 0) ? Math.floor(outEa / (qpb * bpp)) : 0);
+    // 현재고 ea/box/pt
     var stockBox = qpb > 0 ? Math.floor(stockEa / qpb) : 0;
     var stockPt = (qpb > 0 && bpp > 0) ? Math.floor(stockEa / (qpb * bpp)) : 0;
-    var stockParts = [];
-    if (stockPt > 0) stockParts.push('<span style="color:#8e44ad;font-size:11px">' + stockPt.toLocaleString() + ' PT</span>');
-    if (stockBox > 0) stockParts.push('<span style="color:#2980b9;font-size:11px">' + stockBox.toLocaleString() + ' Box</span>');
-    stockParts.push('<span style="font-weight:700;font-size:13px;color:' + (stock <= 0 ? '#e74c3c' : '#222') + '">' + stockEa.toLocaleString() + ' ea</span>');
-    var stockDisplay = stockParts.join('<br>');
+    var eaColor = stock <= 0 ? '#e74c3c' : '#222';
     return '<tr>' +
       '<td><b>' + r.name + '</b></td>' +
+      '<td style="font-size:11px;color:#555">' + (specVal || '-') + '</td>' +
       '<td><span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700">' + (r.ptype || '-') + '</span></td>' +
       '<td style="' + expiryStyle + '">' + (r.expiry || '-') + expiryStatus + '</td>' +
-      '<td style="text-align:right">' + fmtQtyCell(r.inQty_ea, r.inQty_box, r.inQty_pt, 'color:#27ae60;font-weight:600') + '</td>' +
-      '<td style="text-align:right">' + fmtQtyCell(r.outQty_ea, r.outQty_box, r.outQty_pt, 'color:#e74c3c;font-weight:600') + '</td>' +
-      '<td style="text-align:right">' + stockDisplay + '</td>' +
+      '<td style="text-align:right;background:#f1f8f2;color:#2e7d32">' + inEa.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#f1f8f2;color:#2e7d32">' + inBox.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#f1f8f2;color:#2e7d32">' + inPt.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#fff5f5;color:#c62828">' + outEa.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#fff5f5;color:#c62828">' + outBox.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#fff5f5;color:#c62828">' + outPt.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#f0f2ff;color:' + eaColor + ';font-weight:700">' + stockEa.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#f0f2ff;color:#283593">' + stockBox.toLocaleString() + '</td>' +
+      '<td style="text-align:right;background:#f0f2ff;color:#283593">' + stockPt.toLocaleString() + '</td>' +
       '<td>' + r.unit + '</td>' +
       '<td>' + stockBadge + '</td>' +
       '</tr>';
