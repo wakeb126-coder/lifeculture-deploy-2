@@ -3766,3 +3766,97 @@ async function whSaveMove() {
     showToast('이동 실패: ' + e.message, 'error');
   }
 }
+
+// ── 재고실사 품목명 자동완성 ──────────────────────────────────
+async function whStItemFilter(query) {
+  var dropdown = document.getElementById('whst_item_dropdown');
+  if (!dropdown) return;
+  var products = await whLoadProductMaster();
+  var q = (query || '').trim().toLowerCase();
+  var filtered = q ? products.filter(function(p) {
+    return (p.product_name || '').toLowerCase().includes(q) ||
+           (p.product_code || '').toLowerCase().includes(q);
+  }) : products;
+  if (filtered.length === 0) {
+    dropdown.innerHTML = '<div style="padding:12px 14px;color:#aaa;font-size:13px">검색 결과 없음</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+  dropdown.innerHTML = filtered.slice(0, 30).map(function(p) {
+    var typeBadge = '';
+    var pt = p.product_type || '';
+    if (pt.includes('수입')) typeBadge = '<span style="font-size:10px;background:#e8f4fd;color:#2980b9;padding:1px 6px;border-radius:8px;margin-left:6px">수입</span>';
+    else if (pt.includes('OEM')) typeBadge = '<span style="font-size:10px;background:#fef9e7;color:#d68910;padding:1px 6px;border-radius:8px;margin-left:6px">OEM</span>';
+    else if (pt.includes('자체')) typeBadge = '<span style="font-size:10px;background:#eafaf1;color:#1e8449;padding:1px 6px;border-radius:8px;margin-left:6px">자체</span>';
+    var codeTxt = p.product_code ? '<span style="font-size:10px;color:#aaa;margin-left:4px">[' + p.product_code + ']</span>' : '';
+    var nameAttr = (p.product_name || '').replace(/"/g, '&quot;');
+    return '<div onclick="whStSelectItem(this)" data-name="' + nameAttr + '"' +
+      ' style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:4px"' +
+      ' onmouseover="this.style.background=\'#f0fff4\'" onmouseout="this.style.background=\'#fff\'">' +
+      '<span style="font-weight:600;color:#222">' + (p.product_name || '-') + '</span>' +
+      codeTxt + typeBadge + '</div>';
+  }).join('');
+  dropdown.style.display = 'block';
+}
+
+function whStSelectItem(el) {
+  var name = el ? el.getAttribute('data-name') : '';
+  var nameEl = document.getElementById('whst_item_name');
+  if (nameEl) nameEl.value = name;
+  var dropdown = document.getElementById('whst_item_dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+  // 전산 수량 자동 계산 (재고실사 위치 선택 후 자동 계산)
+  if (typeof whCalcStocktakeDiff === 'function') whCalcStocktakeDiff();
+}
+
+// ── 입고 수정 모달 품목명 자동완성 ────────────────────────────
+async function whInEditItemFilter(query) {
+  var dropdown = document.getElementById('whInEdit_item_dropdown');
+  if (!dropdown) return;
+  var products = await whLoadProductMaster();
+  var q = (query || '').trim().toLowerCase();
+  var filtered = q ? products.filter(function(p) {
+    return (p.product_name || '').toLowerCase().includes(q) ||
+           (p.product_code || '').toLowerCase().includes(q);
+  }) : products;
+  if (filtered.length === 0) {
+    dropdown.innerHTML = '<div style="padding:12px 14px;color:#aaa;font-size:13px">검색 결과 없음</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+  dropdown.innerHTML = filtered.slice(0, 30).map(function(p) {
+    var typeBadge = '';
+    var pt = p.product_type || '';
+    if (pt.includes('수입')) typeBadge = '<span style="font-size:10px;background:#e8f4fd;color:#2980b9;padding:1px 6px;border-radius:8px;margin-left:6px">수입</span>';
+    else if (pt.includes('OEM')) typeBadge = '<span style="font-size:10px;background:#fef9e7;color:#d68910;padding:1px 6px;border-radius:8px;margin-left:6px">OEM</span>';
+    else if (pt.includes('자체')) typeBadge = '<span style="font-size:10px;background:#eafaf1;color:#1e8449;padding:1px 6px;border-radius:8px;margin-left:6px">자체</span>';
+    var codeTxt = p.product_code ? '<span style="font-size:10px;color:#aaa;margin-left:4px">[' + p.product_code + ']</span>' : '';
+    var nameAttr = (p.product_name || '').replace(/"/g, '&quot;');
+    var typeAttr = (p.product_type || '').replace(/"/g, '&quot;');
+    return '<div onclick="whInEditSelectItem(this)" data-name="' + nameAttr + '" data-type="' + typeAttr + '"' +
+      ' style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:4px"' +
+      ' onmouseover="this.style.background=\'#f0fff4\'" onmouseout="this.style.background=\'#fff\'">' +
+      '<span style="font-weight:600;color:#222">' + (p.product_name || '-') + '</span>' +
+      codeTxt + typeBadge + '</div>';
+  }).join('');
+  dropdown.style.display = 'block';
+}
+
+function whInEditSelectItem(el) {
+  var name = el ? el.getAttribute('data-name') : '';
+  var type = el ? el.getAttribute('data-type') : '';
+  var nameEl = document.getElementById('whInEdit_item_name');
+  if (nameEl) nameEl.value = name;
+  // 입고유형 자동 설정
+  var typeEl = document.getElementById('whInEdit_type');
+  if (typeEl && type) {
+    var mapped = _whTypeMap[type] || '';
+    if (mapped) {
+      for (var i = 0; i < typeEl.options.length; i++) {
+        if (typeEl.options[i].value === mapped) { typeEl.selectedIndex = i; break; }
+      }
+    }
+  }
+  var dropdown = document.getElementById('whInEdit_item_dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+}

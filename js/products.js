@@ -185,7 +185,7 @@ function renderTable() {
   }
 
   if (!pageData.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#999"><i class="fas fa-inbox" style="font-size:32px;margin-bottom:12px;display:block"></i>제품 정보가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#999"><i class="fas fa-inbox" style="font-size:32px;margin-bottom:12px;display:block"></i>제품 정보가 없습니다.</td></tr>`;
   } else {
     const typeColors = { '자체생산': 'badge-success', 'OEM': 'badge-info', '수입제품': 'badge-warning', '농산물': 'badge-primary', '기타': 'badge-secondary' };
     tbody.innerHTML = pageData.map(p => {
@@ -205,7 +205,6 @@ function renderTable() {
         </td>
         <td><span class="badge ${typeCls}">${p.product_type || '-'}</span></td>
         <td>${p.category || '-'}</td>
-        <td><span style="font-size:12px">${shelfLifeText}</span></td>
         <td>${p.storage_condition || '-'}</td>
         <td>${docStatusBadge(p.documents)}</td>
         <td>
@@ -382,18 +381,28 @@ function openEditModal(id) {
     if (el && val !== undefined && val !== null) el.value = val;
   });
 
-  // SKU 콤보박스 값 복원 (제품코드에서 약어/규격 파싱)
-  if (p.product_code) {
+  // SKU 콤보박스 값 복원: Firestore 저장값 우선, 없으면 제품코드에서 파싱
+  const abbrevEl = document.getElementById('productAbbrev');
+  const specEl = document.getElementById('specCode');
+  const whEl = document.getElementById('warehouseCode');
+  if (p.product_abbrev && abbrevEl) {
+    abbrevEl.value = p.product_abbrev;
+  } else if (p.product_code) {
     const parts = p.product_code.split('-');
-    // 구조: [OWN/OEM/IMP]-[RM/RF/FZ]-[abbrev]-[spec]-[seq]
     if (parts.length >= 4) {
-      const abbrevEl = document.getElementById('productAbbrev');
-      const specEl = document.getElementById('specCode');
-      const whEl = document.getElementById('warehouseCode');
       if (abbrevEl) abbrevEl.value = parts[2] || '';
-      if (specEl) specEl.value = parts[3] || '';
       if (whEl) whEl.value = parts[1] || 'RM';
     }
+  }
+  if (p.spec_code && specEl) {
+    specEl.value = p.spec_code;
+  } else if (p.product_code) {
+    const parts = p.product_code.split('-');
+    if (parts.length >= 5 && specEl) specEl.value = parts[3] || '';
+  }
+  if (whEl && p.product_code && !whEl.value) {
+    const parts = p.product_code.split('-');
+    if (parts.length >= 2) whEl.value = parts[1] || 'RM';
   }
 
   if (p.documents) {
@@ -466,6 +475,8 @@ async function handleSubmit(e) {
     personal_email: document.getElementById('personal_email')?.value || document.getElementById('personalEmail')?.value || '',
     tax_email: document.getElementById('tax_email')?.value || document.getElementById('taxEmail')?.value || '',
     lot_abbrev: document.getElementById('lotAbbrev')?.value || '',
+    product_abbrev: (document.getElementById('productAbbrev')?.value || '').trim().toUpperCase(),
+    spec_code: (document.getElementById('specCode')?.value || '').trim().toUpperCase(),
     qty_per_box: parseInt(document.getElementById('qtyPerBox')?.value) || 0,
     boxes_per_pallet: parseInt(document.getElementById('boxesPerPallet')?.value) || 0,
     documents: docsJson,

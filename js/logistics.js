@@ -1011,16 +1011,15 @@ async function lgProductSearch(keyword) {
   const dropdown = document.getElementById('lgProductDropdown');
   if (!dropdown) return;
   const q = (keyword || '').trim().toLowerCase();
-  if (q.length < 1) {
-    dropdown.style.display = 'none';
-    return;
-  }
   const products = await lgGetProductCache();
-  const matched = products.filter(p => {
-    const name = (p.product_name || '').toLowerCase();
-    const code = (p.product_code || '').toLowerCase();
-    return name.includes(q) || code.includes(q);
-  }).slice(0, 15);
+  const matched = (q.length > 0
+    ? products.filter(p => {
+        const name = (p.product_name || '').toLowerCase();
+        const code = (p.product_code || '').toLowerCase();
+        return name.includes(q) || code.includes(q);
+      })
+    : products
+  ).slice(0, 30);
 
   if (matched.length === 0) {
     dropdown.style.display = 'none';

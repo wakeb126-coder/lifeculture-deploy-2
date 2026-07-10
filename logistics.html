@@ -184,7 +184,7 @@
               <div class="form-group span-2">
                 <label>제품명 <span class="required">*</span> <small style="color:#27ae60;font-weight:400">키워드 입력 시 자동검색</small></label>
                 <div style="position:relative">
-                  <input type="text" id="lg_product_name" required placeholder="제품명 또는 제품코드 입력" oninput="lgProductSearch(this.value)" autocomplete="off" />
+                  <input type="text" id="lg_product_name" required placeholder="제품명 또는 제품코드 입력" oninput="lgProductSearch(this.value)" onfocus="lgProductSearch(this.value)" onblur="setTimeout(function(){var d=document.getElementById('lgProductDropdown');if(d)d.style.display='none';},200)" autocomplete="off" />
                   <div id="lgProductDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 6px 6px;max-height:200px;overflow-y:auto;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
                 </div>
               </div>
@@ -1121,8 +1121,14 @@
             </div>
             <div class="form-grid form-grid-4">
               <div class="form-group span-2">
-                <label>품목명 <span class="required">*</span></label>
-                <input type="text" id="whst_item_name" required placeholder="품목명" />
+                <label>품목명 <span class="required">*</span> <small style="color:#27ae60;font-weight:400">타이핑 시 자동검색</small></label>
+                <div style="position:relative">
+                  <input type="text" id="whst_item_name" required placeholder="품목명 입력 또는 검색" autocomplete="off"
+                    oninput="whStItemFilter(this.value)"
+                    onfocus="whStItemFilter(this.value)"
+                    onblur="setTimeout(function(){var d=document.getElementById('whst_item_dropdown');if(d)d.style.display='none';},200)" />
+                  <div id="whst_item_dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto"></div>
+                </div>
               </div>
               <div class="form-group">
                 <label>전산 수량</label>
@@ -1239,8 +1245,14 @@
         </div>
         <div class="form-grid form-grid-4">
           <div class="form-group span-2">
-            <label>품목명 <span class="required">*</span></label>
-            <input type="text" id="whInEdit_item_name" placeholder="품목명" />
+            <label>품목명 <span class="required">*</span> <small style="color:#27ae60;font-weight:400">타이핑 시 자동검색</small></label>
+            <div style="position:relative">
+              <input type="text" id="whInEdit_item_name" placeholder="품목명 입력 또는 검색" autocomplete="off"
+                oninput="whInEditItemFilter(this.value)"
+                onfocus="whInEditItemFilter(this.value)"
+                onblur="setTimeout(function(){var d=document.getElementById('whInEdit_item_dropdown');if(d)d.style.display='none';},200)" />
+              <div id="whInEdit_item_dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #c8e6c9;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto"></div>
+            </div>
           </div>
           <div class="form-group">
             <label>수량 <span class="required">*</span></label>
