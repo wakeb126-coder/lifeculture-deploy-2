@@ -1184,25 +1184,64 @@ async function lgRenderStockTable() {
     // ptype이 없으면 wh_inbound 값으로 채움
     if (!stockMap[key].ptype) stockMap[key].ptype = ptype;
   });
-  // 4패스: 창고 출고(wh_outbound) 집계 - nameIndex 활용으로 O(n) 처리
-  var nameIdx4 = buildNameIndex();
+  // 4패스: 창고 출고(wh_outbound) 집계
+  // 매칭 우선순위: 1) 품목명+소비기한 정확 매칭 2) ref_lot로 입고 레코드 소비기한 조회 3) FIFO(가장 빠른 소비기한)
+  var _whInLotMap = {};
+  (allWhInboundData || []).forEach(function(r) {
+    if (r.lot_no) _whInLotMap[r.lot_no] = r;
+  });
   (allWhOutboundData || []).forEach(function(r) {
     var name = (r.item_name || '').trim();
     var qty = Number(r.qty || 0);
     if (!name || !qty) return;
-    var matchedKey = nameIdx4[name] || null;
-    if (matchedKey) {
-      stockMap[matchedKey].outQty += qty;
-      // 하위 호환: qty_ea 없으면 qty 사용
-      stockMap[matchedKey].outQty_ea += Number(r.qty_ea !== undefined ? r.qty_ea : qty) || 0;
-      stockMap[matchedKey].outQty_box += Number(r.qty_box || 0);
-      stockMap[matchedKey].outQty_pt += Number(r.qty_pt || 0);
+    var expiry = (r.expiry_date || '').trim();
+    // 1) 정확 매칭: 품목명 + 소비기한
+    var exactKey = name + '||' + expiry;
+    var matchedKey = null;
+    if (stockMap[exactKey]) {
+      matchedKey = exactKey;
+    } else if (!expiry && r.ref_lot && _whInLotMap[r.ref_lot]) {
+      // 2) ref_lot으로 입고 레코드의 소비기한 조회
+      var refExpiry = (_whInLotMap[r.ref_lot].expiry_date || '').trim();
+      var refKey = name + '||' + refExpiry;
+      if (stockMap[refKey]) matchedKey = refKey;
     }
+    if (!matchedKey) {
+      // 3) FIFO: 같은 품목명 중 소비기한이 가장 빠른 키 (재고가 남아있는 것 우선)
+      var candidates = Object.keys(stockMap).filter(function(k) {
+        return k.startsWith(name + '||');
+      });
+      if (candidates.length > 0) {
+        // 재고 있는 것 우선, 없으면 소비기한 빠른 순
+        candidates.sort(function(a, b) {
+          var stockA = stockMap[a].inQty - stockMap[a].outQty;
+          var stockB = stockMap[b].inQty - stockMap[b].outQty;
+          if (stockA > 0 && stockB <= 0) return -1;
+          if (stockA <= 0 && stockB > 0) return 1;
+          return (stockMap[a].expiry || '9999').localeCompare(stockMap[b].expiry || '9999');
+        });
+        matchedKey = candidates[0];
+      }
+    }
+    if (!matchedKey) {
+      // 매칭 실패: 새 키 생성 (출고만 있는 경우)
+      matchedKey = name + '||' + expiry;
+      stockMap[matchedKey] = { name: name, expiry: expiry, unit: (r.unit||'ea'), ptype: '', inQty: 0, outQty: 0,
+        inQty_ea: 0, inQty_box: 0, inQty_pt: 0, outQty_ea: 0, outQty_box: 0, outQty_pt: 0 };
+    }
+    stockMap[matchedKey].outQty += qty;
+    // 하위 호환: qty_ea 없으면 qty 사용
+    stockMap[matchedKey].outQty_ea += Number(r.qty_ea !== undefined ? r.qty_ea : qty) || 0;
+    stockMap[matchedKey].outQty_box += Number(r.qty_box || 0);
+    stockMap[matchedKey].outQty_pt += Number(r.qty_pt || 0);
   });
 
   var rows = Object.values(stockMap);
   if (q) rows = rows.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; });
   if (typeF) rows = rows.filter(function(r) { return r.ptype === typeF; });
+  // 재고없음 숨기기 체크박스
+  var hideZero = document.getElementById('stockHideZero') ? document.getElementById('stockHideZero').checked : false;
+  if (hideZero) rows = rows.filter(function(r) { return (r.inQty - r.outQty) > 0; });
   rows.sort(function(a, b) {
     if (a.name !== b.name) return a.name.localeCompare(b.name);
     return (a.expiry || '').localeCompare(b.expiry || '');
@@ -1241,7 +1280,9 @@ async function lgRenderStockTable() {
       }
     }
     var stockBadge = '';
-    if (stock <= 0) {
+    if (stock < 0) {
+      stockBadge = '<span style="background:#4a0000;color:#ff6b6b;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700" title="출고량이 입고량을 초과합니다. 데이터를 확인해주세요.">⚠ 마이너스</span>';
+    } else if (stock === 0) {
       stockBadge = '<span style="background:#fdedec;color:#e74c3c;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">재고없음</span>';
     } else if (stock <= 10) {
       stockBadge = '<span style="background:#fff3cd;color:#d68910;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700">부족</span>';
