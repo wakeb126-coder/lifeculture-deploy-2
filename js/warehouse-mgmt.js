@@ -221,13 +221,58 @@ function whBuildLocationSelect(prefix) {
   var locs = wh === 'C' ? COLD_LOCATIONS : WARM_LOCATIONS;
   var zoneKeys = [];
   locs.forEach(function(l) { if (zoneKeys.indexOf(l.zoneKey) < 0) zoneKeys.push(l.zoneKey); });
+
+  // 출고 위치 선택: 재고 있는 위치 우선 표시
+  if (prefix === 'whout') {
+    var stockMapOut = whCalcStock();
+    var stockedLocs = [];
+    var emptyOutLocs = [];
+    locs.forEach(function(l) {
+      var items = stockMapOut[l.code] || {};
+      var totalQty = Object.values(items).reduce(function(s, v) { return s + (Number(v.qty) || 0); }, 0);
+      if (totalQty > 0) {
+        stockedLocs.push({ loc: l, qty: totalQty, items: items });
+      } else {
+        emptyOutLocs.push(l);
+      }
+    });
+    if (stockedLocs.length > 0) {
+      var grpStock = document.createElement('optgroup');
+      grpStock.label = '✅ 재고 있는 위치 (' + stockedLocs.length + '개)';
+      stockedLocs.forEach(function(s) {
+        var itemSummary = Object.entries(s.items)
+          .filter(function(e2) { return (Number(e2[1].qty) || 0) > 0; })
+          .map(function(e2) { return e2[0] + ' ' + e2[1].qty + (e2[1].unit || ''); })
+          .join(', ');
+        var opt = document.createElement('option');
+        opt.value = s.loc.code;
+        opt.textContent = s.loc.code + '  ▶ ' + (itemSummary.length > 40 ? itemSummary.substring(0, 40) + '...' : itemSummary);
+        opt.dataset.hasStock = '1';
+        grpStock.appendChild(opt);
+      });
+      locEl.appendChild(grpStock);
+    }
+    if (emptyOutLocs.length > 0) {
+      var grpEmptyOut = document.createElement('optgroup');
+      grpEmptyOut.label = '□ 빈 위치 (' + emptyOutLocs.length + '개)';
+      emptyOutLocs.forEach(function(l) {
+        var opt = document.createElement('option');
+        opt.value = l.code;
+        opt.textContent = l.code + '  (' + l.level + '단 ' + l.slot + '번파레트)';
+        grpEmptyOut.appendChild(opt);
+      });
+      locEl.appendChild(grpEmptyOut);
+    }
+    return;
+  }
+
   zoneKeys.forEach(function(zk) {
     var group = document.createElement('optgroup');
     group.label = (wh === 'C' ? '저온' : '일반') + ' ' + zk + '구역';
     locs.filter(function(l){ return l.zoneKey === zk; }).forEach(function(l) {
       var opt = document.createElement('option');
       opt.value = l.code;
-      opt.textContent = l.code + '  (' + l.level + '단 ' + l.slot + '번파렛트)';
+      opt.textContent = l.code + '  (' + l.level + '단 ' + l.slot + '번파레트)';
       group.appendChild(opt);
     });
     locEl.appendChild(group);
@@ -1249,8 +1294,10 @@ function whLoadStocktakeData() {
     var items = stockMap[l.code] || {};
     return Object.entries(items).filter(function(e){ return (e[1].qty||0) > 0; }).map(function(e) {
       var itemName = e[0], info = e[1];
+      var locAttr = l.code.replace(/'/g, "\\'");
+      var itemAttr = itemName.replace(/'/g, "\\'");
       return '<tr>' +
-        '<td><code style="font-size:11px">' + l.code + '</code></td>' +
+        '<td><code style="font-size:11px;cursor:pointer;color:#2980b9;text-decoration:underline;text-underline-offset:2px" title="클릭하여 위치이동" onclick="whInlineMove(\'' + locAttr + '\', \'' + itemAttr + '\')">📦 ' + l.code + '</code></td>' +
         '<td><b>' + itemName + '</b></td>' +
         '<td style="font-weight:700;color:#2980b9">' + info.qty + ' ' + (info.unit||'') + '</td>' +
         '<td><input type="number" min="0" placeholder="실제수량" style="width:90px;padding:4px;border:1px solid #ddd;border-radius:4px" id="st_' + l.code.replace(/-/g,'_') + '_' + itemName.replace(/\s/g,'_') + '" /></td>' +
@@ -3859,4 +3906,135 @@ function whInEditSelectItem(el) {
   }
   var dropdown = document.getElementById('whInEdit_item_dropdown');
   if (dropdown) dropdown.style.display = 'none';
+}
+
+// ── 출고 위치 선택 시 재고 상세 표시 ──────────────────────────
+function whOutLocationChange() {
+  var locEl = document.getElementById('whout_location');
+  var stockDiv = document.getElementById('whout_location_stock');
+  if (!locEl || !stockDiv) return;
+  var loc = locEl.value;
+  if (!loc) {
+    stockDiv.style.display = 'none';
+    return;
+  }
+  var stockMap = whCalcStock();
+  var items = stockMap[loc] || {};
+  var hasStock = Object.values(items).some(function(v) { return (Number(v.qty) || 0) > 0; });
+  if (!hasStock) {
+    stockDiv.style.display = 'none';
+    return;
+  }
+  var lines = Object.entries(items)
+    .filter(function(e) { return (Number(e[1].qty) || 0) > 0; })
+    .map(function(e) {
+      var itemName = e[0];
+      var info = e[1];
+      var expiryTxt = info.expiry ? ' | 소비기한: ' + info.expiry : '';
+      return '<span style="font-weight:600">' + itemName + '</span> ' + info.qty + ' ' + (info.unit || '') + expiryTxt;
+    });
+  stockDiv.style.display = 'block';
+  stockDiv.innerHTML = '<i class="fas fa-boxes" style="margin-right:4px"></i><b>이 위치 재고:</b> ' + lines.join(' &nbsp;/&nbsp; ');
+}
+
+// ── 재고실사 현황 테이블 인라인 위치이동 ──────────────────────
+// 위치코드 셀 클릭 시 팝오버로 빈 위치 목록 표시 → 선택 즉시 이동
+function whInlineMove(fromLoc, itemName) {
+  // 기존 팝오버 제거
+  var existing = document.getElementById('whInlineMovePopover');
+  if (existing) { existing.remove(); }
+
+  // 빈 위치 목록 계산
+  var stockMap = whCalcStock();
+  var wh = fromLoc.charAt(0); // 'C' or 'W'
+  var allLocs = wh === 'C' ? COLD_LOCATIONS : WARM_LOCATIONS;
+  var emptyLocs = allLocs.filter(function(l) {
+    if (l.code === fromLoc) return false;
+    var items = stockMap[l.code] || {};
+    return !Object.values(items).some(function(v) { return (Number(v.qty) || 0) > 0; });
+  });
+
+  // 팝오버 생성
+  var popover = document.createElement('div');
+  popover.id = 'whInlineMovePopover';
+  popover.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.18);padding:20px;min-width:320px;max-width:420px;max-height:80vh;overflow-y:auto';
+
+  var header = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+    '<div><b style="font-size:15px">위치 이동</b><br>' +
+    '<span style="font-size:12px;color:#888">' + fromLoc + ' → 선택한 위치로 이동</span><br>' +
+    '<span style="font-size:12px;color:#2980b9;font-weight:600">' + itemName + '</span></div>' +
+    '<button onclick="document.getElementById(\'whInlineMovePopover\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;padding:4px">✕</button>' +
+    '</div>';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'whInlineMoveOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:9998';
+  overlay.onclick = function() {
+    var p = document.getElementById('whInlineMovePopover');
+    var o = document.getElementById('whInlineMoveOverlay');
+    if (p) p.remove();
+    if (o) o.remove();
+  };
+
+  if (emptyLocs.length === 0) {
+    popover.innerHTML = header + '<div style="text-align:center;color:#e74c3c;padding:20px">빈 위치가 없습니다.</div>';
+  } else {
+    var listHtml = '<div style="font-size:12px;color:#888;margin-bottom:8px">빈 위치 ' + emptyLocs.length + '개 — 클릭하면 즉시 이동됩니다</div>';
+    listHtml += emptyLocs.map(function(l) {
+      var locAttr = l.code.replace(/'/g, "\\'");
+      var itemAttr = itemName.replace(/'/g, "\\'");
+      return '<div onclick="whDoInlineMove(\'' + locAttr + '\', \'' + locAttr.charAt(0) + '\', \'' + fromLoc.replace(/'/g,"\\'") + '\', \'' + itemAttr + '\')"' +
+        ' style="padding:8px 12px;cursor:pointer;border-radius:6px;border:1px solid #e0e0e0;margin-bottom:6px;font-size:13px;display:flex;align-items:center;gap:8px"' +
+        ' onmouseover="this.style.background=\'#e8f4fd\';this.style.borderColor=\'#2980b9\'"' +
+        ' onmouseout="this.style.background=\'#fff\';this.style.borderColor=\'#e0e0e0\'">' +
+        '<code style="font-size:12px;background:#f5f5f5;padding:2px 6px;border-radius:4px">' + l.code + '</code>' +
+        '<span style="color:#555">' + l.level + '단 ' + l.slot + '번파레트</span>' +
+        '</div>';
+    }).join('');
+    popover.innerHTML = header + listHtml;
+  }
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(popover);
+}
+
+async function whDoInlineMove(toLoc, toWh, fromLoc, itemName) {
+  // 팝오버 닫기
+  var p = document.getElementById('whInlineMovePopover');
+  var o = document.getElementById('whInlineMoveOverlay');
+  if (p) p.remove();
+  if (o) o.remove();
+
+  if (!toLoc || toLoc === fromLoc) { showToast('이동할 위치를 선택해주세요.', 'warning'); return; }
+
+  var targets = whInboundData.filter(function(r) {
+    return r.location === fromLoc && (r.item_name || '미상') === itemName;
+  });
+
+  if (targets.length === 0) {
+    showToast('이동할 입고 기록을 찾을 수 없습니다.', 'error');
+    return;
+  }
+
+  try {
+    for (var i = 0; i < targets.length; i++) {
+      var rec = targets[i];
+      var updated = Object.assign({}, rec, {
+        warehouse: toWh,
+        location: toLoc,
+        memo: (rec.memo ? rec.memo + ' | ' : '') + '위치이동: ' + fromLoc + ' → ' + toLoc
+      });
+      var recId = updated.id;
+      delete updated.id;
+      await apiPut('wh_inbound', recId, updated);
+    }
+    showToast('이동 완료: ' + fromLoc + ' → ' + toLoc + ' (' + targets.length + '건)', 'success');
+    whInvalidateMapCache();
+    whLoadAll._calledByUser = true;
+    await whReloadAll();
+    whLoadAll._calledByUser = false;
+    if (typeof loadLogisticsData === 'function') await loadLogisticsData();
+  } catch(e) {
+    showToast('이동 실패: ' + e.message, 'error');
+  }
 }

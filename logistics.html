@@ -937,10 +937,13 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>출고위치 <span class="required">*</span></label>
-                <select id="whout_location" required>
+                <label>출고위치 <span class="required">*</span>
+                  <span style="font-size:11px;font-weight:400;color:#888;margin-left:6px">재고 있는 위치 우선 표시</span>
+                </label>
+                <select id="whout_location" required onchange="whOutLocationChange()">
                   <option value="">창고 먼저 선택</option>
                 </select>
+                <div id="whout_location_stock" style="display:none;margin-top:5px;padding:6px 10px;background:#fff3cd;border-radius:6px;border:1px solid #ffc107;font-size:12px;color:#856404"></div>
               </div>
               <div class="form-group">
                 <label>출고일자 <span class="required">*</span></label>
