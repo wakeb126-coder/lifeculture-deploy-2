@@ -884,7 +884,10 @@
         <div style="background:linear-gradient(135deg,#fff8e1,#fef3c7);border:1px solid #ffc107;border-radius:12px;padding:16px;margin-bottom:16px">
           <div style="font-weight:700;color:#856404;margin-bottom:10px;font-size:14px"><i class="fas fa-sort-amount-up"></i> FIFO 출고 가이드 — 소비기한 임박 순 추천</div>
           <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-            <input type="text" id="whFifoSearch" placeholder="품목명 입력..." style="padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;flex:1;min-width:180px" oninput="whRenderFifo()" />
+            <div style="position:relative;flex:1;min-width:180px">
+              <input type="text" id="whFifoSearch" placeholder="품목명 입력... (한 글자만 입력해도 자동완성)" style="padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;width:100%;box-sizing:border-box" oninput="whFifoItemFilter(this.value)" autocomplete="off" />
+              <div id="whFifoDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #ffc107;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:1000;max-height:240px;overflow-y:auto"></div>
+            </div>
             <select id="whFifoWarehouse" onchange="whRenderFifo()" style="padding:8px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
               <option value="">전체 창고</option>
               <option value="C">❄️ 저온창고</option>

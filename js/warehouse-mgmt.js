@@ -4038,3 +4038,54 @@ async function whDoInlineMove(toLoc, toWh, fromLoc, itemName) {
     showToast('이동 실패: ' + e.message, 'error');
   }
 }
+
+// ── FIFO 검색 품목명 자동완성 ──────────────────────────────────
+async function whFifoItemFilter(query) {
+  var dropdown = document.getElementById('whFifoDropdown');
+  if (!dropdown) { whRenderFifo(); return; }
+  var q = (query || '').trim();
+  // 드롭다운 닫기 (빈 입력)
+  if (!q) {
+    dropdown.style.display = 'none';
+    whRenderFifo();
+    return;
+  }
+  var products = await whLoadProductMaster();
+  var qLow = q.toLowerCase();
+  var filtered = products.filter(function(p) {
+    return (p.product_name || '').toLowerCase().indexOf(qLow) !== -1;
+  });
+  if (filtered.length === 0) {
+    dropdown.style.display = 'none';
+    whRenderFifo();
+    return;
+  }
+  dropdown.innerHTML = filtered.slice(0, 30).map(function(p) {
+    var nameAttr = (p.product_name || '').replace(/"/g, '&quot;');
+    var nameDisplay = (p.product_name || '').replace(
+      new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+      function(m) { return '<b style="color:#856404">' + m + '</b>'; }
+    );
+    return '<div onclick="whFifoSelectItem(this)" data-name="' + nameAttr + '"' +
+      ' style="padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #fff3cd"' +
+      ' onmouseover="this.style.background=\'#fff8e1\'" onmouseout="this.style.background=\'#fff\'">' +
+      nameDisplay + '</div>';
+  }).join('');
+  dropdown.style.display = 'block';
+  // 외부 클릭 시 닫기
+  document.addEventListener('click', function closeFifoDropdown(e) {
+    if (!dropdown.contains(e.target) && e.target.id !== 'whFifoSearch') {
+      dropdown.style.display = 'none';
+      document.removeEventListener('click', closeFifoDropdown);
+    }
+  });
+}
+
+function whFifoSelectItem(el) {
+  var name = el ? el.getAttribute('data-name') : '';
+  var searchEl = document.getElementById('whFifoSearch');
+  if (searchEl) searchEl.value = name;
+  var dropdown = document.getElementById('whFifoDropdown');
+  if (dropdown) dropdown.style.display = 'none';
+  whRenderFifo();
+}
