@@ -19,39 +19,106 @@ async function loadDashboard() {
   }
 }
 
+// ─────────────────────────────────────────────
+// KPI — kpi_summary 집계 캐시 기반 (장기 최적화)
+// 캐시 미스 시 전체 데이터 재집계 후 캐시 재구축
+// ─────────────────────────────────────────────
 async function loadKPI() {
   try {
     const thisMonth = today().substring(0, 7); // YYYY-MM
 
-    // 원자재 품목 수
-    const rawRes = await apiGet('raw_materials', { limit: 100 });
-    const rawData = rawRes.data || [];
-    // 입고 거래만 필터
-    const rawItems = rawData.filter(r => r.transaction_type === '입고');
-    document.getElementById('kpiRaw').textContent = rawItems.length + '건';
+    // 4개 컬렉션 캐시를 병렬 조회
+    const [roastCache, extCache, boxCache, rawCache] = await Promise.all([
+      getKpiCache('roasting_log', thisMonth),
+      getKpiCache('extraction_log', thisMonth),
+      getKpiCache('box_packing_log', thisMonth),
+      getKpiCache('raw_materials', thisMonth),
+    ]);
 
-    // 로스팅 이번 달
-    const roastRes = await apiGet('roasting_log', { limit: 100 });
-    const roastData = roastRes.data || [];
-    const roastMonth = roastData.filter(r => r.work_date && r.work_date.startsWith(thisMonth));
-    const roastTotal = roastMonth.reduce((s, r) => s + (parseFloat(r.roasted_qty) || 0), 0);
-    document.getElementById('kpiRoasting').textContent = numFormat(roastTotal, 1) + 'kg';
+    // ── 원자재 입고 건수 ──
+    if (rawCache && rawCache.in_count != null) {
+      document.getElementById('kpiRaw').textContent = (rawCache.in_count || 0) + '건';
+    } else {
+      // 캐시 미스 → 전체 조회 후 캐시 재구축
+      const rawRes = await apiGetAll('raw_materials');
+      const inCount = rawRes.filter(r =>
+        r.transaction_type === '입고' &&
+        (r.receive_date || '').startsWith(thisMonth)
+      ).length;
+      document.getElementById('kpiRaw').textContent = inCount + '건';
+      // 백그라운드 캐시 재구축
+      _rebuildMonthCache('raw_materials', thisMonth, rawRes);
+    }
 
-    // 추출 이번 달
-    const extRes = await apiGet('extraction_log', { limit: 100 });
-    const extData = extRes.data || [];
-    const extMonth = extData.filter(r => r.work_date && r.work_date.startsWith(thisMonth));
-    const extTotal = extMonth.reduce((s, r) => s + (parseFloat(r.extract_qty) || 0), 0);
-    document.getElementById('kpiExtraction').textContent = numFormat(extTotal, 1) + 'L';
+    // ── 로스팅 이번 달 합계 ──
+    if (roastCache && roastCache.roasted_qty_total != null) {
+      document.getElementById('kpiRoasting').textContent = numFormat(roastCache.roasted_qty_total, 1) + 'kg';
+    } else {
+      const roastRes = await apiGetAll('roasting_log');
+      const roastTotal = roastRes
+        .filter(r => (r.work_date || '').startsWith(thisMonth))
+        .reduce((s, r) => s + (parseFloat(r.roasted_qty) || 0), 0);
+      document.getElementById('kpiRoasting').textContent = numFormat(roastTotal, 1) + 'kg';
+      _rebuildMonthCache('roasting_log', thisMonth, roastRes);
+    }
 
-    // 완제품 박스 이번 달
-    const boxRes = await apiGet('box_packing_log', { limit: 100 });
-    const boxData = boxRes.data || [];
-    const boxMonth = boxData.filter(r => r.work_date && r.work_date.startsWith(thisMonth));
-    const boxTotal = boxMonth.reduce((s, r) => s + (parseInt(r.box_count) || 0), 0);
-    document.getElementById('kpiBox').textContent = numFormat(boxTotal, 0) + 'box';
+    // ── 추출 이번 달 합계 ──
+    if (extCache && extCache.extract_qty_total != null) {
+      document.getElementById('kpiExtraction').textContent = numFormat(extCache.extract_qty_total, 1) + 'L';
+    } else {
+      const extRes = await apiGetAll('extraction_log');
+      const extTotal = extRes
+        .filter(r => (r.work_date || '').startsWith(thisMonth))
+        .reduce((s, r) => s + (parseFloat(r.extract_qty) || 0), 0);
+      document.getElementById('kpiExtraction').textContent = numFormat(extTotal, 1) + 'L';
+      _rebuildMonthCache('extraction_log', thisMonth, extRes);
+    }
+
+    // ── 완제품 박스 이번 달 합계 ──
+    if (boxCache && boxCache.box_count_total != null) {
+      document.getElementById('kpiBox').textContent = numFormat(boxCache.box_count_total, 0) + 'box';
+    } else {
+      const boxRes = await apiGetAll('box_packing_log');
+      const boxTotal = boxRes
+        .filter(r => (r.work_date || '').startsWith(thisMonth))
+        .reduce((s, r) => s + (parseInt(r.box_count) || 0), 0);
+      document.getElementById('kpiBox').textContent = numFormat(boxTotal, 0) + 'box';
+      _rebuildMonthCache('box_packing_log', thisMonth, boxRes);
+    }
   } catch (e) {
     console.error('KPI load error:', e);
+  }
+}
+
+/**
+ * 특정 월의 캐시를 백그라운드에서 재구축 (캐시 미스 복구용)
+ */
+async function _rebuildMonthCache(type, month, allRows) {
+  try {
+    const db = getFirestore();
+    const monthRows = allRows.filter(r => {
+      const d = r.work_date || r.receive_date || '';
+      return d.startsWith(month);
+    });
+    const docId = type + '_' + month;
+    const data = { type, month, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+
+    if (type === 'roasting_log') {
+      data.roasted_qty_total = monthRows.reduce((s, r) => s + (parseFloat(r.roasted_qty) || 0), 0);
+      data.count = monthRows.length;
+    } else if (type === 'extraction_log') {
+      data.extract_qty_total = monthRows.reduce((s, r) => s + (parseFloat(r.extract_qty) || 0), 0);
+      data.count = monthRows.length;
+    } else if (type === 'box_packing_log') {
+      data.box_count_total = monthRows.reduce((s, r) => s + (parseInt(r.box_count) || 0), 0);
+      data.count = monthRows.length;
+    } else if (type === 'raw_materials') {
+      data.in_count = monthRows.filter(r => r.transaction_type === '입고').length;
+    }
+
+    await db.collection('kpi_summary').doc(docId).set(data, { merge: true });
+  } catch (e) {
+    console.warn('[KPI Cache] 월별 재구축 실패 (무시됨):', e.message);
   }
 }
 

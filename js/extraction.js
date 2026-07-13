@@ -111,6 +111,8 @@ async function handleSubmit(e) {
   try {
     await apiPost('extraction_log', record);
     showToast(`✅ 추출 등록 완료! Lot: ${lot}`, 'success');
+    // KPI 집계 캐시 업데이트 (백그라운드)
+    if (typeof updateKpiCache === 'function') updateKpiCache('extraction_log', record, +1);
     resetForm();
     await loadData();
     await initLotNo();
@@ -193,7 +195,11 @@ function changePage(p){currentPage=p;renderTable();}
 
 async function deleteRow(id) {
   showConfirm('이 추출 생산 기록을 삭제하시겠습니까?', async () => {
-    try { await apiDelete('extraction_log', id); showToast('삭제 완료!','success'); await loadData(); }
+    try {
+      const delRec = allData.find(r => r.id === id);
+      await apiDelete('extraction_log', id);
+      if (delRec && typeof updateKpiCache === 'function') updateKpiCache('extraction_log', delRec, -1);
+      showToast('삭제 완료!','success'); await loadData(); }
     catch(e){ showToast('삭제 실패: '+e.message,'error'); }
   });
 }

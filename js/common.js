@@ -412,3 +412,153 @@ window.InventoryStore = (function() {
 
   return { on: on, off: off, emit: emit, set: set, get: get, setAll: setAll };
 })();
+
+
+// ===========================
+// KPI 집계 캐시 (kpi_summary 컬렉션)
+// 데이터 등록/삭제 시 호출하여 월별 집계를 누적 업데이트
+// 문서 ID 형식: {type}_{YYYY-MM}  예) roasting_2025-07
+// 필드 구조:
+//   roasting_log  → { roasted_qty_total, count }
+//   extraction_log → { extract_qty_total, count }
+//   box_packing_log → { box_count_total, count }
+//   raw_materials  → { in_count }  (입고 건수)
+// ===========================
+
+/**
+ * KPI 집계 캐시 증분 업데이트
+ * @param {string} type  - 'roasting_log' | 'extraction_log' | 'box_packing_log' | 'raw_materials'
+ * @param {object} record - 저장된 레코드 원본
+ * @param {number} sign  - +1 (등록) 또는 -1 (삭제)
+ */
+async function updateKpiCache(type, record, sign) {
+  try {
+    const db = getFirestore();
+    // 날짜 필드 추출 (컬렉션마다 다름)
+    const dateStr = record.work_date || record.receive_date || record.sale_date || '';
+    if (!dateStr || dateStr.length < 7) return; // 날짜 없으면 스킵
+    const month = dateStr.substring(0, 7); // YYYY-MM
+    const docId = type + '_' + month;
+    const ref = db.collection('kpi_summary').doc(docId);
+
+    // 증분값 계산
+    const increment = firebase.firestore.FieldValue.increment;
+    const delta = {};
+
+    if (type === 'roasting_log') {
+      delta.roasted_qty_total = increment((parseFloat(record.roasted_qty) || 0) * sign);
+      delta.count = increment(1 * sign);
+    } else if (type === 'extraction_log') {
+      delta.extract_qty_total = increment((parseFloat(record.extract_qty) || 0) * sign);
+      delta.count = increment(1 * sign);
+    } else if (type === 'box_packing_log') {
+      delta.box_count_total = increment((parseInt(record.box_count) || 0) * sign);
+      delta.count = increment(1 * sign);
+    } else if (type === 'raw_materials' && record.transaction_type === '입고') {
+      delta.in_count = increment(1 * sign);
+    } else {
+      return; // 해당 없는 타입은 스킵
+    }
+
+    // 문서가 없으면 자동 생성(set with merge), 있으면 증분 업데이트
+    delta.type = type;
+    delta.month = month;
+    delta.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    await ref.set(delta, { merge: true });
+  } catch (e) {
+    // 캐시 업데이트 실패는 조용히 처리 (원본 저장은 이미 완료됨)
+    console.warn('[KPI Cache] 집계 업데이트 실패 (무시됨):', e.message);
+  }
+}
+
+/**
+ * 특정 월의 KPI 집계 캐시 조회
+ * @param {string} type  - 컬렉션명
+ * @param {string} month - 'YYYY-MM'
+ * @returns {object|null}
+ */
+async function getKpiCache(type, month) {
+  try {
+    const db = getFirestore();
+    const docId = type + '_' + month;
+    const doc = await db.collection('kpi_summary').doc(docId).get();
+    return doc.exists ? doc.data() : null;
+  } catch (e) {
+    console.warn('[KPI Cache] 조회 실패:', e.message);
+    return null;
+  }
+}
+
+/**
+ * 전체 데이터를 재집계하여 kpi_summary를 재구축 (관리자 전용 복구 함수)
+ * 대시보드에서 직접 호출하지 않으며, 데이터 불일치 발생 시 수동 실행
+ */
+async function rebuildKpiCache() {
+  try {
+    showToast('KPI 캐시 재구축 중... 잠시 기다려 주세요.', 'info');
+    const [roastAll, extAll, boxAll, rawAll] = await Promise.all([
+      apiGetAll('roasting_log'),
+      apiGetAll('extraction_log'),
+      apiGetAll('box_packing_log'),
+      apiGetAll('raw_materials'),
+    ]);
+
+    const summary = {}; // { docId: { ...fields } }
+
+    const ensure = (docId, type, month) => {
+      if (!summary[docId]) summary[docId] = { type, month };
+    };
+
+    roastAll.forEach(r => {
+      const month = (r.work_date || '').substring(0, 7);
+      if (!month) return;
+      const id = 'roasting_log_' + month;
+      ensure(id, 'roasting_log', month);
+      summary[id].roasted_qty_total = (summary[id].roasted_qty_total || 0) + (parseFloat(r.roasted_qty) || 0);
+      summary[id].count = (summary[id].count || 0) + 1;
+    });
+
+    extAll.forEach(r => {
+      const month = (r.work_date || '').substring(0, 7);
+      if (!month) return;
+      const id = 'extraction_log_' + month;
+      ensure(id, 'extraction_log', month);
+      summary[id].extract_qty_total = (summary[id].extract_qty_total || 0) + (parseFloat(r.extract_qty) || 0);
+      summary[id].count = (summary[id].count || 0) + 1;
+    });
+
+    boxAll.forEach(r => {
+      const month = (r.work_date || '').substring(0, 7);
+      if (!month) return;
+      const id = 'box_packing_log_' + month;
+      ensure(id, 'box_packing_log', month);
+      summary[id].box_count_total = (summary[id].box_count_total || 0) + (parseInt(r.box_count) || 0);
+      summary[id].count = (summary[id].count || 0) + 1;
+    });
+
+    rawAll.forEach(r => {
+      if (r.transaction_type !== '입고') return;
+      const month = (r.receive_date || '').substring(0, 7);
+      if (!month) return;
+      const id = 'raw_materials_' + month;
+      ensure(id, 'raw_materials', month);
+      summary[id].in_count = (summary[id].in_count || 0) + 1;
+    });
+
+    // Firestore에 일괄 저장
+    const db = getFirestore();
+    const entries = Object.entries(summary);
+    const CHUNK = 400;
+    for (let i = 0; i < entries.length; i += CHUNK) {
+      const batch = db.batch();
+      entries.slice(i, i + CHUNK).forEach(([docId, data]) => {
+        data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        batch.set(db.collection('kpi_summary').doc(docId), data);
+      });
+      await batch.commit();
+    }
+    showToast('KPI 캐시 재구축 완료! (' + entries.length + '개 월별 집계)', 'success');
+  } catch (e) {
+    showToast('KPI 캐시 재구축 실패: ' + e.message, 'error');
+  }
+}

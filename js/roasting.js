@@ -358,6 +358,8 @@ async function handleSubmit(e) {
     }
 
     showToast(`✅ 로스팅 등록 완료! Lot: ${lot}`, 'success');
+    // KPI 집계 캐시 업데이트 (백그라운드)
+    if (typeof updateKpiCache === 'function') updateKpiCache('roasting_log', record, +1);
     resetForm();
     await loadData();
     await initLotNo();
@@ -717,6 +719,8 @@ async function deleteRow(id) {
           console.warn('원료수불부 연동 삭제 실패:', re);
         }
       }
+      // KPI 집계 캐시 업데이트 (삭제 시 차감)
+      if (record && typeof updateKpiCache === 'function') updateKpiCache('roasting_log', record, -1);
       showToast('삭제 완료!', 'success');
       closeEditModal();
       await loadData();

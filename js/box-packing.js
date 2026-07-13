@@ -102,6 +102,8 @@ async function handleSubmit(e) {
   try {
     await apiPost('box_packing_log', record);
     showToast(`✅ 박스 포장 등록 완료! Lot: ${lot}`, 'success');
+    // KPI 집계 캐시 업데이트 (백그라운드)
+    if (typeof updateKpiCache === 'function') updateKpiCache('box_packing_log', record, +1);
     resetForm();
     await loadData();
     await initLotNo();
@@ -185,7 +187,11 @@ function changePage(p){currentPage=p;renderTable();}
 
 async function deleteRow(id) {
   showConfirm('이 박스 포장 기록을 삭제하시겠습니까?', async () => {
-    try { await apiDelete('box_packing_log', id); showToast('삭제 완료!','success'); await loadData(); }
+    try {
+      const delRec = allData.find(r => r.id === id);
+      await apiDelete('box_packing_log', id);
+      if (delRec && typeof updateKpiCache === 'function') updateKpiCache('box_packing_log', delRec, -1);
+      showToast('삭제 완료!','success'); await loadData(); }
     catch(e){ showToast('삭제 실패: '+e.message,'error'); }
   });
 }

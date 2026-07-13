@@ -416,6 +416,8 @@ async function handleSubmit(e) {
   try {
     await apiPost('raw_materials', record);
     showToast(`✅ ${type} 등록 완료! Lot: ${lot}`, 'success');
+    // KPI 집계 캐시 업데이트 (입고 건수 집계)
+    if (typeof updateKpiCache === 'function') updateKpiCache('raw_materials', record, +1);
     resetForm();
     await loadRawMaterials();
     renderStockSummaryCards();
@@ -837,7 +839,9 @@ async function saveEdit() {
 async function deleteRecord(id) {
   showConfirm('이 수불 내역을 삭제하시겠습니까?', async () => {
     try {
+      const delRec = allData ? allData.find(r => r.id === (id || editingId)) : null;
       await apiDelete('raw_materials', id || editingId);
+      if (delRec && typeof updateKpiCache === 'function') updateKpiCache('raw_materials', delRec, -1);
       showToast('삭제되었습니다.', 'success');
       closeEditModal();
       await loadRawMaterials();
