@@ -1209,7 +1209,10 @@ function whRenderOutTable() {
       '<td>' + (r.unit||'') + '</td>' +
       '<td>' + (r.ref_lot||'-') + '</td>' +
       '<td>' + (r.destination||'-') + '</td>' +
-      '<td><button class="btn btn-sm" onclick="whDeleteOutbound(\'' + (r.id||'') + '\',\'' + (r.lot_no||'') + '\')" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;padding:3px 8px;font-size:11px"><i class="fas fa-trash"></i></button></td>' +
+      '<td style="white-space:nowrap">' +
+        '<button class="btn btn-sm" onclick="whOpenEditOutModal(\'' + (r.id||'') + '\')" style="background:#e8f4fd;color:#2980b9;border:1px solid #2980b9;padding:3px 8px;font-size:11px;margin-right:4px"><i class="fas fa-edit"></i></button>' +
+        '<button class="btn btn-sm" onclick="whDeleteOutbound(\'' + (r.id||'') + '\',\'' + (r.lot_no||'') + '\')" style="background:#fdedec;color:#e74c3c;border:1px solid #e74c3c;padding:3px 8px;font-size:11px"><i class="fas fa-trash"></i></button>' +
+      '</td>' +
       '</tr>';
   }).join('');
 }
@@ -4196,5 +4199,85 @@ function whInLocationChange() {
     infoEl.style.color = '#856404';
     var summary = entries.map(function(e) { return e[0] + ' ' + e[1].qty + (e[1].unit ? ' ' + e[1].unit : ''); }).join(' / ');
     infoEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 이 위치에 다른 제품이 있습니다: ' + summary;
+  }
+}
+
+// ── 출고 수정 모달 ──────────────────────────────────────────────
+function whOpenEditOutModal(id) {
+  var r = whOutboundData.find(function(d) { return d.id === id; });
+  if (!r) { showToast('출고 데이터를 찾을 수 없습니다.', 'error'); return; }
+
+  document.getElementById('whOutEditId').value = id;
+  document.getElementById('whOutEdit_date').value = r.outbound_date || '';
+  document.getElementById('whOutEdit_item_name').value = r.item_name || '';
+  document.getElementById('whOutEdit_qty').value = r.qty || '';
+  document.getElementById('whOutEdit_manager').value = r.manager || '';
+  document.getElementById('whOutEdit_destination').value = r.destination || '';
+  document.getElementById('whOutEdit_notes').value = r.notes || '';
+
+  // 창고/위치 설정
+  var whEl = document.getElementById('whOutEdit_warehouse');
+  if (whEl) {
+    whEl.value = r.warehouse || (r.location && r.location.startsWith('C') ? 'C' : 'W');
+    whBuildLocationSelect('whOutEdit');
+  }
+  setTimeout(function() {
+    var locEl = document.getElementById('whOutEdit_location');
+    if (locEl) locEl.value = r.location || '';
+  }, 50);
+
+  // 단위 설정
+  var unitEl = document.getElementById('whOutEdit_unit');
+  if (unitEl) unitEl.value = r.unit || 'ea';
+
+  var modal = document.getElementById('whOutEditModal');
+  if (modal) { modal.style.display = 'flex'; }
+}
+
+function whCloseEditOutModal() {
+  var modal = document.getElementById('whOutEditModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function whSaveOutEdit() {
+  var id = document.getElementById('whOutEditId').value;
+  if (!id) return;
+
+  var qty = parseInt(document.getElementById('whOutEdit_qty').value) || 0;
+  if (qty <= 0) { showToast('수량을 올바르게 입력해 주세요.', 'error'); return; }
+
+  var unit = document.getElementById('whOutEdit_unit').value || 'ea';
+  var itemName = document.getElementById('whOutEdit_item_name').value.trim();
+
+  // ea 환산
+  var products = _whProductMasterCache || [];
+  var matchProduct = products.find(function(p) { return (p.product_name||'').trim() === itemName; });
+  var qpb = matchProduct ? (parseInt(matchProduct.qty_per_box) || 0) : 0;
+  var bpp = matchProduct ? (parseInt(matchProduct.boxes_per_pallet) || 0) : 0;
+  var breakdown = _whCalcBreakdown(qty, unit, qpb, bpp);
+
+  var updateData = {
+    outbound_date: document.getElementById('whOutEdit_date').value,
+    warehouse: document.getElementById('whOutEdit_warehouse').value,
+    location: document.getElementById('whOutEdit_location').value,
+    item_name: itemName,
+    qty: qty,
+    unit: unit,
+    qty_ea: breakdown.qty_ea,
+    qty_box: breakdown.qty_box,
+    qty_pt: breakdown.qty_pt,
+    manager: document.getElementById('whOutEdit_manager').value.trim(),
+    destination: document.getElementById('whOutEdit_destination').value.trim(),
+    notes: document.getElementById('whOutEdit_notes').value.trim()
+  };
+
+  try {
+    await apiPatch('wh_outbound', id, updateData);
+    showToast('출고 수정 완료', 'success');
+    whCloseEditOutModal();
+    whInvalidateMapCache();
+    await whReloadAll();
+  } catch(e) {
+    showToast('수정 실패: ' + e.message, 'error');
   }
 }
