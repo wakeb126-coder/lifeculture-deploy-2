@@ -1207,6 +1207,11 @@ function whRenderLedger(stockMap) {
     });
   });
 
+  // 재고없음/마이너스 보이기 체크박스 (기본값: 미체크 = 숨김)
+  var showZeroEl = document.getElementById('ledgerShowZero');
+  var showZero = showZeroEl ? showZeroEl.checked : false;
+  if (!showZero) rows = rows.filter(function(r) { return r.currentQty > 0; });
+
   if (rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#aaa;padding:30px">등록된 재고가 없습니다.</td></tr>';
     return;
