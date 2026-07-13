@@ -222,6 +222,70 @@ function whBuildLocationSelect(prefix) {
   var zoneKeys = [];
   locs.forEach(function(l) { if (zoneKeys.indexOf(l.zoneKey) < 0) zoneKeys.push(l.zoneKey); });
 
+  // 입고 위치 선택: 같은 제품이 있는 위치 우선 표시
+  if (prefix === 'whin') {
+    var stockMapIn = whCalcStock();
+    var itemNameIn = (document.getElementById('whin_item_name') || {}).value || '';
+    itemNameIn = itemNameIn.trim();
+    var sameItemLocs = [];
+    var otherStockedLocs = [];
+    var emptyInLocs = [];
+    locs.forEach(function(l) {
+      var items = stockMapIn[l.code] || {};
+      var hasSameItem = itemNameIn && items[itemNameIn] && (Number(items[itemNameIn].qty) || 0) > 0;
+      var totalQty = Object.values(items).reduce(function(s, v) { return s + (Number(v.qty) || 0); }, 0);
+      if (hasSameItem) {
+        sameItemLocs.push({ loc: l, qty: items[itemNameIn].qty, unit: items[itemNameIn].unit || '' });
+      } else if (totalQty > 0) {
+        var itemSummary = Object.entries(items)
+          .filter(function(e2) { return (Number(e2[1].qty) || 0) > 0; })
+          .map(function(e2) { return e2[0] + ' ' + e2[1].qty; })
+          .join(', ');
+        otherStockedLocs.push({ loc: l, summary: itemSummary });
+      } else {
+        emptyInLocs.push(l);
+      }
+    });
+    // 같은 제품 있는 위치 그룹
+    if (sameItemLocs.length > 0) {
+      var grpSame = document.createElement('optgroup');
+      grpSame.label = '⭐ 같은 제품 있는 위치 (' + sameItemLocs.length + '개) — 합산 추천';
+      sameItemLocs.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.loc.code;
+        opt.textContent = s.loc.code + '  ▶ 현재고 ' + s.qty + ' ' + s.unit + ' (합산 가능)';
+        opt.dataset.hasSameItem = '1';
+        grpSame.appendChild(opt);
+      });
+      locEl.appendChild(grpSame);
+    }
+    // 다른 제품 있는 위치 그룹
+    if (otherStockedLocs.length > 0) {
+      var grpOther = document.createElement('optgroup');
+      grpOther.label = '📦 다른 제품 있는 위치 (' + otherStockedLocs.length + '개)';
+      otherStockedLocs.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.loc.code;
+        opt.textContent = s.loc.code + '  ▶ ' + (s.summary.length > 35 ? s.summary.substring(0, 35) + '...' : s.summary);
+        grpOther.appendChild(opt);
+      });
+      locEl.appendChild(grpOther);
+    }
+    // 빈 위치 그룹
+    if (emptyInLocs.length > 0) {
+      var grpEmptyIn = document.createElement('optgroup');
+      grpEmptyIn.label = '□ 빈 위치 (' + emptyInLocs.length + '개)';
+      emptyInLocs.forEach(function(l) {
+        var opt = document.createElement('option');
+        opt.value = l.code;
+        opt.textContent = l.code + '  (' + l.level + '단 ' + l.slot + '번파레트)';
+        grpEmptyIn.appendChild(opt);
+      });
+      locEl.appendChild(grpEmptyIn);
+    }
+    return;
+  }
+
   // 출고 위치 선택: 재고 있는 위치 우선 표시
   if (prefix === 'whout') {
     var stockMapOut = whCalcStock();
@@ -2121,6 +2185,9 @@ function whSelectItemName(el) {
 
   // 환산 수량 표시 업데이트
   whInCalcQty();
+  // 위치 드롭다운 재빌드: 같은 제품 있는 위치 우선 표시
+  var whInEl = document.getElementById('whin_warehouse');
+  if (whInEl && whInEl.value) whBuildLocationSelect('whin');
 }
 
 // ── 입고 환산 수량 계산 및 표시 ──────────────────────────
@@ -4093,4 +4160,41 @@ function whFifoSelectItem(el) {
   var dropdown = document.getElementById('whFifoDropdown');
   if (dropdown) dropdown.style.display = 'none';
   whRenderFifo();
+}
+
+// ── 입고 위치 선택 시 현재고 정보 표시 ──────────────────────────
+function whInLocationChange() {
+  var locEl = document.getElementById('whin_location');
+  var infoEl = document.getElementById('whin_location_stock');
+  if (!locEl || !infoEl) return;
+  var locCode = locEl.value;
+  var itemName = (document.getElementById('whin_item_name') || {}).value || '';
+  itemName = itemName.trim();
+  if (!locCode) { infoEl.style.display = 'none'; return; }
+  var stockMap = whCalcStock();
+  var items = stockMap[locCode] || {};
+  var entries = Object.entries(items).filter(function(e) { return (Number(e[1].qty) || 0) > 0; });
+  if (entries.length === 0) {
+    infoEl.style.display = 'block';
+    infoEl.style.background = '#f0f8ff';
+    infoEl.style.borderColor = '#90caf9';
+    infoEl.style.color = '#1565c0';
+    infoEl.innerHTML = '<i class="fas fa-info-circle"></i> 빈 위치입니다. 새 재고가 등록됩니다.';
+    return;
+  }
+  var hasSame = itemName && items[itemName] && (Number(items[itemName].qty) || 0) > 0;
+  if (hasSame) {
+    infoEl.style.display = 'block';
+    infoEl.style.background = '#e8f5e9';
+    infoEl.style.borderColor = '#a5d6a7';
+    infoEl.style.color = '#2e7d32';
+    infoEl.innerHTML = '<i class="fas fa-check-circle"></i> <b>' + itemName + '</b> 현재고 <b>' + items[itemName].qty + ' ' + (items[itemName].unit || '') + '</b> — 이 위치에 합산 입고됩니다.';
+  } else {
+    infoEl.style.display = 'block';
+    infoEl.style.background = '#fff8e1';
+    infoEl.style.borderColor = '#ffe082';
+    infoEl.style.color = '#856404';
+    var summary = entries.map(function(e) { return e[0] + ' ' + e[1].qty + (e[1].unit ? ' ' + e[1].unit : ''); }).join(' / ');
+    infoEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 이 위치에 다른 제품이 있습니다: ' + summary;
+  }
 }
