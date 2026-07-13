@@ -1243,8 +1243,9 @@ async function lgRenderStockTable() {
   var rows = Object.values(stockMap);
   if (q) rows = rows.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; });
   if (typeF) rows = rows.filter(function(r) { return r.ptype === typeF; });
-  // 재고없음 숨기기 체크박스
-  var hideZero = document.getElementById('stockHideZero') ? document.getElementById('stockHideZero').checked : false;
+  // 재고없음/마이너스 숨기기 체크박스 (기본값: 체크)
+  var hideZeroEl = document.getElementById('stockHideZero');
+  var hideZero = hideZeroEl ? hideZeroEl.checked : true;
   if (hideZero) rows = rows.filter(function(r) { return (r.inQty - r.outQty) > 0; });
   rows.sort(function(a, b) {
     if (a.name !== b.name) return a.name.localeCompare(b.name);
