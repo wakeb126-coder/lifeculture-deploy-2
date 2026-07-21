@@ -1176,6 +1176,10 @@ function whFifoGuide() {
 }
 
 // ── 출고 테이블 렌더 ──────────────────────────────
+// 출고 이력 페이지네이션 상태
+var _whOutPage = 1;
+var _whOutPageSize = 20;
+
 function whRenderOutTable() {
   var tbody = document.getElementById('whOutTableBody');
   if (!tbody) return;
@@ -1185,6 +1189,8 @@ function whRenderOutTable() {
     return;
   }
   var _outSearchQ = (document.getElementById('whOutSearch') ? document.getElementById('whOutSearch').value.trim().toLowerCase() : '');
+  // 검색어 변경 시 첫 페이지로 이동
+  if (_outSearchQ) _whOutPage = 1;
   var data = whOutboundData.slice().sort(function(a,b){ return (b.outbound_date||'').localeCompare(a.outbound_date||''); });
   if (_outSearchQ) {
     data = data.filter(function(r) {
@@ -1195,10 +1201,17 @@ function whRenderOutTable() {
     });
   }
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>' + (_outSearchQ ? '검색 결과가 없습니다.' : '등록된 출고 내역이 없습니다.') + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>' + (_outSearchQ ? '검색 결과가 없습니다.' : '등록된 출고 내역이 없습니다.') + '</td></tr>';
+    document.getElementById('whOutPagination') && (document.getElementById('whOutPagination').innerHTML = '');
     return;
   }
-  tbody.innerHTML = data.map(function(r) {
+  // 페이지네이션 계산
+  var totalPages = Math.ceil(data.length / _whOutPageSize);
+  if (_whOutPage > totalPages) _whOutPage = totalPages;
+  var start = (_whOutPage - 1) * _whOutPageSize;
+  var pageData = data.slice(start, start + _whOutPageSize);
+
+  tbody.innerHTML = pageData.map(function(r) {
     return '<tr>' +
       '<td>' + (r.lot_no||'-') + '</td>' +
       '<td><span style="background:#fef9e7;color:#f39c12;padding:2px 8px;border-radius:12px;font-size:11px">' + (r.warehouse==='C'?'저온':'일반') + '</span></td>' +
@@ -1215,6 +1228,38 @@ function whRenderOutTable() {
       '</td>' +
       '</tr>';
   }).join('');
+
+  // 페이지네이션 렌더링
+  var pg = document.getElementById('whOutPagination');
+  if (!pg) return;
+  if (totalPages <= 1) { pg.innerHTML = ''; return; }
+  var btns = '';
+  // 이전 버튼
+  btns += '<button onclick="whOutGoPage(' + (_whOutPage-1) + ')" ' + (_whOutPage===1?'disabled':'') + ' style="padding:5px 10px;border:1px solid #ddd;border-radius:6px;background:' + (_whOutPage===1?'#f5f5f5':'#fff') + ';cursor:pointer;font-size:12px">&laquo;</button>';
+  // 페이지 번호 (5개씩 표시)
+  var startPg = Math.max(1, _whOutPage - 2);
+  var endPg = Math.min(totalPages, startPg + 4);
+  if (startPg > 1) btns += '<span style="padding:5px 4px;font-size:12px;color:#aaa">...</span>';
+  for (var p = startPg; p <= endPg; p++) {
+    var active = (p === _whOutPage);
+    btns += '<button onclick="whOutGoPage(' + p + ')" style="padding:5px 10px;border:1px solid ' + (active?'#e74c3c':'#ddd') + ';border-radius:6px;background:' + (active?'#e74c3c':'#fff') + ';color:' + (active?'#fff':'#333') + ';cursor:pointer;font-size:12px;font-weight:' + (active?'bold':'normal') + '">' + p + '</button>';
+  }
+  if (endPg < totalPages) btns += '<span style="padding:5px 4px;font-size:12px;color:#aaa">...</span>';
+  // 다음 버튼
+  btns += '<button onclick="whOutGoPage(' + (_whOutPage+1) + ')" ' + (_whOutPage===totalPages?'disabled':'') + ' style="padding:5px 10px;border:1px solid #ddd;border-radius:6px;background:' + (_whOutPage===totalPages?'#f5f5f5':'#fff') + ';cursor:pointer;font-size:12px">&raquo;</button>';
+  // 건수 정보
+  btns += '<span style="font-size:11px;color:#888;margin-left:8px">' + data.length + '건 / ' + totalPages + '페이지</span>';
+  pg.innerHTML = btns;
+}
+
+function whOutGoPage(p) {
+  var totalPages = Math.ceil(whOutboundData.length / _whOutPageSize);
+  if (p < 1 || p > totalPages) return;
+  _whOutPage = p;
+  whRenderOutTable();
+  // 테이블 상단으로 스크롤
+  var el = document.getElementById('whOutTableBody');
+  if (el) el.closest('.table-section') && el.closest('.table-section').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 async function whDeleteOutbound(id, lotNo) {
