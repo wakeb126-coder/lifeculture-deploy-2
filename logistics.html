@@ -1047,9 +1047,22 @@
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" onclick="whOutDownloadTemplate()" style="background:#e8f4fd;color:#2980b9;border:1px solid #2980b9;font-size:12px"><i class="fas fa-file-excel"></i> 양식 다운로드</button>
               <button class="btn" onclick="whBulkOutPreview()" style="background:#fff3cd;color:#856404;border:1px solid #ffc107;font-size:12px"><i class="fas fa-eye"></i> 미리보기 / 위치 자동배정</button>
               <button class="btn" onclick="whBulkOutClearAll()" style="background:#fff5f5;color:#e74c3c;border:1px solid #e74c3c;font-size:12px"><i class="fas fa-trash"></i> 전체 초기화</button>
             </div>
+          </div>
+          <!-- 엑셀 업로드 드롭존 -->
+          <div id="whOutDropZone"
+            ondragover="event.preventDefault();this.classList.add('dragover')"
+            ondragleave="this.classList.remove('dragover')"
+            ondrop="whOutHandleDrop(event)"
+            style="border:2px dashed #e74c3c;border-radius:10px;padding:18px;text-align:center;color:#e74c3c;background:#fff5f5;margin-bottom:14px;cursor:pointer;transition:background 0.2s"
+            onclick="document.getElementById('whOutFileInput').click()">
+            <i class="fas fa-file-upload" style="font-size:22px;margin-bottom:6px;display:block"></i>
+            <div style="font-size:13px;font-weight:600">엑셀 파일을 여기에 드래그하거나 클릭하여 업로드</div>
+            <div style="font-size:11px;color:#999;margin-top:4px">.xlsx / .xls 파일 지원 — 양식 다운로드 후 작성하세요</div>
+            <input type="file" id="whOutFileInput" accept=".xlsx,.xls" style="display:none" onchange="whOutHandleFile(this.files[0])" />
           </div>
           <!-- 입력 테이블 -->
           <div style="overflow-x:auto">

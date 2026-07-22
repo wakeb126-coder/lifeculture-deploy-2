@@ -4326,3 +4326,168 @@ async function whSaveOutEdit() {
     showToast('수정 실패: ' + e.message, 'error');
   }
 }
+
+// ══════════════════════════════════════════════════
+// 출고관리 엑셀 양식 다운로드 & 업로드
+// ══════════════════════════════════════════════════
+
+// ── 출고 엑셀 양식 다운로드 ──────────────────────
+function whOutDownloadTemplate() {
+  if (typeof XLSX === 'undefined') {
+    showToast('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warning');
+    return;
+  }
+
+  var headers = ['품목명 *', '수량 *', '단위(pallet/box/ea/kg)', '출고일(YYYY-MM-DD) *', '출고처', '담당자 *', '비고'];
+  var examples = [
+    ['찹쌀 누룽지스낵 23g*18입', 10, 'box', new Date().toISOString().split('T')[0], '쿠팡', '홍길동', ''],
+    ['타미티미 커피콩 캔디 100g', 5, 'box', new Date().toISOString().split('T')[0], '네이버스토어', '김철수', '박람회 출고'],
+    ['꿀이구마 한입 미니약과', 2, 'pallet', new Date().toISOString().split('T')[0], '오프라인매장', '이영희', '']
+  ];
+
+  var wb = XLSX.utils.book_new();
+  var wsData = [headers].concat(examples);
+  var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // 열 너비
+  ws['!cols'] = [
+    {wch:30}, {wch:8}, {wch:22}, {wch:20}, {wch:16}, {wch:12}, {wch:20}
+  ];
+
+  // 헤더 스타일 (빨간 계열)
+  var range = XLSX.utils.decode_range(ws['!ref']);
+  for (var c = range.s.c; c <= range.e.c; c++) {
+    var cellAddr = XLSX.utils.encode_cell({r: 0, c: c});
+    if (!ws[cellAddr]) continue;
+    ws[cellAddr].s = {
+      fill: { fgColor: { rgb: 'FDEDEC' } },
+      font: { bold: true },
+      alignment: { horizontal: 'center' }
+    };
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, '창고출고양식');
+
+  // 제품명 목록 시트
+  var prodHeaders = ['제품명', '제품코드'];
+  var prodData = [prodHeaders];
+  if (_whProductMasterCache) {
+    _whProductMasterCache.forEach(function(p) {
+      prodData.push([p.product_name || p.name || '', p.product_code || p.code || '']);
+    });
+  }
+  var wsProd = XLSX.utils.aoa_to_sheet(prodData);
+  wsProd['!cols'] = [{wch:30}, {wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsProd, '제품명목록');
+
+  // 단위 안내 시트
+  var unitData = [
+    ['단위', '설명'],
+    ['pallet', '파레트 단위'],
+    ['box', '박스 단위'],
+    ['ea', '낱개 단위'],
+    ['kg', '무게(kg) 단위']
+  ];
+  var wsUnit = XLSX.utils.aoa_to_sheet(unitData);
+  wsUnit['!cols'] = [{wch:12}, {wch:20}];
+  XLSX.utils.book_append_sheet(wb, wsUnit, '단위안내');
+
+  XLSX.writeFile(wb, '창고출고양식_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  showToast('출고 엑셀 양식이 다운로드되었습니다.', 'success');
+}
+
+// ── 출고 엑셀 드롭 처리 ──────────────────────────
+function whOutHandleDrop(event) {
+  event.preventDefault();
+  var zone = document.getElementById('whOutDropZone');
+  if (zone) zone.classList.remove('dragover');
+  var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+  if (file) whOutHandleFile(file);
+}
+
+// ── 출고 엑셀 파일 파싱 및 테이블 채우기 ─────────
+function whOutHandleFile(file) {
+  if (!file) return;
+  if (typeof XLSX === 'undefined') {
+    showToast('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'warning');
+    return;
+  }
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb = XLSX.read(data, { type: 'array', cellDates: true });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      if (rows.length < 2) {
+        showToast('데이터가 없습니다. 양식을 확인해주세요.', 'warning');
+        return;
+      }
+
+      // 헤더 제거 후 빈 행 필터
+      var dataRows = rows.slice(1).filter(function(r) {
+        return r.some(function(c) { return c !== '' && c !== null && c !== undefined; });
+      });
+
+      if (dataRows.length === 0) {
+        showToast('입력된 데이터가 없습니다.', 'warning');
+        return;
+      }
+
+      // 날짜 포맷 헬퍼
+      function fmtDate(v) {
+        if (!v) return '';
+        if (v instanceof Date) {
+          var y = v.getFullYear();
+          var m = String(v.getMonth() + 1).padStart(2, '0');
+          var d2 = String(v.getDate()).padStart(2, '0');
+          return y + '-' + m + '-' + d2;
+        }
+        var s = String(v).trim();
+        if (/^\d{8}$/.test(s)) return s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8);
+        return s;
+      }
+
+      // 기존 일괄출고 테이블 초기화
+      var tbody = document.getElementById('whBulkOutBody');
+      if (tbody) tbody.innerHTML = '';
+      if (typeof _whBulkOutRowCount !== 'undefined') _whBulkOutRowCount = 0;
+
+      var added = 0;
+      dataRows.forEach(function(r) {
+        // 컬럼 순서: A=품목명(0), B=수량(1), C=단위(2), D=출고일(3), E=출고처(4), F=담당자(5), G=비고(6)
+        var d = {
+          item_name:   String(r[0] || '').trim(),
+          qty:         Number(r[1]) || '',
+          unit:        String(r[2] || 'box').trim(),
+          date:        fmtDate(r[3]),
+          destination: String(r[4] || '').trim(),
+          manager:     String(r[5] || '').trim()
+        };
+        if (!d.item_name) return; // 품목명 없는 행 스킵
+        if (typeof whBulkOutAddRow === 'function') whBulkOutAddRow(d);
+        added++;
+      });
+
+      showToast(added + '건의 출고 데이터를 불러왔습니다. 확인 후 [출고 등록]을 눌러주세요.', 'success');
+
+      // 드롭존 텍스트 업데이트
+      var zone = document.getElementById('whOutDropZone');
+      if (zone) {
+        zone.style.background = '#eafaf1';
+        zone.style.borderColor = '#27ae60';
+        zone.style.color = '#27ae60';
+        zone.querySelector('div').textContent = '✅ ' + added + '건 불러오기 완료 — 다시 업로드하려면 클릭';
+      }
+    } catch(err) {
+      showToast('파일 읽기 오류: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+
+  // input 초기화 (같은 파일 재업로드 가능)
+  var fi = document.getElementById('whOutFileInput');
+  if (fi) fi.value = '';
+}
