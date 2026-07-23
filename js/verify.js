@@ -165,6 +165,32 @@ async function vfySearch() {
   document.getElementById('vfyTimelineSection').style.display = combined.length > 0 ? '' : 'none';
   document.getElementById('vfyEmptyState').style.display      = combined.length > 0 ? 'none' : '';
 
+  // ── 음수 재고 알림 배너 ──
+  var warnBanner = document.getElementById('vfyWarnBanner');
+  if (warnBanner) {
+    if (warnCnt > 0) {
+      // 음수 발생 행 목록 추출
+      var warnRows = combined.filter(function(r) { return r.isWarn; });
+      var warnDetails = warnRows.map(function(r) {
+        return r.date + ' ' + (r.type === 'in' ? '입고' : '출고') + ' ' + r.qty + 'ea → 누적 ' + r.cumStock;
+      }).join('<br>');
+      warnBanner.innerHTML =
+        '<div style="background:#fff0f0;border:2px solid #e74c3c;border-radius:10px;padding:14px 18px;margin-bottom:14px">' +
+        '<div style="font-weight:700;color:#c0392b;font-size:13px;margin-bottom:8px">⚠️ 누적 재고 음수 경고 — ' + warnCnt + '건 발생</div>' +
+        '<div style="font-size:12px;color:#555;line-height:1.8">' + warnDetails + '</div>' +
+        '<div style="margin-top:10px;font-size:12px;color:#888">위 시점에서 출고 수량이 재고를 초과했습니다. 누락된 입고 이력이 있거나 출고 수량이 잘못 입력되었을 수 있습니다.</div>' +
+        '</div>';
+      warnBanner.style.display = '';
+    } else {
+      warnBanner.style.display = 'none';
+      warnBanner.innerHTML = '';
+    }
+  }
+
+  // 엑셀 다운로드 버튼 활성화
+  var xlsBtn = document.getElementById('vfyExcelBtn');
+  if (xlsBtn) xlsBtn.style.display = combined.length > 0 ? '' : 'none';
+
   if (combined.length > 0) {
     showToast(combined.length + '건 조회 완료' + (warnCnt > 0 ? ' (⚠️ 경고 ' + warnCnt + '건)' : ''), warnCnt > 0 ? 'warning' : 'success');
   } else {
@@ -608,4 +634,98 @@ async function vfySaveAdj() {
   } catch(e) {
     showToast('조정 실패: ' + e.message, 'error');
   }
+}
+
+// ── 엑셀 다운로드 ────────────────────────────────
+function vfyExportExcel() {
+  if (!_vfyTimeline || _vfyTimeline.length === 0) {
+    showToast('먼저 이력을 조회해 주세요.', 'warning');
+    return;
+  }
+
+  var itemName = _vfyCurrentItem || '품목';
+  var today    = new Date().toISOString().split('T')[0];
+
+  // ── 시트1: 이력 타임라인 ──
+  var timelineData = [
+    ['날짜', '유형', 'Lot No', '창고', '위치코드', '변동수량(ea)', '누적재고(ea)', '담당자', '출고처/공급처', '비고', '음수경고']
+  ];
+  _vfyTimeline.forEach(function(r) {
+    var typeLabel = r.type === 'in' ? '입고' : '출고';
+    if (r.inbound_type === '재고조정' || (r.lot_no && r.lot_no.startsWith('WH-ADJ'))) typeLabel = '조정';
+    if (r.lot_no && r.lot_no.startsWith('WH-LOSS'))   typeLabel = '손실';
+    if (r.lot_no && r.lot_no.startsWith('WH-SAMPLE')) typeLabel = '샘플';
+    if (r.lot_no && r.lot_no.startsWith('WH-RTN'))    typeLabel = '반품';
+    timelineData.push([
+      r.date || '',
+      typeLabel,
+      r.lot_no || '',
+      r.warehouse === 'C' ? '냉장창고' : '일반창고',
+      r.location || '',
+      (r.type === 'in' ? '+' : '-') + r.qty,
+      r.cumStock,
+      r.manager || '',
+      r.destination || r.supplier || '',
+      r.note || '',
+      r.isWarn ? '⚠️ 음수' : ''
+    ]);
+  });
+
+  // ── 시트2: 음수 경고 목록 ──
+  var warnData = [
+    ['날짜', '유형', 'Lot No', '위치코드', '변동수량(ea)', '누적재고(ea)', '비고']
+  ];
+  _vfyTimeline.filter(function(r) { return r.isWarn; }).forEach(function(r) {
+    warnData.push([
+      r.date || '',
+      r.type === 'in' ? '입고' : '출고',
+      r.lot_no || '',
+      r.location || '',
+      (r.type === 'in' ? '+' : '-') + r.qty,
+      r.cumStock,
+      r.note || ''
+    ]);
+  });
+
+  // ── 시트3: 요약 ──
+  var totalIn  = _vfyTimeline.filter(function(r) { return r.type === 'in'; }).reduce(function(s, r) { return s + r.qty; }, 0);
+  var totalOut = _vfyTimeline.filter(function(r) { return r.type !== 'in'; }).reduce(function(s, r) { return s + r.qty; }, 0);
+  var warnCnt  = _vfyTimeline.filter(function(r) { return r.isWarn; }).length;
+  var summaryData = [
+    ['항목', '값'],
+    ['품목명', itemName],
+    ['조회 위치', _vfyCurrentLoc || '전체'],
+    ['조회 기간', (document.getElementById('vfyDateFrom') || {}).value + ' ~ ' + (document.getElementById('vfyDateTo') || {}).value],
+    ['총 이력 건수', _vfyTimeline.length],
+    ['총 입고량(ea)', totalIn],
+    ['총 출고량(ea)', totalOut],
+    ['현재 전산재고(ea)', totalIn - totalOut],
+    ['음수 경고 건수', warnCnt],
+    ['다운로드 일시', today]
+  ];
+
+  if (typeof XLSX === 'undefined') {
+    showToast('엑셀 라이브러리가 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    return;
+  }
+
+  var wb = XLSX.utils.book_new();
+
+  var ws1 = XLSX.utils.aoa_to_sheet(timelineData);
+  ws1['!cols'] = [10,8,18,10,10,14,14,10,14,16,8].map(function(w) { return { wch: w }; });
+  XLSX.utils.book_append_sheet(wb, ws1, '이력타임라인');
+
+  if (warnData.length > 1) {
+    var ws2 = XLSX.utils.aoa_to_sheet(warnData);
+    ws2['!cols'] = [10,8,18,10,14,14,16].map(function(w) { return { wch: w }; });
+    XLSX.utils.book_append_sheet(wb, ws2, '음수경고목록');
+  }
+
+  var ws3 = XLSX.utils.aoa_to_sheet(summaryData);
+  ws3['!cols'] = [{ wch: 20 }, { wch: 30 }];
+  XLSX.utils.book_append_sheet(wb, ws3, '요약');
+
+  var fileName = '재고검증_' + itemName.replace(/[\/\\:*?"<>|]/g, '_') + '_' + today + '.xlsx';
+  XLSX.writeFile(wb, fileName);
+  showToast('엑셀 다운로드 완료: ' + fileName, 'success');
 }

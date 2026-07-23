@@ -1299,8 +1299,11 @@
               <button onclick="vfyOpenAddModal('in')" style="padding:6px 14px;background:#eafaf1;color:#27ae60;border:1.5px solid #27ae60;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-plus"></i> 누락 입고 추가</button>
               <button onclick="vfyOpenAddModal('out')" style="padding:6px 14px;background:#fdedec;color:#e74c3c;border:1.5px solid #e74c3c;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-plus"></i> 누락 출고 추가</button>
               <button onclick="vfyOpenAdjModal()" style="padding:6px 14px;background:#fef9e7;color:#e67e22;border:1.5px solid #f39c12;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-tools"></i> 잔여 오차 조정</button>
+              <button id="vfyExcelBtn" onclick="vfyExportExcel()" style="display:none;padding:6px 14px;background:#1d6f42;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-file-excel"></i> 엑셀 다운로드</button>
             </div>
           </div>
+          <!-- 음수 재고 경고 배너 -->
+          <div id="vfyWarnBanner" style="display:none"></div>
           <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse;font-size:12px">
               <thead>
