@@ -769,6 +769,7 @@ function whRenderInTable() {
     return;
   }
   var _inSearchQ = (document.getElementById('whInSearch') ? document.getElementById('whInSearch').value.trim().toLowerCase() : '');
+  var _inTypeQ = (document.getElementById('whInTypeFilter') ? document.getElementById('whInTypeFilter').value : '');
   var data = whInboundData.slice().sort(function(a,b){ return (b.inbound_date||'').localeCompare(a.inbound_date||''); });
   if (_inSearchQ) {
     data = data.filter(function(r) {
@@ -778,8 +779,11 @@ function whRenderInTable() {
              (r.supplier||'').toLowerCase().includes(_inSearchQ);
     });
   }
+  if (_inTypeQ) {
+    data = data.filter(function(r) { return (r.inbound_type||'') === _inTypeQ; });
+  }
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>' + (_inSearchQ ? '검색 결과가 없습니다.' : '등록된 입고 내역이 없습니다.') + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#aaa;padding:30px"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px"></i>' + (_inSearchQ ? '검색 결과가 없습니다.' : '등록된 입고 내역이 없습니다.') + '</td></tr>';
     return;
   }
   tbody.innerHTML = data.map(function(r) {
@@ -792,6 +796,12 @@ function whRenderInTable() {
       '<td><code style="font-size:11px">' + (r.location||'-') + '</code></td>' +
       '<td>' + (r.inbound_date||'-') + '</td>' +
       '<td><b>' + (r.item_name||'-') + '</b></td>' +
+      '<td>' + (function(t){
+        var map = {'수입제품':'#2980b9','OEM제품':'#d68910','자체생산':'#1e8449','회수입고':'#8e44ad','기타':'#888'};
+        var bgMap = {'수입제품':'#e8f4fd','OEM제품':'#fef9e7','자체생산':'#eafaf1','회수입고':'#f3e8fd','기타':'#f0f0f0'};
+        var c = map[t]||'#888', b = bgMap[t]||'#f0f0f0';
+        return '<span style="background:'+b+';color:'+c+';padding:2px 8px;border-radius:12px;font-size:11px">'+(t||'-')+'</span>';
+      })(r.inbound_type||'') + '</td>' +
       '<td style="text-align:right">' + _whFmtQtyBreakdown(r.qty, r.unit, r.item_name, r.qty_ea, r.qty_box, r.qty_pt) + '</td>' +
       '<td>' + (r.unit||'-') + '</td>' +
       '<td>' + (r.expiry_date||'-') + '</td>' +

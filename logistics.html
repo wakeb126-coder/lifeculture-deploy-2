@@ -861,6 +861,14 @@
             <div class="table-title"><i class="fas fa-history" style="color:#27ae60"></i> 최근 창고 입고 이력</div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <input type="text" id="whInSearch" placeholder="품목명 검색..." oninput="whRenderInTable()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+              <select id="whInTypeFilter" onchange="whRenderInTable()" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;height:36px">
+                <option value="">전체 유형</option>
+                <option value="수입제품">수입제품</option>
+                <option value="OEM제품">OEM제품</option>
+                <option value="자체생산">자체생산</option>
+                <option value="회수입고">회수입고</option>
+                <option value="기타">기타</option>
+              </select>
               <button class="btn" onclick="whInToggleSelectAll()" style="background:#f0f4ff;color:#2563eb;border:1px solid #2563eb;font-size:12px;padding:5px 10px"><i class="fas fa-check-square"></i> 전체선택</button>
               <button class="btn" id="whInDeleteSelectedBtn" onclick="whInDeleteSelected()" style="background:#fff5f5;color:#e74c3c;border:1px solid #e74c3c;font-size:12px;padding:5px 10px;display:none"><i class="fas fa-trash"></i> 선택 삭제 (<span id="whInSelectedCount">0</span>건)</button>
               <button class="btn" onclick="whInDeleteAll()" style="background:#fdedec;color:#c0392b;border:1px solid #c0392b;font-size:12px;padding:5px 10px"><i class="fas fa-trash-alt"></i> 전체 삭제</button>
@@ -872,7 +880,7 @@
               <thead>
                 <tr>
                   <th style="width:36px"><input type="checkbox" id="whInCheckAll" onchange="whInCheckAllChange(this)" title="전체선택" /></th>
-                  <th>Lot No</th><th>창고</th><th>위치코드</th><th>입고일</th><th>품목명</th>
+                  <th>Lot No</th><th>창고</th><th>위치코드</th><th>입고일</th><th>품목명</th><th>입고유형</th>
                   <th>수량 <small style="font-weight:400;font-size:10px;color:#888">(ea / Box / PT)</small></th><th>단위</th><th>소비기한</th><th>공급업체</th><th>담당자</th><th>관리</th>
                 </tr>
               </thead>

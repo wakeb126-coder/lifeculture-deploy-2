@@ -234,6 +234,9 @@ function vfyRenderTimeline() {
     if (row.lot_no && row.lot_no.startsWith('WH-RTN')) {
       typeBadge = '<span style="background:#d1ecf1;color:#0c5460;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">반품</span>';
     }
+    if (row.inbound_type === '회수입고') {
+      typeBadge = '<span style="background:#f3e8fd;color:#8e44ad;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">회수입고</span>';
+    }
 
     var qtyColor = isIn ? '#27ae60' : '#e74c3c';
     var qtySign  = isIn ? '+' : '-';

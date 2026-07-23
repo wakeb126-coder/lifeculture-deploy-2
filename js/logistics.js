@@ -1242,7 +1242,9 @@ async function lgRenderStockTable() {
 
   var rows = Object.values(stockMap);
   if (q) rows = rows.filter(function(r) { return r.name.toLowerCase().indexOf(q) !== -1; });
+  // 재고현황 유형 필터: 회수입고는 유형 필터에서 제외 (재고에는 포함)
   if (typeF) rows = rows.filter(function(r) { return r.ptype === typeF; });
+  else rows = rows.filter(function(r) { return r.ptype !== '회수입고'; });
   // 재고없음/마이너스 보이기 체크박스 (기본값: 미체크 = 숨김)
   var hideZeroEl = document.getElementById('stockHideZero');
   var showZero = hideZeroEl ? hideZeroEl.checked : false;
