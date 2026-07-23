@@ -649,9 +649,11 @@ function vfyExportExcel() {
   var itemName = _vfyCurrentItem || '품목';
   var today    = new Date().toISOString().split('T')[0];
 
+  var isAllMode = (itemName === '(전체 품목)');
+
   // ── 시트1: 이력 타임라인 ──
   var timelineData = [
-    ['날짜', '유형', 'Lot No', '창고', '위치코드', '변동수량(ea)', '누적재고(ea)', '담당자', '출고처/공급처', '비고', '음수경고']
+    ['날짜', '품목명', '유형', 'Lot No', '창고', '위치코드', '변동수량(ea)', '담당자', '출고싸/공급싸', '비고', '음수경고']
   ];
   _vfyTimeline.forEach(function(r) {
     var typeLabel = r.type === 'in' ? '입고' : '출고';
@@ -661,32 +663,33 @@ function vfyExportExcel() {
     if (r.lot_no && r.lot_no.startsWith('WH-RTN'))    typeLabel = '반품';
     timelineData.push([
       r.date || '',
+      r.item_name || '',
       typeLabel,
       r.lot_no || '',
       r.warehouse === 'C' ? '냉장창고' : '일반창고',
       r.location || '',
       (r.type === 'in' ? '+' : '-') + r.qty,
-      r.cumStock,
       r.manager || '',
-      r.destination || r.supplier || '',
-      r.note || '',
+      r.destination || r.supplier || r.party || '',
+      r.memo || r.note || '',
       r.isWarn ? '⚠️ 음수' : ''
     ]);
   });
 
   // ── 시트2: 음수 경고 목록 ──
   var warnData = [
-    ['날짜', '유형', 'Lot No', '위치코드', '변동수량(ea)', '누적재고(ea)', '비고']
+    ['날짜', '품목명', '유형', 'Lot No', '위치코드', '변동수량(ea)', '누적재고(ea)', '비고']
   ];
   _vfyTimeline.filter(function(r) { return r.isWarn; }).forEach(function(r) {
     warnData.push([
       r.date || '',
+      r.item_name || '',
       r.type === 'in' ? '입고' : '출고',
       r.lot_no || '',
       r.location || '',
       (r.type === 'in' ? '+' : '-') + r.qty,
       r.cumStock,
-      r.note || ''
+      r.memo || r.note || ''
     ]);
   });
 
@@ -694,18 +697,37 @@ function vfyExportExcel() {
   var totalIn  = _vfyTimeline.filter(function(r) { return r.type === 'in'; }).reduce(function(s, r) { return s + r.qty; }, 0);
   var totalOut = _vfyTimeline.filter(function(r) { return r.type !== 'in'; }).reduce(function(s, r) { return s + r.qty; }, 0);
   var warnCnt  = _vfyTimeline.filter(function(r) { return r.isWarn; }).length;
+
   var summaryData = [
     ['항목', '값'],
     ['품목명', itemName],
     ['조회 위치', _vfyCurrentLoc || '전체'],
     ['조회 기간', (document.getElementById('vfyDateFrom') || {}).value + ' ~ ' + (document.getElementById('vfyDateTo') || {}).value],
-    ['총 이력 건수', _vfyTimeline.length],
-    ['총 입고량(ea)', totalIn],
-    ['총 출고량(ea)', totalOut],
+    ['전체 이력 건수', _vfyTimeline.length],
+    ['전체 입고량(ea)', totalIn],
+    ['전체 출고량(ea)', totalOut],
     ['현재 전산재고(ea)', totalIn - totalOut],
     ['음수 경고 건수', warnCnt],
     ['다운로드 일시', today]
   ];
+
+  // 전체 품목 모드일 때 품목별 집계 시트 추가
+  var itemSummaryData = null;
+  if (isAllMode) {
+    var itemMap = {};
+    _vfyTimeline.forEach(function(r) {
+      var n = r.item_name || '(미입력)';
+      if (!itemMap[n]) itemMap[n] = { in: 0, out: 0, warn: 0 };
+      if (r.type === 'in') itemMap[n].in  += r.qty;
+      else                  itemMap[n].out += r.qty;
+      if (r.isWarn) itemMap[n].warn++;
+    });
+    itemSummaryData = [['품목명', '입고합계(ea)', '출고합계(ea)', '전산재고(ea)', '음수경고건수']];
+    Object.keys(itemMap).sort().forEach(function(n) {
+      var m = itemMap[n];
+      itemSummaryData.push([n, m.in, m.out, m.in - m.out, m.warn]);
+    });
+  }
 
   if (typeof XLSX === 'undefined') {
     showToast('엑셀 라이브러리가 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.', 'error');
@@ -715,12 +737,19 @@ function vfyExportExcel() {
   var wb = XLSX.utils.book_new();
 
   var ws1 = XLSX.utils.aoa_to_sheet(timelineData);
-  ws1['!cols'] = [10,8,18,10,10,14,14,10,14,16,8].map(function(w) { return { wch: w }; });
+  ws1['!cols'] = [10,22,8,18,10,12,14,10,16,16,8].map(function(w) { return { wch: w }; });
   XLSX.utils.book_append_sheet(wb, ws1, '이력타임라인');
+
+  // 전체 품목 모드: 품목별 집계 시트 먼저 삽입
+  if (isAllMode && itemSummaryData) {
+    var wsItem = XLSX.utils.aoa_to_sheet(itemSummaryData);
+    wsItem['!cols'] = [28,14,14,14,12].map(function(w) { return { wch: w }; });
+    XLSX.utils.book_append_sheet(wb, wsItem, '품목별집계');
+  }
 
   if (warnData.length > 1) {
     var ws2 = XLSX.utils.aoa_to_sheet(warnData);
-    ws2['!cols'] = [10,8,18,10,14,14,16].map(function(w) { return { wch: w }; });
+    ws2['!cols'] = [10,22,8,18,12,14,14,16].map(function(w) { return { wch: w }; });
     XLSX.utils.book_append_sheet(wb, ws2, '음수경고목록');
   }
 
