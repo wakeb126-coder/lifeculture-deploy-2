@@ -126,12 +126,14 @@ async function vfySearch() {
       };
     });
 
-  // 날짜순 정렬
+  // 날짜순 정렬 (같은 날짜는 입고 먼저, 같은 유형이면 Lot 번호 순)
   var combined = inRows.concat(outRows).sort(function(a, b) {
     if (a.date < b.date) return -1;
     if (a.date > b.date) return 1;
-    // 같은 날짜면 입고 먼저
-    return (a.type === 'in' ? -1 : 1);
+    // 같은 날짜: 입고 먼저 표시
+    if (a.type !== b.type) return (a.type === 'in' ? -1 : 1);
+    // 같은 유형: Lot 번호 오름차순
+    return (a.lot_no || '').localeCompare(b.lot_no || '');
   });
 
   // 누적재고 계산
