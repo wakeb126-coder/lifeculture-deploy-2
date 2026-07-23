@@ -62,21 +62,22 @@ function vfySelectItem(name) {
 // ── 조회 ─────────────────────────────────────────
 async function vfySearch() {
   var itemName = (document.getElementById('vfyItemInput') || {}).value.trim();
-  if (!itemName) { showToast('품목명을 입력해주세요.', 'warning'); return; }
+  // 빈 문자열이면 전체 품목 조회
+  var isAll = !itemName;
 
   var locFilter  = (document.getElementById('vfyLocFilter') || {}).value || '';
   var dateFrom   = (document.getElementById('vfyDateFrom') || {}).value || '';
   var dateTo     = (document.getElementById('vfyDateTo') || {}).value || '';
 
-  _vfyCurrentItem = itemName;
+  _vfyCurrentItem = isAll ? '(전체 품목)' : itemName;
   _vfyCurrentLoc  = locFilter;
 
-  showToast('조회 중...', 'info');
+  showToast(isAll ? '전체 품목 조회 중...' : '조회 중...', 'info');
 
   // 입고 데이터 필터
   var inRows = (typeof whInboundData !== 'undefined' ? whInboundData : [])
     .filter(function(r) {
-      if ((r.item_name || '') !== itemName) return false;
+      if (!isAll && (r.item_name || '') !== itemName) return false;
       if (locFilter && (r.location || '') !== locFilter) return false;
       var d = r.inbound_date || r.date || '';
       if (dateFrom && d < dateFrom) return false;
@@ -103,7 +104,7 @@ async function vfySearch() {
   // 출고 데이터 필터
   var outRows = (typeof whOutboundData !== 'undefined' ? whOutboundData : [])
     .filter(function(r) {
-      if ((r.item_name || '') !== itemName) return false;
+      if (!isAll && (r.item_name || '') !== itemName) return false;
       if (locFilter && (r.location || '') !== locFilter) return false;
       var d = r.outbound_date || r.date || '';
       if (dateFrom && d < dateFrom) return false;
@@ -196,7 +197,7 @@ async function vfySearch() {
   if (combined.length > 0) {
     showToast(combined.length + '건 조회 완료' + (warnCnt > 0 ? ' (⚠️ 경고 ' + warnCnt + '건)' : ''), warnCnt > 0 ? 'warning' : 'success');
   } else {
-    showToast('"' + itemName + '" 이력이 없습니다.', 'info');
+    showToast((isAll ? '전체 품목' : '"' + itemName + '"') + ' 이력이 없습니다.', 'info');
   }
 }
 
