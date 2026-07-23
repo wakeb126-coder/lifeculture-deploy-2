@@ -137,15 +137,17 @@ async function vfySearch() {
     return (a.lot_no || '').localeCompare(b.lot_no || '');
   });
 
-  // 누적재고 계산
-  var cumStock = 0;
+  // 누적재고 계산 (품목별 독립 계산)
+  var cumStockMap = {};
   combined.forEach(function(row) {
+    var key = row.item_name || '';
+    if (!cumStockMap[key]) cumStockMap[key] = 0;
     if (row.type === 'in') {
-      cumStock += row.qty;
+      cumStockMap[key] += row.qty;
     } else {
-      cumStock -= row.qty;
+      cumStockMap[key] -= row.qty;
     }
-    row.cumStock = cumStock;
+    row.cumStock = cumStockMap[key];
     row.isWarn = (row.cumStock < 0);
   });
 
