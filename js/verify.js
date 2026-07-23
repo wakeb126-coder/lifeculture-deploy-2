@@ -653,11 +653,17 @@ function vfyExportExcel() {
 
   var isAllMode = (itemName === '(전체 품목)');
 
-  // ── 시트1: 이력 타임라인 ──
+  // ── 시트1: 이력 타임라인 (품목별 누적재고 독립 계산) ──
   var timelineData = [
-    ['날짜', '품목명', '유형', 'Lot No', '창고', '위치코드', '변동수량(ea)', '담당자', '출고싸/공급싸', '비고', '음수경고']
+    ['날짜', '품목명', '유형', 'Lot No', '창고', '위치코드', '변동수량(ea)', '품목별누적재고(ea)', '담당자', '출고싸/공급싸', '비고', '음수경고']
   ];
+  // 엑셀용 품목별 누적재고 독립 계산
+  var xlsCumMap = {};
   _vfyTimeline.forEach(function(r) {
+    var key = r.item_name || '';
+    if (!xlsCumMap[key]) xlsCumMap[key] = 0;
+    if (r.type === 'in') xlsCumMap[key] += r.qty;
+    else                  xlsCumMap[key] -= r.qty;
     var typeLabel = r.type === 'in' ? '입고' : '출고';
     if (r.inbound_type === '재고조정' || (r.lot_no && r.lot_no.startsWith('WH-ADJ'))) typeLabel = '조정';
     if (r.lot_no && r.lot_no.startsWith('WH-LOSS'))   typeLabel = '손실';
@@ -671,10 +677,11 @@ function vfyExportExcel() {
       r.warehouse === 'C' ? '냉장창고' : '일반창고',
       r.location || '',
       (r.type === 'in' ? '+' : '-') + r.qty,
+      xlsCumMap[key],
       r.manager || '',
       r.destination || r.supplier || r.party || '',
       r.memo || r.note || '',
-      r.isWarn ? '⚠️ 음수' : ''
+      xlsCumMap[key] < 0 ? '⚠️ 음수' : ''
     ]);
   });
 
@@ -739,7 +746,7 @@ function vfyExportExcel() {
   var wb = XLSX.utils.book_new();
 
   var ws1 = XLSX.utils.aoa_to_sheet(timelineData);
-  ws1['!cols'] = [10,22,8,18,10,12,14,10,16,16,8].map(function(w) { return { wch: w }; });
+  ws1['!cols'] = [10,22,8,18,10,12,14,14,10,16,16,8].map(function(w) { return { wch: w }; });
   XLSX.utils.book_append_sheet(wb, ws1, '이력타임라인');
 
   // 전체 품목 모드: 품목별 집계 시트 먼저 삽입
