@@ -121,6 +121,7 @@
           <button class="tab-btn" onclick="switchTab('wh_in')" id="tabWhIn"><i class="fas fa-arrow-circle-down" style="color:#27ae60"></i> 입고관리</button>
           <button class="tab-btn" onclick="switchTab('wh_out')" id="tabWhOut"><i class="fas fa-arrow-circle-up" style="color:#e74c3c"></i> 출고관리</button>
           <button class="tab-btn" onclick="switchTab('wh_stocktake')" id="tabWhStocktake"><i class="fas fa-clipboard-check" style="color:#8e44ad"></i> 재고실사</button>
+          <button class="tab-btn" onclick="switchTab('wh_verify')" id="tabWhVerify" style="border-left:2px solid #e0e0e0;margin-left:4px"><i class="fas fa-search-plus" style="color:#e67e22"></i> 재고검증</button>
         </div>
       </div>
 
@@ -1233,7 +1234,225 @@
       </div>
 
     </div>
+
+      <!-- ===== 탭: 재고검증 ===== -->
+      <div class="tab-content" id="tabContent_wh_verify">
+
+        <!-- 검색 필터 -->
+        <div style="background:#fff8f0;border:1.5px solid #f39c12;border-radius:12px;padding:16px;margin-bottom:16px">
+          <div style="font-weight:700;color:#e67e22;font-size:14px;margin-bottom:12px"><i class="fas fa-search-plus"></i> 재고 검증 — 입출고 이력 추적 & 오류 수정</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:2;min-width:180px">
+              <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">품목명 <span style="color:#e74c3c">*</span></label>
+              <div style="position:relative">
+                <input type="text" id="vfyItemInput" placeholder="품목명 입력 (한 글자 이상)..." autocomplete="off"
+                  oninput="vfyItemAutocomplete(this)"
+                  style="width:100%;padding:8px 12px;border:1.5px solid #f39c12;border-radius:8px;font-size:13px;box-sizing:border-box" />
+                <div id="vfyItemDrop" style="display:none;position:absolute;z-index:9999;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;min-width:100%;left:0;top:100%"></div>
+              </div>
+            </div>
+            <div style="flex:1;min-width:140px">
+              <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">위치코드 (선택)</label>
+              <select id="vfyLocFilter" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+                <option value="">전체 위치</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:120px">
+              <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">시작일</label>
+              <input type="date" id="vfyDateFrom" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+            </div>
+            <div style="flex:1;min-width:120px">
+              <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">종료일</label>
+              <input type="date" id="vfyDateTo" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+            </div>
+            <button onclick="vfySearch()" style="padding:8px 20px;background:#e67e22;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap"><i class="fas fa-search"></i> 조회</button>
+          </div>
+        </div>
+
+        <!-- 요약 카드 -->
+        <div id="vfySummaryCards" style="display:none;margin-bottom:16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+            <div style="background:#eafaf1;border:1.5px solid #27ae60;border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:11px;color:#555;margin-bottom:4px">총 입고</div>
+              <div id="vfySumIn" style="font-size:20px;font-weight:700;color:#27ae60">-</div>
+            </div>
+            <div style="background:#fdedec;border:1.5px solid #e74c3c;border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:11px;color:#555;margin-bottom:4px">총 출고</div>
+              <div id="vfySumOut" style="font-size:20px;font-weight:700;color:#e74c3c">-</div>
+            </div>
+            <div style="background:#e8f4fd;border:1.5px solid #2980b9;border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:11px;color:#555;margin-bottom:4px">전산 재고</div>
+              <div id="vfySumStock" style="font-size:20px;font-weight:700;color:#2980b9">-</div>
+            </div>
+            <div style="background:#fef9e7;border:1.5px solid #f39c12;border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:11px;color:#555;margin-bottom:4px">경고 건수</div>
+              <div id="vfySumWarn" style="font-size:20px;font-weight:700;color:#e67e22">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 이력 타임라인 테이블 -->
+        <div id="vfyTimelineSection" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+            <div style="font-weight:700;font-size:13px;color:#333"><i class="fas fa-stream" style="color:#e67e22"></i> 입출고 이력 타임라인</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="vfyOpenAddModal('in')" style="padding:6px 14px;background:#eafaf1;color:#27ae60;border:1.5px solid #27ae60;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-plus"></i> 누락 입고 추가</button>
+              <button onclick="vfyOpenAddModal('out')" style="padding:6px 14px;background:#fdedec;color:#e74c3c;border:1.5px solid #e74c3c;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-plus"></i> 누락 출고 추가</button>
+              <button onclick="vfyOpenAdjModal()" style="padding:6px 14px;background:#fef9e7;color:#e67e22;border:1.5px solid #f39c12;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer"><i class="fas fa-tools"></i> 잔여 오차 조정</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="background:#fff3e0">
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">날짜</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">유형</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">Lot No</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">위치</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">품목명</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;text-align:right;white-space:nowrap">변동수량</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;text-align:right;white-space:nowrap">누적재고</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">출고처/공급처</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">담당자</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">비고</th>
+                  <th style="padding:8px 10px;border:1px solid #ffe0b2;white-space:nowrap">관리</th>
+                </tr>
+              </thead>
+              <tbody id="vfyTimelineBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 빈 상태 -->
+        <div id="vfyEmptyState" style="text-align:center;padding:60px 20px;color:#aaa">
+          <i class="fas fa-search" style="font-size:40px;display:block;margin-bottom:12px"></i>
+          <div style="font-size:14px">품목명을 입력하고 조회하면 입출고 이력을 확인할 수 있습니다.</div>
+        </div>
+
+      </div>
+
+    </div>
   </main>
+
+  <!-- 재고검증 - 누락 이력 추가 모달 -->
+  <div class="modal-overlay" id="vfyAddModal">
+    <div class="modal-dialog" style="max-width:560px">
+      <div class="modal-header">
+        <h3 id="vfyAddModalTitle"><i class="fas fa-plus-circle"></i> 누락 이력 추가</h3>
+        <button class="modal-close" onclick="vfyCloseAddModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="vfyAddType" value="in" />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">날짜 <span style="color:#e74c3c">*</span></label>
+            <input type="date" id="vfyAddDate" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">창고 <span style="color:#e74c3c">*</span></label>
+            <select id="vfyAddWarehouse" onchange="vfyBuildLocSelect()" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+              <option value="C">❄️ 저온창고 (C)</option>
+              <option value="W">🏭 일반창고 (W)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">위치코드 <span style="color:#e74c3c">*</span></label>
+            <select id="vfyAddLoc" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px"></select>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">품목명 <span style="color:#e74c3c">*</span></label>
+            <input type="text" id="vfyAddItem" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" readonly />
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">수량 <span style="color:#e74c3c">*</span></label>
+            <input type="number" id="vfyAddQty" min="1" placeholder="0" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">단위</label>
+            <select id="vfyAddUnit" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+              <option value="ea">ea</option>
+              <option value="box">box</option>
+              <option value="pallet">pallet</option>
+              <option value="kg">kg</option>
+            </select>
+          </div>
+          <div id="vfyAddDestRow">
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">출고처 / 공급처</label>
+            <input type="text" id="vfyAddDest" placeholder="예) 쿠팡, 박람회, 공급업체명" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">담당자</label>
+            <input type="text" id="vfyAddManager" placeholder="담당자명" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label style="display:block;font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:5px">추가 사유 <span style="color:#e74c3c">*</span> (감사 로그에 기록됩니다)</label>
+          <input type="text" id="vfyAddReason" placeholder="예) 현장 출고 미등록, 박람회 출고 누락, 초기 데이터 누락" style="width:100%;padding:9px 12px;border:1.5px solid #e74c3c;border-radius:8px;font-size:13px" />
+        </div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid #f0f0f0;display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="vfyCloseAddModal()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#f8f9fa;color:#555;border:1px solid #ddd">취소</button>
+        <button onclick="vfySaveAdd()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#e67e22;color:#fff;border:none"><i class="fas fa-save"></i> 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 재고검증 - 잔여 오차 조정 모달 -->
+  <div class="modal-overlay" id="vfyAdjModal">
+    <div class="modal-dialog" style="max-width:520px">
+      <div class="modal-header">
+        <h3><i class="fas fa-tools" style="color:#e67e22"></i> 잔여 오차 조정</h3>
+        <button class="modal-close" onclick="vfyCloseAdjModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#fef9e7;border:1px solid #f39c12;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#856404">
+          <b>현재 전산 재고:</b> <span id="vfyAdjCurrentStock" style="font-size:15px;font-weight:700">-</span>
+          &nbsp;|&nbsp;
+          <b>실제 재고:</b> <input type="number" id="vfyAdjActual" min="0" placeholder="실제 수량 입력" style="width:120px;padding:4px 8px;border:1.5px solid #f39c12;border-radius:6px;font-size:13px;font-weight:700" oninput="vfyCalcAdjDiff()" />
+          &nbsp;<span id="vfyAdjDiffLabel" style="font-weight:700"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">조정 유형 <span style="color:#e74c3c">*</span></label>
+            <select id="vfyAdjType" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">
+              <option value="loss">손실 처리 (파손/분실/유통기한 만료)</option>
+              <option value="adj">기타 조정 (원인 불명 오차)</option>
+              <option value="sample">샘플 출고 (시식/증정)</option>
+              <option value="return">반품 입고 (택배반품/박람회 회수)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">조정일 <span style="color:#e74c3c">*</span></label>
+            <input type="date" id="vfyAdjDate" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+          </div>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:5px">조정 사유 <span style="color:#e74c3c">*</span> (감사 로그에 기록됩니다)</label>
+          <input type="text" id="vfyAdjReason" placeholder="예) 창고 이전 중 파손, 원인 불명 재고 차이, 시식 행사 출고" style="width:100%;padding:9px 12px;border:1.5px solid #e74c3c;border-radius:8px;font-size:13px" />
+        </div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid #f0f0f0;display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="vfyCloseAdjModal()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#f8f9fa;color:#555;border:1px solid #ddd">취소</button>
+        <button onclick="vfySaveAdj()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#e67e22;color:#fff;border:none"><i class="fas fa-check"></i> 조정 적용</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 재고검증 - 이력 수정 모달 -->
+  <div class="modal-overlay" id="vfyEditModal">
+    <div class="modal-dialog" style="max-width:520px">
+      <div class="modal-header">
+        <h3><i class="fas fa-edit" style="color:#e67e22"></i> 이력 수정</h3>
+        <button class="modal-close" onclick="vfyCloseEditModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="vfyEditModalBody"></div>
+      <div style="padding:14px 20px;border-top:1px solid #f0f0f0;display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="vfyCloseEditModal()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#f8f9fa;color:#555;border:1px solid #ddd">취소</button>
+        <button onclick="vfyDeleteRecord()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#fdedec;color:#e74c3c;border:1.5px solid #e74c3c;margin-right:auto"><i class="fas fa-trash"></i> 삭제</button>
+        <button onclick="vfySaveEdit()" style="padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:#e67e22;color:#fff;border:none"><i class="fas fa-save"></i> 수정 저장</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 수정 모달 -->
   <div class="modal-overlay" id="lgEditModal">
@@ -1516,6 +1735,7 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="js/warehouse-mgmt.js"></script>
+  <script src="js/verify.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const user = requireAuth('logistics');
@@ -1531,7 +1751,7 @@ function switchTab(tab) {
       // 탭 ID → 버튼 ID 매핑 (카멜케이스 변환)
       const btnIdMap = {
         'register':'tabRegister','import':'tabImport','oem':'tabOem','own':'tabOwn','all':'tabAll',
-        'wh_map':'tabWhMap','wh_in':'tabWhIn','wh_out':'tabWhOut','wh_stocktake':'tabWhStocktake'
+        'wh_map':'tabWhMap','wh_in':'tabWhIn','wh_out':'tabWhOut','wh_stocktake':'tabWhStocktake','wh_verify':'tabWhVerify'
       };
       const btnId = btnIdMap[tab] || ('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
       const btn = document.getElementById(btnId);
@@ -1545,6 +1765,7 @@ function switchTab(tab) {
       if (tab === 'wh_in') { whRenderInTable(); whInitBulkTable(); }
       if (tab === 'wh_out') { whRenderOutTable(); whRenderFifo(); whInitBulkOutTable(); }
       if (tab === 'wh_stocktake') { whRenderLedger(); whRenderStocktakeTable(); }
+      if (tab === 'wh_verify') { if (typeof vfyInit === 'function') vfyInit(); }
     }
   </script>
   <!-- 팀 메뉴 오버레이 -->
