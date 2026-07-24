@@ -4703,20 +4703,39 @@ function whCreateFullStocktakeCard(locObj, stockMap) {
   // 위치코드 헤더 (드래그 핸들 포함)
   var header = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
     '<code style="font-size:11px;font-weight:700;color:' + (hasStock ? '#6c3483' : '#aaa') + ';background:' + (hasStock ? '#ede0f7' : '#f0f0f0') + ';padding:2px 7px;border-radius:6px">' + locCode + '</code>' +
-    '<span class="wh-fs-drag-handle" data-loc="' + locCode + '" draggable="true" title="드래그하여 위치 이동" style="font-size:14px;color:#aaa;cursor:grab;padding:2px 4px;border-radius:4px;user-select:none">⠿</span>' +
+    '<div style="display:flex;align-items:center;gap:4px">' +
+      '<button onclick="whFullStAddItem(\''+locCode+'\')" title="이 위치에 품목 추가" style="font-size:11px;color:#27ae60;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:4px" >＋</button>' +
+      '<span class="wh-fs-drag-handle" data-loc="' + locCode + '" draggable="true" title="드래그하여 위치 이동" style="font-size:14px;color:#aaa;cursor:grab;padding:2px 4px;border-radius:4px;user-select:none">⠿</span>' +
+    '</div>' +
   '</div>';
   // 재고 항목 목록
   var itemsHtml = '';
   var activeItems = Object.entries(items).filter(function(e) { return (Number(e[1].qty) || 0) > 0; });
   if (activeItems.length === 0) {
-    itemsHtml = '<div style="font-size:11px;color:#bbb;text-align:center;padding:8px 0">빈 위치</div>';
+    // 빈 위치: 품목명+수량 직접 입력 폼 표시
+    var emptyLocSafeId = locCode.replace(/[^a-zA-Z0-9]/g, '_');
+    itemsHtml =
+      '<div style="font-size:11px;color:#bbb;text-align:center;padding:4px 0 6px">빈 위치</div>' +
+      '<div id="wfst_new_wrap_' + emptyLocSafeId + '" style="background:#f0fff4;border:1px dashed #27ae60;border-radius:6px;padding:6px 8px">' +
+        '<div style="font-size:10px;color:#27ae60;font-weight:700;margin-bottom:5px">+ 품목 직접 입력</div>' +
+        '<input type="text" id="wfst_new_name_' + emptyLocSafeId + '" placeholder="품목명" ' +
+          'style="width:100%;padding:4px 7px;border:1px solid #b2dfdb;border-radius:4px;font-size:11px;box-sizing:border-box;margin-bottom:4px" />' +
+        '<div style="display:flex;gap:4px">' +
+          '<input type="number" id="wfst_new_qty_' + emptyLocSafeId + '" min="1" step="1" placeholder="수량" ' +
+            'style="flex:1;padding:4px 7px;border:1px solid #b2dfdb;border-radius:4px;font-size:11px" />' +
+          '<input type="text" id="wfst_new_unit_' + emptyLocSafeId + '" placeholder="단위" value="ea" ' +
+            'style="width:40px;padding:4px 5px;border:1px solid #b2dfdb;border-radius:4px;font-size:11px" />' +
+          '<button onclick="whFullStNewItemSave(\''+locCode+'\',\''+emptyLocSafeId+'\')" ' +
+            'style="padding:4px 8px;background:#27ae60;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700">저장</button>' +
+        '</div>' +
+      '</div>';
   } else {
     activeItems.forEach(function(entry) {
       var itemName = entry[0];
       var info = entry[1];
       var sysQty = Number(info.qty) || 0;
       var safeId = locCode.replace(/[^a-zA-Z0-9]/g, '_') + '__' + itemName.replace(/[^a-zA-Z0-9가-힣]/g, '_');
-      // 입고 레코드 ID 수집 (품목명 변경 시 사용)
+      // 입고 레코드 ID 수집 (품목명 변경/삭제 시 사용)
       var inboundIds = whInboundData
         .filter(function(r) { return r.location === locCode && r.item_name === itemName; })
         .map(function(r) { return r.id; });
@@ -4733,7 +4752,10 @@ function whCreateFullStocktakeCard(locObj, stockMap) {
               'onfocus="this.style.background=\"#fffde7\";this.style.borderColor=\"#f39c12\"" ' +
               'onblur="this.style.background=\"transparent\";this.style.borderColor=\"transparent\";whFullStNameBlur(this)" ' +
               'style="flex:1;font-size:11px;font-weight:700;color:#333;border:1px solid transparent;border-radius:4px;padding:2px 5px;background:transparent;min-width:0;cursor:text" />' +
-            '<span style="font-size:9px;color:#bbb;white-space:nowrap" title="품목명 클릭 시 수정 가능">✎</span>' +
+            '<span style="font-size:9px;color:#bbb" title="품목명 클릭 시 수정 가능">✎</span>' +
+            '<button onclick="whFullStDeleteItem(\''+locCode+'\',\''+itemName.replace(/'/g,"\\\'")+'\',' + JSON.stringify(inboundIds) + ')" ' +
+              'title="이 품목 재고 삭제" ' +
+              'style="font-size:11px;color:#e74c3c;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:4px;line-height:1">✕</button>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:6px">' +
             '<span style="font-size:10px;color:#888">전산:</span>' +
@@ -4886,8 +4908,163 @@ async function whFullStNameBlur(input) {
     input.value = origName;
   }
 }
+// ── 품목 삭제 ────────────────────────────────────
+async function whFullStDeleteItem(locCode, itemName, inboundIds) {
+  if (!_whFullStocktakeUnlocked) { showToast('관리자 허가가 필요합니다.', 'warning'); return; }
+  if (!Array.isArray(inboundIds)) inboundIds = [];
+  var totalQty = whInboundData
+    .filter(function(r) { return r.location === locCode && r.item_name === itemName; })
+    .reduce(function(s, r) { return s + (Number(r.qty) || 0); }, 0);
+  var outQty = whOutboundData
+    ? whOutboundData.filter(function(r) { return r.location === locCode && r.item_name === itemName; })
+        .reduce(function(s, r) { return s + (Number(r.qty) || 0); }, 0)
+    : 0;
+  var netQty = totalQty - outQty;
+  if (!confirm('[⚠️ 주의] ' + locCode + ' 위치의 "' + itemName + '" 재고를 삭제합니다.\n현재고: ' + netQty + '\n입고 레코드 ' + inboundIds.length + '건이 모두 삭제됩니다.\n\n계속하시겠습니까?')) return;
+  try {
+    for (var i = 0; i < inboundIds.length; i++) {
+      await apiDelete('wh_inbound', inboundIds[i]);
+    }
+    // 연관 출고 레코드도 삭제 (선택)
+    var outRecs = whOutboundData
+      ? whOutboundData.filter(function(r) { return r.location === locCode && r.item_name === itemName; })
+      : [];
+    if (outRecs.length > 0) {
+      if (confirm('연관된 출고 레코드 ' + outRecs.length + '건도 삭제하시겠습니까?\n(아니오를 누르면 출고 레코드는 유지됩니다)')) {
+        for (var j = 0; j < outRecs.length; j++) {
+          await apiDelete('wh_outbound', outRecs[j].id);
+        }
+      }
+    }
+    showToast('삭제 완료: ' + locCode + ' / ' + itemName, 'success');
+    whInvalidateMapCache();
+    await whReloadAll();
+    if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
+  } catch(e) {
+    showToast('삭제 실패: ' + e.message, 'error');
+  }
+}
+// ── 품목 추가 (재고 있는 위치에 새 품목 추가) ────────────────
+function whFullStAddItem(locCode) {
+  if (!_whFullStocktakeUnlocked) { showToast('관리자 허가가 필요합니다.', 'warning'); return; }
+  var modalId = 'whFullStAddItemModal';
+  var existing = document.getElementById(modalId);
+  if (existing) existing.remove();
+  var today = new Date().toISOString().split('T')[0];
+  var m = document.createElement('div');
+  m.id = modalId;
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10002;display:flex;align-items:center;justify-content:center';
+  m.innerHTML =
+    '<div style="background:#fff;border-radius:14px;width:90%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.2);overflow:hidden">' +
+      '<div style="background:#e8f8f5;border-bottom:1px solid #b2dfdb;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">' +
+        '<h3 style="color:#27ae60;font-size:14px;margin:0"><i class="fas fa-plus-circle"></i> ' + locCode + ' 품목 추가</h3>' +
+        '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa">&times;</button>' +
+      '</div>' +
+      '<div style="padding:16px;display:flex;flex-direction:column;gap:10px">' +
+        '<div><label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">품목명 <span style="color:red">*</span></label>' +
+          '<input type="text" id="whFsAddName" placeholder="품목명 입력" style="width:100%;padding:7px 10px;border:1.5px solid #b2dfdb;border-radius:7px;font-size:12px;box-sizing:border-box" /></div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<div style="flex:1"><label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">수량 <span style="color:red">*</span></label>' +
+            '<input type="number" id="whFsAddQty" min="1" step="1" placeholder="0" style="width:100%;padding:7px 10px;border:1.5px solid #b2dfdb;border-radius:7px;font-size:12px;box-sizing:border-box" /></div>' +
+          '<div style="width:70px"><label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">단위</label>' +
+            '<input type="text" id="whFsAddUnit" value="ea" style="width:100%;padding:7px 10px;border:1.5px solid #b2dfdb;border-radius:7px;font-size:12px;box-sizing:border-box" /></div>' +
+        '</div>' +
+        '<div><label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">소비기한 (선택)</label>' +
+          '<input type="date" id="whFsAddExpiry" value="" style="width:100%;padding:7px 10px;border:1.5px solid #b2dfdb;border-radius:7px;font-size:12px;box-sizing:border-box" /></div>' +
+        '<div style="display:flex;gap:8px;margin-top:4px">' +
+          '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:9px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px">취소</button>' +
+          '<button onclick="whFullStAddItemSave(\'' + locCode.replace(/'/g,"\\\'")+'\',' + '\'' + modalId + '\'' + ')" style="flex:1;padding:9px;background:#27ae60;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700"><i class="fas fa-plus"></i> 추가</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(m);
+  setTimeout(function() { var el = document.getElementById('whFsAddName'); if (el) el.focus(); }, 100);
+}
+async function whFullStAddItemSave(locCode, modalId) {
+  var nameEl = document.getElementById('whFsAddName');
+  var qtyEl = document.getElementById('whFsAddQty');
+  var unitEl = document.getElementById('whFsAddUnit');
+  var expiryEl = document.getElementById('whFsAddExpiry');
+  var itemName = (nameEl ? nameEl.value.trim() : '');
+  var qty = qtyEl ? (Number(qtyEl.value) || 0) : 0;
+  var unit = unitEl ? (unitEl.value.trim() || 'ea') : 'ea';
+  var expiry = expiryEl ? expiryEl.value : '';
+  if (!itemName) { showToast('품목명을 입력하세요.', 'warning'); return; }
+  if (qty <= 0) { showToast('수량을 입력하세요.', 'warning'); return; }
+  var today = new Date().toISOString().split('T')[0];
+  var dateShort = today.replace(/-/g,'').slice(2);
+  var prefix = 'WH-ADJ-' + dateShort;
+  var existingAdj = [];
+  try { existingAdj = (await apiGetAll('wh_inbound')).filter(function(r) { return r.lot_no && r.lot_no.startsWith(prefix); }); } catch(e2) {}
+  var seq = existingAdj.length + 1;
+  var lotNo = prefix + '-' + String(seq).padStart(3,'0');
+  try {
+    await apiPost('wh_inbound', {
+      lot_no: lotNo,
+      inbound_date: today,
+      warehouse: locCode.charAt(0),
+      location: locCode,
+      item_name: itemName,
+      qty: qty,
+      unit: unit,
+      expiry_date: expiry || '',
+      inbound_type: '재고조정',
+      manager: '실사추가',
+      memo: '전체실사 모드 직접추가',
+      created_at: Date.now()
+    });
+    var modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+    showToast('추가 완료: ' + locCode + ' / ' + itemName + ' ' + qty + unit, 'success');
+    whInvalidateMapCache();
+    await whReloadAll();
+    if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
+  } catch(e) {
+    showToast('추가 실패: ' + e.message, 'error');
+  }
+}
+// ── 빈 위치 직접 저장 ─────────────────────────────────
+async function whFullStNewItemSave(locCode, safeId) {
+  if (!_whFullStocktakeUnlocked) { showToast('관리자 허가가 필요합니다.', 'warning'); return; }
+  var nameEl = document.getElementById('wfst_new_name_' + safeId);
+  var qtyEl = document.getElementById('wfst_new_qty_' + safeId);
+  var unitEl = document.getElementById('wfst_new_unit_' + safeId);
+  var itemName = (nameEl ? nameEl.value.trim() : '');
+  var qty = qtyEl ? (Number(qtyEl.value) || 0) : 0;
+  var unit = unitEl ? (unitEl.value.trim() || 'ea') : 'ea';
+  if (!itemName) { showToast('품목명을 입력하세요.', 'warning'); if (nameEl) nameEl.focus(); return; }
+  if (qty <= 0) { showToast('수량을 입력하세요.', 'warning'); if (qtyEl) qtyEl.focus(); return; }
+  var today = new Date().toISOString().split('T')[0];
+  var dateShort = today.replace(/-/g,'').slice(2);
+  var prefix = 'WH-ADJ-' + dateShort;
+  var existingAdj = [];
+  try { existingAdj = (await apiGetAll('wh_inbound')).filter(function(r) { return r.lot_no && r.lot_no.startsWith(prefix); }); } catch(e2) {}
+  var seq = existingAdj.length + 1;
+  var lotNo = prefix + '-' + String(seq).padStart(3,'0');
+  try {
+    await apiPost('wh_inbound', {
+      lot_no: lotNo,
+      inbound_date: today,
+      warehouse: locCode.charAt(0),
+      location: locCode,
+      item_name: itemName,
+      qty: qty,
+      unit: unit,
+      expiry_date: '',
+      inbound_type: '재고조정',
+      manager: '실사추가',
+      memo: '전체실사 모드 빈위치 직접입력',
+      created_at: Date.now()
+    });
+    showToast('저장 완료: ' + locCode + ' / ' + itemName + ' ' + qty + unit, 'success');
+    whInvalidateMapCache();
+    await whReloadAll();
+    if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
+  } catch(e) {
+    showToast('저장 실패: ' + e.message, 'error');
+  }
+}
 // ── 드래그&드롭 이벤트 핸들러 ──────────────────────────────
-
 function whFullStDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
