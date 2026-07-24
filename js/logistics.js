@@ -733,14 +733,28 @@ function lgExport(tab) {
       return (a.expiry || '').localeCompare(b.expiry || '');
     });
 
-    var headers = ['제품명', '제품유형', '소비기한',
-      '입고(ea)', '입고(Box)', '입고(PT)',
-      '출고(ea)', '출고(Box)', '출고(PT)',
-      '현재고(ea)', '현재고(Box)', '현재고(PT)',
-      '단위', '상태'];
-    // 제품마스터 캐시 로드 (Box/PT 환산용)
+    // ── SheetJS xlsx 서식 다운로드 ──
     var _expProducts = typeof _lgProductCache !== 'undefined' ? (_lgProductCache || []) : [];
-    var csvRows = rows.map(function(r) {
+    var wb = XLSX.utils.book_new();
+    var wsData = [];
+
+    // 행1: 대제목
+    wsData.push(['현재 재고 현황', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    // 행2: 다운로드 날짜
+    wsData.push(['다운로드: ' + new Date().toLocaleDateString('ko-KR'), '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    // 행3: 빈 행
+    wsData.push([]);
+    // 행4: 그룹 헤더
+    wsData.push(['제품명', '제품규격', '제품유형', '소비기한',
+      '입고수량(ea)', '입고수량(Box)', '입고수량(PT)',
+      '출고수량(ea)', '출고수량(Box)', '출고수량(PT)',
+      '현재고(ea)', '현재고(Box)', '현재고(PT)',
+      '단위', '상태']);
+
+    var typeColors = { '수입제품': 'FF2980B9', 'OEM제품': 'FFD68910', '자체생산': 'FF1E8449', '회수입고': 'FF8E44AD', '기타': 'FF888888' };
+    var statusColors = { '정상': 'FF1E8449', '부족': 'FFD68910', '재고없음': 'FFAAAAAA', '기한만료': 'FFE74C3C' };
+
+    rows.forEach(function(r) {
       var stock = r.inQty - r.outQty;
       var status = stock <= 0 ? '재고없음' : stock <= 10 ? '부족' : '정상';
       if (r.expiry) {
@@ -748,34 +762,98 @@ function lgExport(tab) {
         if (diff < 0) status = '기한만료';
         else if (diff <= 30) status = '임박(' + diff + '일)';
       }
-      // 제품마스터에서 환산 기준 조회
       var _pm = _expProducts.find(function(p) { return (p.product_name||'').trim() === r.name; });
+      var _spec = _pm ? (_pm.product_spec || _pm.spec || '') : '';
       var _qpb = _pm ? (parseInt(_pm.qty_per_box) || 0) : 0;
       var _bpp = _pm ? (parseInt(_pm.boxes_per_pallet) || 0) : 0;
-      // 집계된 ea/box/pt 값 사용 (없으면 환산)
       var inEa = r.inQty_ea || r.inQty;
       var inBox = r.inQty_box || (_qpb > 0 ? Math.floor(inEa / _qpb) : 0);
-      var inPt = r.inQty_pt || (_bpp > 0 ? Math.floor(inBox / _bpp) : 0);
+      var inPt  = r.inQty_pt  || (_bpp > 0 ? Math.floor(inBox / _bpp) : 0);
       var outEa = r.outQty_ea || r.outQty;
       var outBox = r.outQty_box || (_qpb > 0 ? Math.floor(outEa / _qpb) : 0);
-      var outPt = r.outQty_pt || (_bpp > 0 ? Math.floor(outBox / _bpp) : 0);
-      var curEa = inEa - outEa;
+      var outPt  = r.outQty_pt  || (_bpp > 0 ? Math.floor(outBox / _bpp) : 0);
+      var curEa  = inEa - outEa;
       var curBox = _qpb > 0 ? Math.floor(curEa / _qpb) : (inBox - outBox);
-      var curPt = _bpp > 0 ? Math.floor(curBox / _bpp) : (inPt - outPt);
-      return [r.name, r.ptype || '-', r.expiry || '-',
+      var curPt  = _bpp > 0 ? Math.floor(curBox / _bpp) : (inPt - outPt);
+      wsData.push([r.name, _spec || '-', r.ptype || '-', r.expiry || '-',
         inEa, inBox, inPt,
         outEa, outBox, outPt,
         curEa, curBox, curPt,
-        r.unit, status];
+        r.unit || 'ea', status]);
     });
-    var csvContent = [headers, ...csvRows].map(function(row) { return row.map(function(cell) { return '"' + cell + '"'; }).join(','); }).join('\n');
-    var blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = '현재재고현황_' + new Date().toISOString().split('T')[0] + '.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+
+    var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // 열 너비 설정
+    ws['!cols'] = [
+      {wch:28},{wch:16},{wch:10},{wch:12},
+      {wch:10},{wch:10},{wch:8},
+      {wch:10},{wch:10},{wch:8},
+      {wch:10},{wch:10},{wch:8},
+      {wch:6},{wch:10}
+    ];
+
+    // 행1 대제목 병합
+    ws['!merges'] = [
+      { s:{r:0,c:0}, e:{r:0,c:14} },
+      { s:{r:1,c:0}, e:{r:1,c:14} }
+    ];
+
+    // 셀 스타일 적용 (SheetJS Pro 없이 기본 스타일만)
+    var headerRow = 3; // 0-indexed
+    var dataStartRow = 4;
+
+    // 헤더 셀 스타일
+    var hdrCols = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O'];
+    hdrCols.forEach(function(col) {
+      var cellRef = col + (headerRow + 1);
+      if (!ws[cellRef]) ws[cellRef] = { v: '', t: 's' };
+      ws[cellRef].s = {
+        font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+        fill: { fgColor: { rgb: 'FF2C3E50' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: { bottom: { style: 'thin', color: { rgb: 'FFCCCCCC' } } }
+      };
+    });
+
+    // 데이터 행 스타일 (짝수행 배경)
+    for (var ri = dataStartRow; ri < wsData.length; ri++) {
+      var rowData = wsData[ri];
+      var isEven = (ri - dataStartRow) % 2 === 0;
+      var rowBg = isEven ? 'FFFAFAFA' : 'FFFFFFFF';
+      // 현재고 음수 행은 연빨간 배경
+      var curEaVal = rowData[10];
+      if (typeof curEaVal === 'number' && curEaVal < 0) rowBg = 'FFFFF0F0';
+      hdrCols.forEach(function(col, ci) {
+        var cellRef = col + (ri + 1);
+        if (!ws[cellRef]) ws[cellRef] = { v: '', t: 's' };
+        var cellStyle = {
+          fill: { fgColor: { rgb: rowBg } },
+          alignment: { vertical: 'center' },
+          border: { bottom: { style: 'hair', color: { rgb: 'FFE0E0E0' } } }
+        };
+        // 제품유형 컬럼(C) 색상
+        if (ci === 2) {
+          var tc = typeColors[rowData[2]] || 'FF888888';
+          cellStyle.font = { color: { rgb: tc }, bold: true };
+          cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
+        }
+        // 수량 컬럼 가운데 정렬
+        if (ci >= 4 && ci <= 12) cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
+        // 현재고 컬럼 굵게
+        if (ci >= 10 && ci <= 12) cellStyle.font = { bold: true };
+        // 상태 컬럼(O) 색상
+        if (ci === 14) {
+          var sc = statusColors[rowData[14]] || 'FF333333';
+          cellStyle.font = { color: { rgb: sc }, bold: true };
+          cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
+        }
+        ws[cellRef].s = cellStyle;
+      });
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, '현재재고현황');
+    XLSX.writeFile(wb, '현재재고현황_' + new Date().toISOString().split('T')[0] + '.xlsx');
     showToast('현재 재고 현황 엑셀 다운로드 완료!', 'success');
     return;
   }
