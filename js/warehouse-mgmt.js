@@ -4757,12 +4757,17 @@ function whCreateFullStocktakeCard(locObj, stockMap) {
         '<div style="font-size:10px;color:#27ae60;font-weight:700;margin-bottom:5px">+ 품목 직접 입력</div>' +
         '<input type="text" id="wfst_new_name_' + emptyLocSafeId + '" placeholder="품목명" ' +
           'style="width:100%;padding:4px 7px;border:1px solid #b2dfdb;border-radius:4px;font-size:11px;box-sizing:border-box;margin-bottom:4px" />' +
-        '<div style="display:flex;gap:4px">' +
+        '<div style="display:flex;gap:4px;margin-bottom:4px">' +
           '<input type="number" id="wfst_new_qty_' + emptyLocSafeId + '" min="1" step="1" placeholder="수량" ' +
             'style="flex:1;padding:4px 7px;border:1px solid #b2dfdb;border-radius:4px;font-size:11px" />' +
           '<input type="text" id="wfst_new_unit_' + emptyLocSafeId + '" placeholder="단위" value="ea" ' +
             'style="width:40px;padding:4px 5px;border:1px solid #b2dfdb;border-radius:4px;font-size:11px" />' +
-          '<button onclick="whFullStNewItemSave(\''+locCode+'\',\''+emptyLocSafeId+'\')" ' +
+        '</div>' +
+        '<div style="display:flex;gap:4px;align-items:center">' +
+          '<span style="font-size:10px;color:#888;white-space:nowrap">소비기한</span>' +
+          '<input type="date" id="wfst_new_expiry_' + emptyLocSafeId + '" ' +
+            'style="flex:1;padding:3px 5px;border:1px solid #b2dfdb;border-radius:4px;font-size:11px" />' +
+          '<button class="wh-fs-new-save-btn" data-loc="' + locCode + '" data-safe-id="' + emptyLocSafeId + '" ' +
             'style="padding:4px 8px;background:#27ae60;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-weight:700">저장</button>' +
         '</div>' +
       '</div>';
@@ -4850,6 +4855,14 @@ function whCreateFullStocktakeCard(locObj, stockMap) {
     addBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       whFullStAddItem(addBtn.dataset.loc);
+    });
+  }
+  // 빈위치 저장 버튼 이벤트 바인딩
+  var newSaveBtn = card.querySelector('.wh-fs-new-save-btn');
+  if (newSaveBtn) {
+    newSaveBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      whFullStNewItemSave(newSaveBtn.dataset.loc, newSaveBtn.dataset.safeId);
     });
   }
   return card;
@@ -4947,10 +4960,11 @@ function whFilterFullStocktakeGrid() {
 
 // ── 위치코드 input blur 핸들러 (위치 이동) ──────────────────
 async function whFullStLocInputBlur(input) {
-  if (!_whFullStocktakeUnlocked) { input.value = input.dataset.origLoc; return; }
+  if (!_whFullStocktakeUnlocked) { input.value = input.dataset.origLoc || ''; return; }
   var newLoc = (input.value || '').trim().toUpperCase();
-  var origLoc = input.dataset.origLoc || '';
+  var origLoc = (input.dataset.origLoc || '').trim();
   if (!newLoc || newLoc === origLoc) { input.value = origLoc; return; }
+  // 유효한 위치코드인지 확인
   var allLocs = COLD_LOCATIONS.concat(WARM_LOCATIONS);
   var targetLocObj = allLocs.find(function(l) { return l.code === newLoc; });
   if (!targetLocObj) {
@@ -4959,30 +4973,32 @@ async function whFullStLocInputBlur(input) {
     return;
   }
   var recs = whInboundData.filter(function(r) { return r.location === origLoc; });
-  if (recs.length === 0) {
-    showToast('이동할 입고 레코드가 없습니다.', 'warning');
+  var outRecs = whOutboundData.filter(function(r) { return r.location === origLoc; });
+  if (recs.length === 0 && outRecs.length === 0) {
+    // 빈 위치인 경우 단순 위치코드 표시만 변경 (실제 DB 변경 없음)
+    showToast('빈 위치는 위치코드를 변경할 데이터가 없습니다.', 'info');
     input.value = origLoc;
     return;
   }
-  if (!confirm(origLoc + ' 위치의 입고 레코드 ' + recs.length + '건을 ' + newLoc + '으로 이동합니다.\n\n계속하시겠습니까?')) {
+  var totalCount = recs.length + outRecs.length;
+  if (!confirm(origLoc + ' 위치의 레코드 ' + totalCount + '건(입고 ' + recs.length + '건 + 출고 ' + outRecs.length + '건)을\n' + newLoc + ' 으로 이동합니다.\n\n계속하시겠습니까?')) {
     input.value = origLoc;
     return;
   }
   try {
     for (var i = 0; i < recs.length; i++) {
-      await apiPut('wh_inbound', recs[i].id, Object.assign({}, recs[i], {
-        location: newLoc,
-        warehouse: newLoc.charAt(0)
-      }));
+      var r = recs[i]; var rId = r.id;
+      var ru = Object.assign({}, r, { location: newLoc, warehouse: newLoc.charAt(0) });
+      delete ru.id;
+      await apiPut('wh_inbound', rId, ru);
     }
-    var outRecs = whOutboundData.filter(function(r) { return r.location === origLoc; });
     for (var j = 0; j < outRecs.length; j++) {
-      await apiPut('wh_outbound', outRecs[j].id, Object.assign({}, outRecs[j], {
-        location: newLoc,
-        warehouse: newLoc.charAt(0)
-      }));
+      var o = outRecs[j]; var oId = o.id;
+      var ou = Object.assign({}, o, { location: newLoc, warehouse: newLoc.charAt(0) });
+      delete ou.id;
+      await apiPut('wh_outbound', oId, ou);
     }
-    showToast('위치 이동 완료: ' + origLoc + ' → ' + newLoc, 'success');
+    showToast('위치 이동 완료: ' + origLoc + ' → ' + newLoc + ' (' + totalCount + '건)', 'success');
     whInvalidateMapCache();
     await whReloadAll();
     if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
@@ -4997,16 +5013,25 @@ async function whFullStNameBlur(input) {
   if (!_whFullStocktakeUnlocked) return;
   var newName = (input.value || '').trim();
   var origName = input.dataset.origName || '';
-  if (!newName || newName === origName) return;
+  // &quot; 이스케이프 복원 후 비교
+  var origNameDecoded = origName.replace(/&quot;/g, '"');
+  if (!newName || newName === origNameDecoded) { input.value = origNameDecoded; return; }
+  var locCode = input.dataset.loc || '';
+  // ids 우선 사용, 없으면 locCode+origName으로 직접 조회
   var idsStr = input.dataset.inboundIds || '';
   var ids = idsStr ? idsStr.split(',').filter(Boolean) : [];
+  if (ids.length === 0 && locCode && origNameDecoded) {
+    ids = whInboundData
+      .filter(function(r) { return r.location === locCode && r.item_name === origNameDecoded; })
+      .map(function(r) { return r.id; });
+  }
   if (ids.length === 0) {
     showToast('변경할 입고 레코드를 찾을 수 없습니다.', 'warning');
-    input.value = origName;
+    input.value = origNameDecoded;
     return;
   }
-  if (!confirm('"' + origName + '" → "' + newName + '" 으로 품목명을 변경합니다.\n해당 위치의 입고 레코드 ' + ids.length + '건이 모두 변경됩니다.\n\n계속하시겠습니까?')) {
-    input.value = origName;
+  if (!confirm('"' + origNameDecoded + '" → "' + newName + '" 으로 품목명을 변경합니다.\n해당 위치의 입고 레코드 ' + ids.length + '건이 모두 변경됩니다.\n\n계속하시겠습니까?')) {
+    input.value = origNameDecoded;
     return;
   }
   try {
@@ -5015,25 +5040,33 @@ async function whFullStNameBlur(input) {
       if (!rec) continue;
       var updated = Object.assign({}, rec, {
         item_name: newName,
-        memo: (rec.memo ? rec.memo + ' | ' : '') + '품목명변경: ' + origName + ' → ' + newName
+        memo: (rec.memo ? rec.memo + ' | ' : '') + '품목명변경: ' + origNameDecoded + ' → ' + newName
       });
       var recId = updated.id; delete updated.id;
       await apiPut('wh_inbound', recId, updated);
     }
-    showToast('품목명 변경 완료: ' + origName + ' → ' + newName + ' (' + ids.length + '건)', 'success');
+    showToast('품목명 변경 완료: ' + origNameDecoded + ' → ' + newName + ' (' + ids.length + '건)', 'success');
     input.dataset.origName = newName;
     whInvalidateMapCache();
     await whReloadAll();
     if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
   } catch(e) {
     showToast('품목명 변경 실패: ' + e.message, 'error');
-    input.value = origName;
+    input.value = origNameDecoded;
   }
 }
 // ── 품목 삭제 ────────────────────────────────────
 async function whFullStDeleteItem(locCode, itemName, inboundIds) {
   if (!_whFullStocktakeUnlocked) { showToast('관리자 허가가 필요합니다.', 'warning'); return; }
+  // itemName &quot; 디코딩
+  itemName = (itemName || '').replace(/&quot;/g, '"');
   if (!Array.isArray(inboundIds)) inboundIds = [];
+  // inboundIds가 비어있으면 locCode+itemName으로 직접 조회
+  if (inboundIds.length === 0 && locCode && itemName) {
+    inboundIds = whInboundData
+      .filter(function(r) { return r.location === locCode && r.item_name === itemName; })
+      .map(function(r) { return r.id; });
+  }
   var totalQty = whInboundData
     .filter(function(r) { return r.location === locCode && r.item_name === itemName; })
     .reduce(function(s, r) { return s + (Number(r.qty) || 0); }, 0);
@@ -5151,9 +5184,11 @@ async function whFullStNewItemSave(locCode, safeId) {
   var nameEl = document.getElementById('wfst_new_name_' + safeId);
   var qtyEl = document.getElementById('wfst_new_qty_' + safeId);
   var unitEl = document.getElementById('wfst_new_unit_' + safeId);
+  var expiryEl = document.getElementById('wfst_new_expiry_' + safeId);
   var itemName = (nameEl ? nameEl.value.trim() : '');
   var qty = qtyEl ? (Number(qtyEl.value) || 0) : 0;
   var unit = unitEl ? (unitEl.value.trim() || 'ea') : 'ea';
+  var expiryDate = expiryEl ? (expiryEl.value || '') : '';
   if (!itemName) { showToast('품목명을 입력하세요.', 'warning'); if (nameEl) nameEl.focus(); return; }
   if (qty <= 0) { showToast('수량을 입력하세요.', 'warning'); if (qtyEl) qtyEl.focus(); return; }
   var today = new Date().toISOString().split('T')[0];
@@ -5172,7 +5207,7 @@ async function whFullStNewItemSave(locCode, safeId) {
       item_name: itemName,
       qty: qty,
       unit: unit,
-      expiry_date: '',
+      expiry_date: expiryDate,
       inbound_type: '재고조정',
       manager: '실사추가',
       memo: '전체실사 모드 빈위치 직접입력',
@@ -5471,8 +5506,14 @@ async function whSaveFullStocktake() {
       });
     }
     showToast('전체 동기화 완료', 'success');
-    // 그리드 재렌더링
+    // 그리드 재렌더링 (스크롤 위치 유지)
+    var gridEl = document.getElementById('whFullStocktakeGridInner');
+    var scrollTop = gridEl ? (gridEl.closest('[style*="overflow"]') || document.documentElement).scrollTop : 0;
     whRenderFullStocktakeGrid();
+    setTimeout(function() {
+      var scrollTarget = gridEl ? (gridEl.closest('[style*="overflow"]') || document.documentElement) : null;
+      if (scrollTarget) scrollTarget.scrollTop = scrollTop;
+    }, 50);
   } catch(e) {
     showToast('저장 실패: ' + e.message, 'error');
   }
