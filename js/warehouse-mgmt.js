@@ -4687,35 +4687,27 @@ function whCreateFullStocktakeCard(locObj, stockMap) {
   var locCode = locObj.code;
   var items = stockMap[locCode] || {};
   var hasStock = Object.values(items).some(function(v) { return (Number(v.qty) || 0) > 0; });
-
   var card = document.createElement('div');
   card.className = 'wh-full-st-card';
   card.dataset.locCode = locCode;
   card.dataset.hasStock = hasStock ? '1' : '0';
-
-  // 드래그&드롭 이벤트
-  card.draggable = true;
-  card.addEventListener('dragstart', whFullStDragStart);
+  // 카드 자체는 드래그 비활성화 → 드래그 핸들(⠿)에만 드래그 활성화
+  card.draggable = false;
   card.addEventListener('dragover', whFullStDragOver);
   card.addEventListener('dragleave', whFullStDragLeave);
   card.addEventListener('drop', whFullStDrop);
-  card.addEventListener('dragend', whFullStDragEnd);
-
   // 카드 스타일
   var borderColor = hasStock ? '#8e44ad' : '#ddd';
   var bgColor = hasStock ? '#fdf5ff' : '#f8f9fa';
-  card.style.cssText = 'border:1.5px solid ' + borderColor + ';border-radius:10px;padding:10px 12px;background:' + bgColor + ';cursor:grab;transition:all 0.15s;position:relative;user-select:none';
-
-  // 위치코드 헤더
+  card.style.cssText = 'border:1.5px solid ' + borderColor + ';border-radius:10px;padding:10px 12px;background:' + bgColor + ';transition:all 0.15s;position:relative';
+  // 위치코드 헤더 (드래그 핸들 포함)
   var header = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
     '<code style="font-size:11px;font-weight:700;color:' + (hasStock ? '#6c3483' : '#aaa') + ';background:' + (hasStock ? '#ede0f7' : '#f0f0f0') + ';padding:2px 7px;border-radius:6px">' + locCode + '</code>' +
-    '<span style="font-size:10px;color:#aaa;cursor:grab" title="드래그하여 위치 이동">⠿</span>' +
+    '<span class="wh-fs-drag-handle" data-loc="' + locCode + '" draggable="true" title="드래그하여 위치 이동" style="font-size:14px;color:#aaa;cursor:grab;padding:2px 4px;border-radius:4px;user-select:none">⠿</span>' +
   '</div>';
-
   // 재고 항목 목록
   var itemsHtml = '';
   var activeItems = Object.entries(items).filter(function(e) { return (Number(e[1].qty) || 0) > 0; });
-
   if (activeItems.length === 0) {
     itemsHtml = '<div style="font-size:11px;color:#bbb;text-align:center;padding:8px 0">빈 위치</div>';
   } else {
@@ -4724,10 +4716,25 @@ function whCreateFullStocktakeCard(locObj, stockMap) {
       var info = entry[1];
       var sysQty = Number(info.qty) || 0;
       var safeId = locCode.replace(/[^a-zA-Z0-9]/g, '_') + '__' + itemName.replace(/[^a-zA-Z0-9가-힣]/g, '_');
-
+      // 입고 레코드 ID 수집 (품목명 변경 시 사용)
+      var inboundIds = whInboundData
+        .filter(function(r) { return r.location === locCode && r.item_name === itemName; })
+        .map(function(r) { return r.id; });
       itemsHtml +=
         '<div style="margin-bottom:6px;padding:6px 8px;background:#fff;border-radius:6px;border:1px solid #e8d5f5">' +
-          '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:4px;word-break:break-all">' + itemName + '</div>' +
+          '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">' +
+            '<input type="text" ' +
+              'id="wfst_name_' + safeId + '" ' +
+              'data-loc="' + locCode + '" ' +
+              'data-orig-name="' + itemName.replace(/"/g, '&quot;') + '" ' +
+              'data-inbound-ids="' + inboundIds.join(',') + '" ' +
+              'value="' + itemName.replace(/"/g, '&quot;') + '" ' +
+              'title="클릭하여 품목명 수정" ' +
+              'onfocus="this.style.background=\"#fffde7\";this.style.borderColor=\"#f39c12\"" ' +
+              'onblur="this.style.background=\"transparent\";this.style.borderColor=\"transparent\";whFullStNameBlur(this)" ' +
+              'style="flex:1;font-size:11px;font-weight:700;color:#333;border:1px solid transparent;border-radius:4px;padding:2px 5px;background:transparent;min-width:0;cursor:text" />' +
+            '<span style="font-size:9px;color:#bbb;white-space:nowrap" title="품목명 클릭 시 수정 가능">✎</span>' +
+          '</div>' +
           '<div style="display:flex;align-items:center;gap:6px">' +
             '<span style="font-size:10px;color:#888">전산:</span>' +
             '<span style="font-size:12px;font-weight:700;color:#2980b9">' + sysQty + '</span>' +
@@ -4746,8 +4753,25 @@ function whCreateFullStocktakeCard(locObj, stockMap) {
         '</div>';
     });
   }
-
   card.innerHTML = header + itemsHtml;
+  // 드래그 핸들에 이벤트 바인딩 (innerHTML 후 DOM에서 찾아야 함)
+  var handle = card.querySelector('.wh-fs-drag-handle');
+  if (handle) {
+    handle.addEventListener('dragstart', function(e) {
+      _whFullStocktakeDragSrc = { locCode: locCode, card: card };
+      card.style.opacity = '0.5';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', locCode);
+      e.stopPropagation();
+    });
+    handle.addEventListener('dragend', function(e) {
+      card.style.opacity = '1';
+      var hs = card.dataset.hasStock === '1';
+      card.style.borderColor = hs ? '#8e44ad' : '#ddd';
+      card.style.background = hs ? '#fdf5ff' : '#f8f9fa';
+      _whFullStocktakeDragSrc = null;
+    });
+  }
   return card;
 }
 
@@ -4824,17 +4848,45 @@ function whFilterFullStocktakeGrid() {
   if (emptyEl) emptyEl.style.display = visibleCount === 0 ? '' : 'none';
 }
 
-// ── 드래그&드롭 이벤트 핸들러 ──────────────────────────────
-function whFullStDragStart(e) {
-  var card = e.currentTarget;
-  _whFullStocktakeDragSrc = {
-    locCode: card.dataset.locCode,
-    card: card
-  };
-  card.style.opacity = '0.5';
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', card.dataset.locCode);
+// ── 품목명 blur 핸들러 (품목명 변경 저장) ──────────────────
+async function whFullStNameBlur(input) {
+  if (!_whFullStocktakeUnlocked) return;
+  var newName = (input.value || '').trim();
+  var origName = input.dataset.origName || '';
+  if (!newName || newName === origName) return;
+  var idsStr = input.dataset.inboundIds || '';
+  var ids = idsStr ? idsStr.split(',').filter(Boolean) : [];
+  if (ids.length === 0) {
+    showToast('변경할 입고 레코드를 찾을 수 없습니다.', 'warning');
+    input.value = origName;
+    return;
+  }
+  if (!confirm('"' + origName + '" → "' + newName + '" 으로 품목명을 변경합니다.\n해당 위치의 입고 레코드 ' + ids.length + '건이 모두 변경됩니다.\n\n계속하시겠습니까?')) {
+    input.value = origName;
+    return;
+  }
+  try {
+    for (var i = 0; i < ids.length; i++) {
+      var rec = whInboundData.find(function(r) { return r.id === ids[i]; });
+      if (!rec) continue;
+      var updated = Object.assign({}, rec, {
+        item_name: newName,
+        memo: (rec.memo ? rec.memo + ' | ' : '') + '품목명변경: ' + origName + ' → ' + newName
+      });
+      var recId = updated.id; delete updated.id;
+      await apiPut('wh_inbound', recId, updated);
+    }
+    showToast('품목명 변경 완료: ' + origName + ' → ' + newName + ' (' + ids.length + '건)', 'success');
+    input.dataset.origName = newName;
+    whInvalidateMapCache();
+    await whReloadAll();
+    if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
+  } catch(e) {
+    showToast('품목명 변경 실패: ' + e.message, 'error');
+    input.value = origName;
+  }
 }
+// ── 드래그&드롭 이벤트 핸들러 ──────────────────────────────
 
 function whFullStDragOver(e) {
   e.preventDefault();
