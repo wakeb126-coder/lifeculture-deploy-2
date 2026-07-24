@@ -5311,9 +5311,44 @@ async function whSaveFullStocktake() {
     var msg = '전체 실사 저장 완료 (' + records.length + '건)';
     if (adjCreated > 0) msg += ' — 재고 자동 조정 ' + adjCreated + '건 반영';
     showToast(msg, 'success');
+    // ── 전체 물류관리 연동 갱신 ──────────────────────────────
+    showToast('물류관리 전체 데이터 동기화 중...', 'info');
     whInvalidateMapCache();
+    // 1) warehouse-mgmt 전체 재로드 (입고/출고/실사/원장/맵/KPI)
     await whReloadAll();
-    if (typeof loadLogisticsData === 'function') loadLogisticsData();
+    // 2) logistics.js 재고현황 및 물류 테이블 갱신
+    if (typeof loadLogisticsData === 'function') await loadLogisticsData();
+    // 3) 창고맵 갱신 (현재 선택된 맵 타입 유지)
+    var freshMap = whCalcStock();
+    whUpdateDashKpi(freshMap);
+    whUpdateMapKpi(freshMap);
+    var mapTab = document.getElementById('tabContent_wh_map');
+    if (mapTab) { whShowMap(whCurrentMap || 'cold', freshMap); }
+    // 4) 재고원장 갱신
+    whRenderLedger(freshMap);
+    // 5) 입고/출고 테이블 갱신
+    whRenderInTable();
+    whRenderOutTable();
+    // 6) 실사 이력 테이블 갱신
+    whRenderStocktakeTable();
+    // 7) FIFO 갱신
+    if (typeof whRenderFifo === 'function') whRenderFifo();
+    // 8) 재고검증 탭 갱신 (검색 결과가 열려있으면 재검색)
+    if (typeof vfySearch === 'function') {
+      var vfyInput = document.getElementById('vfyItemInput');
+      if (vfyInput && vfyInput.value.trim()) { vfySearch(); }
+    }
+    // 9) lgRenderStockTable (재고현황 테이블)
+    if (typeof lgRenderStockTable === 'function') lgRenderStockTable();
+    // 10) InventoryStore 이벤트 발행 → 구독 모듈 자동 갱신
+    if (window.InventoryStore) {
+      window.InventoryStore.emit('warehouse:updated', {
+        wh_inbound: whInboundData,
+        wh_outbound: whOutboundData,
+        wh_stocktake: whStocktakeData
+      });
+    }
+    showToast('전체 동기화 완료', 'success');
     // 그리드 재렌더링
     whRenderFullStocktakeGrid();
   } catch(e) {
