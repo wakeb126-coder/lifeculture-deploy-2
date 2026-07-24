@@ -1540,7 +1540,7 @@ async function whSubmitStocktake() {
 }
 
 function whRenderStocktakeTable() {
-  var tbody = document.getElementById('whStocktakeHistBody');
+  var tbody = document.getElementById('whStocktakeBody');
   if (!tbody) return;
   var data = whStocktakeData.slice().sort(function(a,b){ return (b.stocktake_date||'').localeCompare(a.stocktake_date||''); });
   if (data.length === 0) {
@@ -4500,4 +4500,726 @@ function whOutHandleFile(file) {
   // input 초기화 (같은 파일 재업로드 가능)
   var fi = document.getElementById('whOutFileInput');
   if (fi) fi.value = '';
+}
+
+
+// =====================================================
+// ── 전체 위치코드 실사 모드 ──────────────────────────
+// 관리자 허가 체계 + 전체 위치코드 그리드 + 드래그 이동 + 실재고 수정
+// =====================================================
+
+// 전체 실사 모드 상태
+var _whFullStocktakeUnlocked = false;
+var _whFullStocktakeWarehouse = 'C'; // 현재 선택된 창고 ('C' or 'W')
+var _whFullStocktakeDragSrc = null; // 드래그 소스 카드 정보 { locCode, itemName }
+
+// ── 관리자 허가 요청 모달 ──────────────────────────────────
+function whRequestFullStocktakeApproval() {
+  var user = getCurrentUser();
+  // 이미 관리자로 로그인된 경우 즉시 허가
+  if (user && user.role === 'admin') {
+    whGrantFullStocktake();
+    return;
+  }
+
+  // 관리자 비밀번호 입력 모달
+  var modalId = 'whFullApproveModal';
+  var existing = document.getElementById(modalId);
+  if (existing) existing.remove();
+
+  var m = document.createElement('div');
+  m.id = modalId;
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center';
+  m.innerHTML =
+    '<div style="background:#fff;border-radius:14px;width:90%;max-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.2);overflow:hidden">' +
+      '<div style="background:linear-gradient(135deg,#8e44ad,#6c3483);padding:16px 20px;display:flex;align-items:center;justify-content:space-between">' +
+        '<h3 style="color:#fff;font-size:15px;margin:0"><i class="fas fa-key"></i> 관리자 허가</h3>' +
+        '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;opacity:0.7">&times;</button>' +
+      '</div>' +
+      '<div style="padding:20px">' +
+        '<div style="font-size:13px;color:#555;margin-bottom:16px">전체 위치코드 실사 모드를 활성화하려면<br>관리자 비밀번호를 입력하세요.</div>' +
+        '<div style="margin-bottom:12px">' +
+          '<label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">관리자 이메일</label>' +
+          '<input type="email" id="whApproveEmail" placeholder="admin@lifeculture.co.kr" value="admin@lifeculture.co.kr" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" />' +
+        '</div>' +
+        '<div style="margin-bottom:16px">' +
+          '<label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">관리자 비밀번호 <span style="color:#e74c3c">*</span></label>' +
+          '<input type="password" id="whApprovePassword" placeholder="비밀번호 입력" style="width:100%;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;box-sizing:border-box" onkeydown="if(event.key===\'Enter\')whVerifyAdminApproval()" autofocus />' +
+        '</div>' +
+        '<div id="whApproveError" style="display:none;color:#e74c3c;font-size:12px;margin-bottom:10px;padding:8px;background:#fdedec;border-radius:6px"></div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px">취소</button>' +
+          '<button onclick="whVerifyAdminApproval()" style="flex:1;padding:10px;background:#8e44ad;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700"><i class="fas fa-unlock"></i> 허가</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(m);
+  setTimeout(function() {
+    var pw = document.getElementById('whApprovePassword');
+    if (pw) pw.focus();
+  }, 100);
+}
+
+function whVerifyAdminApproval() {
+  var emailEl = document.getElementById('whApproveEmail');
+  var pwEl = document.getElementById('whApprovePassword');
+  var errEl = document.getElementById('whApproveError');
+  if (!pwEl) return;
+
+  var email = (emailEl ? emailEl.value : 'admin@lifeculture.co.kr').trim();
+  var password = pwEl.value;
+
+  // localStorage에서 사용자 목록 조회
+  var USERS_KEY = 'lc_users';
+  var users = [];
+  try { users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]'); } catch(e) {}
+
+  // DEFAULT_USERS fallback
+  if (users.length === 0 && typeof DEFAULT_USERS !== 'undefined') {
+    users = DEFAULT_USERS;
+  }
+
+  var adminUser = users.find(function(u) {
+    return u.email.toLowerCase() === email.toLowerCase() && u.password === password && u.role === 'admin' && u.active;
+  });
+
+  if (!adminUser) {
+    if (errEl) {
+      errEl.textContent = '관리자 이메일 또는 비밀번호가 올바르지 않습니다.';
+      errEl.style.display = 'block';
+    }
+    if (pwEl) { pwEl.value = ''; pwEl.focus(); }
+    return;
+  }
+
+  // 허가 성공
+  var modal = document.getElementById('whFullApproveModal');
+  if (modal) modal.remove();
+  whGrantFullStocktake();
+}
+
+function whGrantFullStocktake() {
+  _whFullStocktakeUnlocked = true;
+  // UI 업데이트
+  var statusEl = document.getElementById('whFullStocktakeStatus');
+  if (statusEl) {
+    statusEl.innerHTML = '<i class="fas fa-unlock" style="color:#2ecc71"></i> <span style="color:#2ecc71">허가됨 — 실사 모드 활성</span>';
+  }
+  var approveBtn = document.getElementById('whFullStocktakeApproveBtn');
+  if (approveBtn) approveBtn.style.display = 'none';
+  var saveBtn = document.getElementById('whFullStocktakeSaveBtn');
+  if (saveBtn) saveBtn.style.display = '';
+  var lockBtn = document.getElementById('whFullStocktakeLockBtn');
+  if (lockBtn) lockBtn.style.display = '';
+
+  // 잠금 오버레이 숨기고 그리드 표시
+  var overlay = document.getElementById('whFullStocktakeLockOverlay');
+  if (overlay) overlay.style.display = 'none';
+  var grid = document.getElementById('whFullStocktakeGrid');
+  if (grid) grid.style.display = '';
+
+  // 오늘 날짜 설정
+  var dateEl = document.getElementById('whFullStocktakeDate');
+  if (dateEl && !dateEl.value) {
+    dateEl.value = new Date().toISOString().split('T')[0];
+  }
+
+  // 그리드 렌더링
+  whRenderFullStocktakeGrid();
+  showToast('전체 위치코드 실사 모드가 활성화되었습니다.', 'success');
+}
+
+function whLockFullStocktake() {
+  if (!confirm('실사 모드를 잠금하시겠습니까?\n저장하지 않은 수정 내용은 사라집니다.')) return;
+  _whFullStocktakeUnlocked = false;
+  var statusEl = document.getElementById('whFullStocktakeStatus');
+  if (statusEl) statusEl.innerHTML = '<i class="fas fa-lock"></i> 관리자 허가 필요';
+  var approveBtn = document.getElementById('whFullStocktakeApproveBtn');
+  if (approveBtn) approveBtn.style.display = '';
+  var saveBtn = document.getElementById('whFullStocktakeSaveBtn');
+  if (saveBtn) saveBtn.style.display = 'none';
+  var lockBtn = document.getElementById('whFullStocktakeLockBtn');
+  if (lockBtn) lockBtn.style.display = 'none';
+  var overlay = document.getElementById('whFullStocktakeLockOverlay');
+  if (overlay) overlay.style.display = '';
+  var grid = document.getElementById('whFullStocktakeGrid');
+  if (grid) grid.style.display = 'none';
+}
+
+// ── 창고 선택 ──────────────────────────────────────────
+function whFullStocktakeSetWarehouse(wh) {
+  _whFullStocktakeWarehouse = wh;
+  var btnC = document.getElementById('whFullWh_C');
+  var btnW = document.getElementById('whFullWh_W');
+  if (btnC) {
+    btnC.style.borderColor = wh === 'C' ? '#8e44ad' : '#ddd';
+    btnC.style.color = wh === 'C' ? '#8e44ad' : '#555';
+    btnC.style.background = wh === 'C' ? '#f5eef8' : '#fff';
+  }
+  if (btnW) {
+    btnW.style.borderColor = wh === 'W' ? '#8e44ad' : '#ddd';
+    btnW.style.color = wh === 'W' ? '#8e44ad' : '#555';
+    btnW.style.background = wh === 'W' ? '#f5eef8' : '#fff';
+  }
+  if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
+}
+
+// ── 전체 위치코드 그리드 렌더링 ──────────────────────────
+function whRenderFullStocktakeGrid() {
+  var inner = document.getElementById('whFullStocktakeGridInner');
+  var emptyEl = document.getElementById('whFullStocktakeEmpty');
+  if (!inner) return;
+
+  var stockMap = whCalcStock();
+  var locs = _whFullStocktakeWarehouse === 'C' ? COLD_LOCATIONS : WARM_LOCATIONS;
+
+  inner.innerHTML = '';
+  locs.forEach(function(l) {
+    var card = whCreateFullStocktakeCard(l, stockMap);
+    inner.appendChild(card);
+  });
+
+  whFilterFullStocktakeGrid();
+}
+
+// ── 위치 카드 생성 ──────────────────────────────────────
+function whCreateFullStocktakeCard(locObj, stockMap) {
+  var locCode = locObj.code;
+  var items = stockMap[locCode] || {};
+  var hasStock = Object.values(items).some(function(v) { return (Number(v.qty) || 0) > 0; });
+
+  var card = document.createElement('div');
+  card.className = 'wh-full-st-card';
+  card.dataset.locCode = locCode;
+  card.dataset.hasStock = hasStock ? '1' : '0';
+
+  // 드래그&드롭 이벤트
+  card.draggable = true;
+  card.addEventListener('dragstart', whFullStDragStart);
+  card.addEventListener('dragover', whFullStDragOver);
+  card.addEventListener('dragleave', whFullStDragLeave);
+  card.addEventListener('drop', whFullStDrop);
+  card.addEventListener('dragend', whFullStDragEnd);
+
+  // 카드 스타일
+  var borderColor = hasStock ? '#8e44ad' : '#ddd';
+  var bgColor = hasStock ? '#fdf5ff' : '#f8f9fa';
+  card.style.cssText = 'border:1.5px solid ' + borderColor + ';border-radius:10px;padding:10px 12px;background:' + bgColor + ';cursor:grab;transition:all 0.15s;position:relative;user-select:none';
+
+  // 위치코드 헤더
+  var header = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+    '<code style="font-size:11px;font-weight:700;color:' + (hasStock ? '#6c3483' : '#aaa') + ';background:' + (hasStock ? '#ede0f7' : '#f0f0f0') + ';padding:2px 7px;border-radius:6px">' + locCode + '</code>' +
+    '<span style="font-size:10px;color:#aaa;cursor:grab" title="드래그하여 위치 이동">⠿</span>' +
+  '</div>';
+
+  // 재고 항목 목록
+  var itemsHtml = '';
+  var activeItems = Object.entries(items).filter(function(e) { return (Number(e[1].qty) || 0) > 0; });
+
+  if (activeItems.length === 0) {
+    itemsHtml = '<div style="font-size:11px;color:#bbb;text-align:center;padding:8px 0">빈 위치</div>';
+  } else {
+    activeItems.forEach(function(entry) {
+      var itemName = entry[0];
+      var info = entry[1];
+      var sysQty = Number(info.qty) || 0;
+      var safeId = locCode.replace(/[^a-zA-Z0-9]/g, '_') + '__' + itemName.replace(/[^a-zA-Z0-9가-힣]/g, '_');
+
+      itemsHtml +=
+        '<div style="margin-bottom:6px;padding:6px 8px;background:#fff;border-radius:6px;border:1px solid #e8d5f5">' +
+          '<div style="font-size:11px;font-weight:700;color:#333;margin-bottom:4px;word-break:break-all">' + itemName + '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px">' +
+            '<span style="font-size:10px;color:#888">전산:</span>' +
+            '<span style="font-size:12px;font-weight:700;color:#2980b9">' + sysQty + '</span>' +
+            '<span style="font-size:10px;color:#888">' + (info.unit || '') + '</span>' +
+            '<span style="font-size:10px;color:#aaa;margin-left:4px">→ 실재고:</span>' +
+            '<input type="number" min="0" step="1" ' +
+              'id="wfst_' + safeId + '" ' +
+              'data-loc="' + locCode + '" ' +
+              'data-item="' + itemName.replace(/"/g, '&quot;') + '" ' +
+              'data-sys="' + sysQty + '" ' +
+              'placeholder="' + sysQty + '" ' +
+              'oninput="whFullStCalcDiff(this)" ' +
+              'style="width:60px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-weight:700" />' +
+          '</div>' +
+          '<div id="wfst_diff_' + safeId + '" style="font-size:11px;font-weight:700;margin-top:3px;color:#aaa">-</div>' +
+        '</div>';
+    });
+  }
+
+  card.innerHTML = header + itemsHtml;
+  return card;
+}
+
+// ── 실재고 차이 계산 ──────────────────────────────────────
+function whFullStCalcDiff(input) {
+  if (!input) return;
+  var sysQty = Number(input.dataset.sys) || 0;
+  var actualQty = input.value !== '' ? (Number(input.value) || 0) : null;
+  var safeId = input.id.replace('wfst_', '');
+  var diffEl = document.getElementById('wfst_diff_' + safeId);
+  if (!diffEl) return;
+  if (actualQty === null) {
+    diffEl.textContent = '-';
+    diffEl.style.color = '#aaa';
+    return;
+  }
+  var diff = actualQty - sysQty;
+  diffEl.textContent = (diff > 0 ? '+' : '') + diff + ' ' + (diff === 0 ? '✓' : '');
+  diffEl.style.color = diff === 0 ? '#27ae60' : (diff > 0 ? '#e67e22' : '#e74c3c');
+
+  // 차이 있는 항목만 필터 적용 시 카드 업데이트
+  whFilterFullStocktakeGrid();
+}
+
+// ── 그리드 필터 ──────────────────────────────────────────
+function whFilterFullStocktakeGrid() {
+  var inner = document.getElementById('whFullStocktakeGridInner');
+  var emptyEl = document.getElementById('whFullStocktakeEmpty');
+  if (!inner) return;
+
+  var searchVal = (document.getElementById('whFullStocktakeSearch') || {}).value || '';
+  var q = searchVal.trim().toLowerCase();
+  var showEmpty = document.getElementById('whFullShowEmpty');
+  var showDiffOnly = document.getElementById('whFullShowDiffOnly');
+  var showEmptyChecked = showEmpty ? showEmpty.checked : true;
+  var showDiffOnlyChecked = showDiffOnly ? showDiffOnly.checked : false;
+
+  var cards = inner.querySelectorAll('.wh-full-st-card');
+  var visibleCount = 0;
+  cards.forEach(function(card) {
+    var locCode = card.dataset.locCode || '';
+    var hasStock = card.dataset.hasStock === '1';
+    var show = true;
+
+    // 검색 필터
+    if (q) {
+      var cardText = card.textContent.toLowerCase();
+      if (!locCode.toLowerCase().includes(q) && !cardText.includes(q)) {
+        show = false;
+      }
+    }
+
+    // 빈 위치 필터
+    if (!showEmptyChecked && !hasStock) show = false;
+
+    // 차이 있는 항목만 필터
+    if (showDiffOnlyChecked) {
+      var hasDiff = false;
+      var inputs = card.querySelectorAll('input[type="number"]');
+      inputs.forEach(function(inp) {
+        if (inp.value !== '') {
+          var sys = Number(inp.dataset.sys) || 0;
+          var actual = Number(inp.value) || 0;
+          if (actual !== sys) hasDiff = true;
+        }
+      });
+      if (!hasDiff) show = false;
+    }
+
+    card.style.display = show ? '' : 'none';
+    if (show) visibleCount++;
+  });
+
+  if (emptyEl) emptyEl.style.display = visibleCount === 0 ? '' : 'none';
+}
+
+// ── 드래그&드롭 이벤트 핸들러 ──────────────────────────────
+function whFullStDragStart(e) {
+  var card = e.currentTarget;
+  _whFullStocktakeDragSrc = {
+    locCode: card.dataset.locCode,
+    card: card
+  };
+  card.style.opacity = '0.5';
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', card.dataset.locCode);
+}
+
+function whFullStDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  var card = e.currentTarget;
+  if (_whFullStocktakeDragSrc && card !== _whFullStocktakeDragSrc.card) {
+    card.style.borderColor = '#e67e22';
+    card.style.background = '#fff8f0';
+  }
+}
+
+function whFullStDragLeave(e) {
+  var card = e.currentTarget;
+  var hasStock = card.dataset.hasStock === '1';
+  card.style.borderColor = hasStock ? '#8e44ad' : '#ddd';
+  card.style.background = hasStock ? '#fdf5ff' : '#f8f9fa';
+}
+
+function whFullStDragEnd(e) {
+  var card = e.currentTarget;
+  card.style.opacity = '1';
+  var hasStock = card.dataset.hasStock === '1';
+  card.style.borderColor = hasStock ? '#8e44ad' : '#ddd';
+  card.style.background = hasStock ? '#fdf5ff' : '#f8f9fa';
+  _whFullStocktakeDragSrc = null;
+}
+
+function whFullStDrop(e) {
+  e.preventDefault();
+  var toCard = e.currentTarget;
+  if (!_whFullStocktakeDragSrc) return;
+  var fromCard = _whFullStocktakeDragSrc.card;
+  if (toCard === fromCard) return;
+
+  var fromLoc = fromCard.dataset.locCode;
+  var toLoc = toCard.dataset.locCode;
+
+  // 드롭 대상 스타일 초기화
+  var toHasStock = toCard.dataset.hasStock === '1';
+  toCard.style.borderColor = toHasStock ? '#8e44ad' : '#ddd';
+  toCard.style.background = toHasStock ? '#fdf5ff' : '#f8f9fa';
+
+  // 출발지에 재고가 없으면 이동 불가
+  if (fromCard.dataset.hasStock !== '1') {
+    showToast('이동할 재고가 없습니다.', 'warning');
+    return;
+  }
+
+  // 이동 확인 모달
+  whShowFullStMoveConfirm(fromLoc, toLoc);
+}
+
+// ── 위치 이동 확인 모달 ──────────────────────────────────
+function whShowFullStMoveConfirm(fromLoc, toLoc) {
+  var stockMap = whCalcStock();
+  var fromItems = stockMap[fromLoc] || {};
+  var activeItems = Object.entries(fromItems).filter(function(e) { return (Number(e[1].qty) || 0) > 0; });
+
+  if (activeItems.length === 0) {
+    showToast('이동할 재고가 없습니다.', 'warning');
+    return;
+  }
+
+  var toItems = stockMap[toLoc] || {};
+  var toHasStock = Object.values(toItems).some(function(v) { return (Number(v.qty) || 0) > 0; });
+
+  var modalId = 'whFullStMoveModal';
+  var existing = document.getElementById(modalId);
+  if (existing) existing.remove();
+
+  var itemListHtml = activeItems.map(function(e) {
+    return '<li style="font-size:12px;color:#555;margin-bottom:3px"><b>' + e[0] + '</b>: ' + e[1].qty + ' ' + (e[1].unit || '') + '</li>';
+  }).join('');
+
+  var warningHtml = toHasStock
+    ? '<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:12px;color:#856404"><i class="fas fa-exclamation-triangle"></i> 대상 위치(' + toLoc + ')에 이미 재고가 있습니다. 이동 후 같은 위치에 여러 품목이 보관됩니다.</div>'
+    : '';
+
+  var m = document.createElement('div');
+  m.id = modalId;
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center';
+  m.innerHTML =
+    '<div style="background:#fff;border-radius:14px;width:90%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,0.2);overflow:hidden">' +
+      '<div style="background:#fff8f0;border-bottom:1px solid #fde8c8;padding:14px 18px;display:flex;align-items:center;justify-content:space-between">' +
+        '<h3 style="color:#e67e22;font-size:14px;margin:0"><i class="fas fa-exchange-alt"></i> 위치 이동 확인</h3>' +
+        '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa">&times;</button>' +
+      '</div>' +
+      '<div style="padding:16px">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:13px">' +
+          '<code style="background:#f5f5f5;padding:4px 8px;border-radius:6px;font-weight:700">' + fromLoc + '</code>' +
+          '<span style="color:#e67e22;font-size:16px">→</span>' +
+          '<code style="background:#f5f5f5;padding:4px 8px;border-radius:6px;font-weight:700">' + toLoc + '</code>' +
+        '</div>' +
+        warningHtml +
+        '<div style="font-size:12px;color:#888;margin-bottom:6px">이동할 재고:</div>' +
+        '<ul style="margin:0 0 14px 0;padding-left:16px">' + itemListHtml + '</ul>' +
+        '<div style="margin-bottom:14px">' +
+          '<label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px">이동 사유 (선택)</label>' +
+          '<input type="text" id="whFullStMoveMemo" placeholder="예) 창고 정리, 위치 변경" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;box-sizing:border-box" />' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button onclick="document.getElementById(\'' + modalId + '\').remove()" style="flex:1;padding:9px;background:#f8f9fa;color:#555;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px">취소</button>' +
+          '<button onclick="whDoFullStMove(\'' + fromLoc.replace(/'/g, "\\'") + '\',\'' + toLoc.replace(/'/g, "\\'") + '\')" style="flex:1;padding:9px;background:#e67e22;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700"><i class="fas fa-exchange-alt"></i> 이동</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(m);
+}
+
+// ── 위치 이동 실행 ──────────────────────────────────────
+async function whDoFullStMove(fromLoc, toLoc) {
+  var memoEl = document.getElementById('whFullStMoveMemo');
+  var memo = memoEl ? memoEl.value.trim() : '';
+  var modal = document.getElementById('whFullStMoveModal');
+  if (modal) modal.remove();
+
+  var targets = whInboundData.filter(function(r) {
+    return r.location === fromLoc;
+  });
+
+  if (targets.length === 0) {
+    showToast('이동할 입고 기록을 찾을 수 없습니다.', 'error');
+    return;
+  }
+
+  var toWh = toLoc.charAt(0);
+  try {
+    for (var i = 0; i < targets.length; i++) {
+      var rec = targets[i];
+      var updated = Object.assign({}, rec, {
+        warehouse: toWh,
+        location: toLoc,
+        memo: (rec.memo ? rec.memo + ' | ' : '') + '위치이동: ' + fromLoc + ' → ' + toLoc + (memo ? ' (' + memo + ')' : '')
+      });
+      var recId = updated.id;
+      delete updated.id;
+      await apiPut('wh_inbound', recId, updated);
+    }
+    showToast('이동 완료: ' + fromLoc + ' → ' + toLoc + ' (' + targets.length + '건)', 'success');
+    whInvalidateMapCache();
+    await whReloadAll();
+    if (typeof loadLogisticsData === 'function') await loadLogisticsData();
+    // 그리드 재렌더링
+    if (_whFullStocktakeUnlocked) whRenderFullStocktakeGrid();
+  } catch(e) {
+    showToast('이동 실패: ' + e.message, 'error');
+  }
+}
+
+// ── 전체 실사 저장 ──────────────────────────────────────
+async function whSaveFullStocktake() {
+  if (!_whFullStocktakeUnlocked) {
+    showToast('관리자 허가가 필요합니다.', 'warning');
+    return;
+  }
+
+  var dateEl = document.getElementById('whFullStocktakeDate');
+  var date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+  if (!date) { showToast('실사일자를 입력해주세요.', 'warning'); return; }
+
+  // 입력된 실재고 수집
+  var inputs = document.querySelectorAll('#whFullStocktakeGridInner input[type="number"][data-loc]');
+  var records = [];
+  inputs.forEach(function(inp) {
+    if (inp.value === '') return;
+    var locCode = inp.dataset.loc;
+    var itemName = inp.dataset.item;
+    var sysQty = Number(inp.dataset.sys) || 0;
+    var actualQty = Number(inp.value) || 0;
+    var diff = actualQty - sysQty;
+    records.push({
+      location: locCode,
+      item_name: itemName,
+      sys_qty: sysQty,
+      actual_qty: actualQty,
+      diff: diff,
+      stocktake_date: date
+    });
+  });
+
+  if (records.length === 0) {
+    showToast('실사 수량을 입력한 항목이 없습니다.', 'warning');
+    return;
+  }
+
+  // 차이 있는 항목 수 확인
+  var diffCount = records.filter(function(r) { return r.diff !== 0; }).length;
+  var confirmMsg = '총 ' + records.length + '건의 실사 결과를 저장합니다.';
+  if (diffCount > 0) confirmMsg += '\n차이 발생 ' + diffCount + '건은 재고 조정 기록이 자동 생성됩니다.';
+  if (!confirm(confirmMsg + '\n\n계속하시겠습니까?')) return;
+
+  try {
+    // 실사 결과 저장
+    for (var i = 0; i < records.length; i++) {
+      await apiPost('wh_stocktake', records[i]);
+    }
+
+    // diff != 0 인 항목에 대해 WH-ADJ 조정 레코드 자동 생성
+    var adjDate = date;
+    var adjDateShort = adjDate.replace(/-/g, '').slice(2);
+    var adjPrefix = 'WH-ADJ-' + adjDateShort;
+    var existingAdj = [];
+    try { existingAdj = (await apiGetAll('wh_inbound')).filter(function(r) { return r.lot_no && r.lot_no.startsWith(adjPrefix); }); } catch(e2) {}
+    var adjSeq = existingAdj.length;
+    var adjCreated = 0;
+
+    for (var j = 0; j < records.length; j++) {
+      var rec = records[j];
+      var diff = Number(rec.diff) || 0;
+      if (diff === 0) continue;
+      adjSeq++;
+      var adjLot = adjPrefix + '-' + String(adjSeq).padStart(3, '0');
+      if (diff > 0) {
+        await apiPost('wh_inbound', {
+          lot_no: adjLot,
+          inbound_date: adjDate,
+          warehouse: rec.location ? rec.location.charAt(0) : 'W',
+          location: rec.location,
+          item_name: rec.item_name,
+          qty: diff,
+          unit: 'ea',
+          inbound_type: '재고조정',
+          manager: '실사조정',
+          memo: '전체실사 플러스 조정 (실사:' + rec.actual_qty + ' / 시스템:' + rec.sys_qty + ')',
+          created_at: Date.now()
+        });
+      } else {
+        await apiPost('wh_outbound', {
+          lot_no: adjLot,
+          outbound_date: adjDate,
+          warehouse: rec.location ? rec.location.charAt(0) : 'W',
+          location: rec.location,
+          item_name: rec.item_name,
+          qty: Math.abs(diff),
+          unit: 'ea',
+          destination: '재고조정',
+          manager: '실사조정',
+          memo: '전체실사 마이너스 조정 (실사:' + rec.actual_qty + ' / 시스템:' + rec.sys_qty + ')',
+          created_at: Date.now()
+        });
+      }
+      adjCreated++;
+    }
+
+    var msg = '전체 실사 저장 완료 (' + records.length + '건)';
+    if (adjCreated > 0) msg += ' — 재고 자동 조정 ' + adjCreated + '건 반영';
+    showToast(msg, 'success');
+    whInvalidateMapCache();
+    await whReloadAll();
+    if (typeof loadLogisticsData === 'function') loadLogisticsData();
+    // 그리드 재렌더링
+    whRenderFullStocktakeGrid();
+  } catch(e) {
+    showToast('저장 실패: ' + e.message, 'error');
+  }
+}
+
+// ── 기존 실사 등록 폼 관련 누락 함수 추가 ──────────────────
+// whHandleStocktakeSubmit: 실사 등록 폼 submit 핸들러
+async function whHandleStocktakeSubmit(e) {
+  if (e) e.preventDefault();
+  var wh = (document.getElementById('whst_warehouse') || {}).value || '';
+  var loc = (document.getElementById('whst_location') || {}).value || '';
+  var date = (document.getElementById('whst_date') || {}).value || '';
+  var manager = ((document.getElementById('whst_manager') || {}).value || '').trim();
+  var itemName = ((document.getElementById('whst_item_name') || {}).value || '').trim();
+  var actualQty = document.getElementById('whst_actual_qty');
+  var reason = (document.getElementById('whst_reason') || {}).value || '';
+  var notes = ((document.getElementById('whst_notes') || {}).value || '').trim();
+
+  if (!loc) { showToast('위치코드를 선택해주세요.', 'warning'); return; }
+  if (!date) { showToast('실사일자를 입력해주세요.', 'warning'); return; }
+  if (!manager) { showToast('담당자를 입력해주세요.', 'warning'); return; }
+  if (!itemName) { showToast('품목명을 입력해주세요.', 'warning'); return; }
+  if (!actualQty || actualQty.value === '') { showToast('실제 수량을 입력해주세요.', 'warning'); return; }
+
+  var sysQtyEl = document.getElementById('whst_system_qty');
+  var sysQty = sysQtyEl ? (Number(sysQtyEl.value) || 0) : 0;
+  var actual = Number(actualQty.value) || 0;
+  var diff = actual - sysQty;
+
+  var record = {
+    warehouse: wh,
+    location: loc,
+    stocktake_date: date,
+    manager: manager,
+    item_name: itemName,
+    sys_qty: sysQty,
+    actual_qty: actual,
+    diff: diff,
+    reason: reason,
+    notes: notes,
+    created_at: Date.now()
+  };
+
+  try {
+    await apiPost('wh_stocktake', record);
+
+    // diff != 0 이면 재고 조정 레코드 생성
+    if (diff !== 0) {
+      var adjDateShort = date.replace(/-/g, '').slice(2);
+      var adjPrefix = 'WH-ADJ-' + adjDateShort;
+      var existingAdj = [];
+      try { existingAdj = (await apiGetAll('wh_inbound')).filter(function(r) { return r.lot_no && r.lot_no.startsWith(adjPrefix); }); } catch(e2) {}
+      var adjSeq = existingAdj.length + 1;
+      var adjLot = adjPrefix + '-' + String(adjSeq).padStart(3, '0');
+      if (diff > 0) {
+        await apiPost('wh_inbound', {
+          lot_no: adjLot, inbound_date: date, warehouse: wh, location: loc,
+          item_name: itemName, qty: diff, unit: 'ea', inbound_type: '재고조정',
+          manager: '실사조정',
+          memo: '재고실사 플러스 조정 (실사:' + actual + ' / 시스템:' + sysQty + ')',
+          created_at: Date.now()
+        });
+      } else {
+        await apiPost('wh_outbound', {
+          lot_no: adjLot, outbound_date: date, warehouse: wh, location: loc,
+          item_name: itemName, qty: Math.abs(diff), unit: 'ea', destination: '재고조정',
+          manager: '실사조정',
+          memo: '재고실사 마이너스 조정 (실사:' + actual + ' / 시스템:' + sysQty + ')',
+          created_at: Date.now()
+        });
+      }
+      showToast('실사 등록 완료 (재고 조정 ' + Math.abs(diff) + ' 반영)', 'success');
+    } else {
+      showToast('실사 등록 완료', 'success');
+    }
+
+    // 폼 초기화
+    var form = document.getElementById('whStocktakeForm');
+    if (form) form.reset();
+    var today = new Date().toISOString().split('T')[0];
+    var dateEl2 = document.getElementById('whst_date');
+    if (dateEl2) dateEl2.value = today;
+
+    whInvalidateMapCache();
+    await whReloadAll();
+    if (typeof loadLogisticsData === 'function') loadLogisticsData();
+    whRenderStocktakeTable();
+  } catch(err) {
+    showToast('저장 실패: ' + err.message, 'error');
+  }
+}
+
+// whLookupSystemQty: 전산재고 조회 버튼 핸들러
+function whLookupSystemQty() {
+  var loc = (document.getElementById('whst_location') || {}).value || '';
+  var itemName = ((document.getElementById('whst_item_name') || {}).value || '').trim();
+  if (!loc) { showToast('위치코드를 먼저 선택해주세요.', 'warning'); return; }
+  if (!itemName) { showToast('품목명을 먼저 입력해주세요.', 'warning'); return; }
+  var stockMap = whCalcStock();
+  var locItems = stockMap[loc] || {};
+  var info = locItems[itemName] || { qty: 0 };
+  var sysQtyEl = document.getElementById('whst_system_qty');
+  if (sysQtyEl) sysQtyEl.value = info.qty || 0;
+  showToast(loc + ' / ' + itemName + ' 전산재고: ' + (info.qty || 0), 'info');
+  whCalcDiff();
+}
+
+// whCalcDiff: 실사 등록 폼 차이 자동 계산
+function whCalcDiff() {
+  var sysQtyEl = document.getElementById('whst_system_qty');
+  var actualQtyEl = document.getElementById('whst_actual_qty');
+  var diffEl = document.getElementById('whst_diff_qty');
+  if (!sysQtyEl || !actualQtyEl || !diffEl) return;
+  var sysQty = Number(sysQtyEl.value) || 0;
+  var actualQty = actualQtyEl.value !== '' ? (Number(actualQtyEl.value) || 0) : null;
+  if (actualQty === null) { diffEl.value = ''; return; }
+  diffEl.value = actualQty - sysQty;
+}
+
+// ── 재고실사 탭 활성화 시 전체 실사 모드 초기화 ──────────────
+function whInitFullStocktakeSection() {
+  // 날짜 초기화
+  var dateEl = document.getElementById('whFullStocktakeDate');
+  if (dateEl && !dateEl.value) {
+    dateEl.value = new Date().toISOString().split('T')[0];
+  }
+  // 현재 로그인 사용자가 admin이면 자동 허가 상태 표시
+  var user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  if (user && user.role === 'admin' && !_whFullStocktakeUnlocked) {
+    // admin은 즉시 사용 가능 안내만 표시 (자동 허가는 하지 않음 - 명시적 클릭 필요)
+    var statusEl = document.getElementById('whFullStocktakeStatus');
+    if (statusEl) {
+      statusEl.innerHTML = '<i class="fas fa-crown" style="color:#f8c471"></i> <span style="color:#f8c471">관리자 계정 — 클릭하여 즉시 활성화</span>';
+    }
+  }
 }

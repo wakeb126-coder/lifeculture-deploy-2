@@ -1239,6 +1239,59 @@
             </table>
           </div>
         </div>
+
+        <!-- ===== 전체 위치코드 실사 모드 ===== -->
+        <div id="whFullStocktakeSection" style="margin-top:24px;border:2px solid #8e44ad;border-radius:14px;overflow:hidden">
+          <!-- 헤더 -->
+          <div style="background:linear-gradient(135deg,#8e44ad,#6c3483);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div style="color:#fff">
+              <div style="font-size:15px;font-weight:700"><i class="fas fa-th"></i> 전체 위치코드 실사 모드</div>
+              <div style="font-size:12px;opacity:0.85;margin-top:3px">모든 위치의 실재고를 한 번에 확인하고 수정합니다. 드래그로 재고 위치를 이동할 수 있습니다.</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span id="whFullStocktakeStatus" style="font-size:12px;color:#f8c471;font-weight:600"><i class="fas fa-lock"></i> 관리자 허가 필요</span>
+              <button id="whFullStocktakeApproveBtn" onclick="whRequestFullStocktakeApproval()" style="padding:8px 16px;background:#f39c12;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer"><i class="fas fa-key"></i> 관리자 허가</button>
+              <button id="whFullStocktakeSaveBtn" onclick="whSaveFullStocktake()" style="padding:8px 16px;background:#27ae60;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:none"><i class="fas fa-save"></i> 실사 저장</button>
+              <button id="whFullStocktakeLockBtn" onclick="whLockFullStocktake()" style="padding:8px 16px;background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:none"><i class="fas fa-lock"></i> 잠금</button>
+            </div>
+          </div>
+
+          <!-- 컨트롤 바 -->
+          <div id="whFullStocktakeControls" style="background:#f9f0ff;border-bottom:1px solid #e0c8f0;padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div style="display:flex;gap:6px">
+              <button onclick="whFullStocktakeSetWarehouse('C')" id="whFullWh_C" style="padding:6px 14px;border-radius:20px;border:1.5px solid #8e44ad;background:#fff;color:#8e44ad;font-size:12px;font-weight:700;cursor:pointer">❄️ 저온창고</button>
+              <button onclick="whFullStocktakeSetWarehouse('W')" id="whFullWh_W" style="padding:6px 14px;border-radius:20px;border:1.5px solid #ddd;background:#fff;color:#555;font-size:12px;font-weight:700;cursor:pointer">🏭 일반창고</button>
+            </div>
+            <input type="text" id="whFullStocktakeSearch" placeholder="위치코드 또는 품목명 검색..." oninput="whFilterFullStocktakeGrid()" style="padding:6px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:12px;flex:1;min-width:160px" />
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;white-space:nowrap">
+              <input type="checkbox" id="whFullShowEmpty" onchange="whFilterFullStocktakeGrid()" style="cursor:pointer" checked />
+              빈 위치 표시
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;white-space:nowrap">
+              <input type="checkbox" id="whFullShowDiffOnly" onchange="whFilterFullStocktakeGrid()" style="cursor:pointer" />
+              차이 있는 항목만
+            </label>
+            <div id="whFullStocktakeDateWrap" style="display:flex;align-items:center;gap:6px">
+              <label style="font-size:12px;color:#555;white-space:nowrap">실사일자</label>
+              <input type="date" id="whFullStocktakeDate" style="padding:6px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:12px" />
+            </div>
+          </div>
+
+          <!-- 잠금 안내 오버레이 -->
+          <div id="whFullStocktakeLockOverlay" style="background:#f9f0ff;padding:32px;text-align:center">
+            <div style="font-size:40px;margin-bottom:12px">🔒</div>
+            <div style="font-size:15px;font-weight:700;color:#6c3483;margin-bottom:8px">관리자 허가가 필요합니다</div>
+            <div style="font-size:13px;color:#888;margin-bottom:16px">관리자가 허가를 부여해야 전체 위치코드 실사 모드를 사용할 수 있습니다.<br>위의 <b>관리자 허가</b> 버튼을 눌러 관리자 비밀번호를 입력하세요.</div>
+            <div style="font-size:12px;color:#aaa">관리자(admin) 계정으로 로그인하면 즉시 사용 가능합니다.</div>
+          </div>
+
+          <!-- 그리드 영역 -->
+          <div id="whFullStocktakeGrid" style="display:none;padding:16px;background:#fafafa">
+            <div id="whFullStocktakeGridInner" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+            </div>
+            <div id="whFullStocktakeEmpty" style="display:none;text-align:center;color:#aaa;padding:40px;font-size:14px">표시할 위치가 없습니다.</div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -1775,7 +1828,7 @@ function switchTab(tab) {
       if (tab === 'wh_map') { whUpdateMapKpi(); whShowMap(whCurrentMap || 'cold'); }
       if (tab === 'wh_in') { whRenderInTable(); whInitBulkTable(); }
       if (tab === 'wh_out') { whRenderOutTable(); whRenderFifo(); whInitBulkOutTable(); }
-      if (tab === 'wh_stocktake') { whRenderLedger(); whRenderStocktakeTable(); }
+      if (tab === 'wh_stocktake') { whRenderLedger(); whRenderStocktakeTable(); whInitFullStocktakeSection(); }
       if (tab === 'wh_verify') { if (typeof vfyInit === 'function') vfyInit(); }
     }
   </script>
